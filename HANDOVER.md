@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.26.0 (`VERSION` in `src/title.js`) |
+| **Version** | 0.26.1 (`VERSION` in `src/title.js`) |
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -145,6 +145,22 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - **Title screen:** gun piles occasionally fall on the robot, bounce off with bonks, and the robot flinches with its arms over its head.
 
 ### 2026-11-03 (late): 0.26.0
+- **0.26.1, Luke's shapes on the V2 parts:**
+  - **Source:** `beveled_sketch_shapes_all.glb` (5 parts, from ChatGPT). The meshes were 19k–36k triangles each in a dense even triangulation, and the tapered part had stepped sides. So each shape is **rebuilt in code** with the same proportions, as bevelled extrusions of 24–1,100 triangles (robot.js: `bevelSolid`, `prismMesh`, `LOWER_SHELLS`).
+  - **Connectors:**
+    - The ring (part_1) is the **arm socket**: `femaleArm()`. A **ball on a neck** (`maleArm()`) sits in it.
+    - The block with a square recess (part_2) is the **module socket**: `femaleModule()`. A **cube plug with a flange** (`maleModule()`) goes in it.
+    - The male halves are added in `mount()` whenever the anchor has `accepts` set.
+    - Spacing: `ARM_LEN` 0.24 and `MOD_LEN` 0.28 out from the torso face.
+  - **Lower halves:**
+    - Walker = the disc (part_5).
+    - Spider = the tapered block (part_4), wider at the back, with 3 legs on each slanted side.
+    - Wheels = the slab (part_3), 4 corner wheels.
+    - Treads = a new triangle in the same style: the wide back edge carries 2 treads and the point 1.
+    - The hips stay at the old body centre, so legs still reach the ground. The top has an orange-ringed hole for the torso, and gem sockets are on the front.
+    - The recesses on the undersides of parts 4 and 5 were left out.
+  - **Torso:** Luke's earlier hull (shape_example_2.obj) with the round bores removed and capped flush with the recess floor (`HULL_PLAIN_*`, `getHullPlainGeo()` in shapes.js; `makeBlock(..., 'plain')`).
+  - **Exported** as OBJ+MTL (metres) to `Documents\Scrapfall\models\`.
 - **Build revamp (V2), behind `BUILD_V2` in config.js.**
   - **Revert:** `BUILD_V2 = false` brings back the old cube bodies, loose legs and leg/brick drops (the old code paths are all still there). For a full code revert, use the GitHub branch `pre-build-revamp` (commit 67cc251, version 0.25.1).
   - **Lower half** (`kind: 'lower'`, table `LOWERS` in data.js): a body-sized block with its legs built in. Four kinds:

@@ -34,7 +34,7 @@ function makeBlock(w, h, d, color, holes = [], hull = false) {
   if (hull) {
     // the bevelled, grooved hull (see shapes.js); the flat faces below only carry the socket holes
     // 'plain': the recesses are dark panels, not sockets (the V2 halves)
-    const m = new THREE.Mesh(getHullGeo(), [M(color), hull === 'plain' ? M(0x262c33) : matSocket]); m.scale.set(w / 2, h / 2, d / 2); group.add(m);
+    const m = hull === 'plain' ? new THREE.Mesh(getHullPlainGeo(), M(color)) : new THREE.Mesh(getHullGeo(), [M(color), matSocket]); m.scale.set(w / 2, h / 2, d / 2); group.add(m);
   }
   for (const face of Object.keys(FACE_ROT)) {
     const [fw, fh, off] = faceDims(face, w, h, d);
@@ -436,6 +436,8 @@ function attachPart(anchor, item, reg) {
 }
 function mount(anchor, item, ref, reg) {
   const p = attachPart(anchor, item, reg);
+  if (anchor.userData.accepts === 'arm') anchor.add(maleArm());          // V2: the ball that sits in the ring
+  else if (anchor.userData.accepts === 'module') anchor.add(maleModule()); // V2: the cube plug in the square recess
   p.userData.ref = ref;
   p.userData.out = anchor.userData.out.clone();
   if (reg) {
@@ -505,59 +507,145 @@ function markMisplacedLegs(g) {
 }
 
 /* ---------- BUILD V2 ----------
-   The lower half: a body-sized block with its legs built in (they can't be taken off), a hole on top for the upper half,
-   and up to two gem sockets on the front that open as it levels. */
-function anchorOn(parent, face, u, v, r = 0.2) {
-  const fg = new THREE.Group(); const fr = FACE_ROT[face]; fg.rotation.set(fr[0], fr[1], fr[2]); parent.add(fg);
+   Shapes from Luke's sketch set (beveled_sketch_shapes_all.glb), rebuilt here as clean low-poly bevelled solids with the
+   same proportions: a ring (the arm socket, sphere connector), a block with a square recess (the module socket, cube
+   connector), and the lower halves (disc = Walker, tapered block = Spider, slab = Wheels; the triangle for Treads is
+   new in the same style). The male halves (ball, cube plug) ride on the part that plugs in. */
+const V2_SHELL = 0x4b5661, V2_STEEL = 0x5d6872, V2_BALL = 0x8c96a0;
+const v2GeoCache = new Map();
+/* a flat profile (points in x/y) extruded along z, bevelled; size stays what the points say */
+function bevelSolid(key, pts, depth, bev, holes) {
+  if (v2GeoCache.has(key)) return v2GeoCache.get(key);
+  const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
+  if (holes) sh.holes = holes;
+  const g = new THREE.ExtrudeGeometry(sh, { depth: Math.max(0.001, depth - bev * 2), bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 20 });
+  g.translate(0, 0, -(depth - bev * 2) / 2);
+  g.computeVertexNormals();
+  v2GeoCache.set(key, g); return g;
+}
+const inset = (pts, b) => { const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cy = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+  return pts.map(([x, y]) => { const dx = x - cx, dy = y - cy, l = Math.hypot(dx, dy) || 1; return [x - dx / l * b * 1.2, y - dy / l * b * 1.2]; }); };
+const circlePts = (r, n = 28) => Array.from({ length: n }, (_, k) => [Math.cos(k / n * Math.PI * 2) * r, Math.sin(k / n * Math.PI * 2) * r]);
+const rectPts = (w, h) => [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]];
+/* a vertical prism: a top-view outline (x, z) extruded up h, centred on y = 0 */
+function prismMesh(key, xz, h, bev, color) {
+  const g = bevelSolid(key, inset(xz.map(([x, z]) => [x, -z]), bev), h, bev);
+  const m = new THREE.Mesh(g, M(color)); m.rotation.x = -Math.PI / 2; return m;
+}
+/* ---- connectors (local +z points out of the surface; z = 0 is the surface) ---- */
+const RING = { R: 0.23, r: 0.095, T: 0.1 }, BOXC = { S: 0.4, T: 0.2, H: 0.22, D: 0.12 };
+const ARM_LEN = RING.T + 0.14, MOD_LEN = BOXC.T + 0.08;          // how far out the plugged-in part sits
+function femaleArm() {
+  const g = new THREE.Group(), hole = new THREE.Path(); hole.absarc(0, 0, RING.r + 0.015, 0, Math.PI * 2, true);
+  const ring = new THREE.Mesh(bevelSolid('ringF', circlePts(RING.R - 0.015), RING.T, 0.015, [hole]), M(V2_STEEL)); ring.position.z = RING.T / 2; g.add(ring);
+  const seat = new THREE.Mesh(new THREE.CircleGeometry(RING.r, 20), M(0x1a1e22)); seat.position.z = 0.004; g.add(seat);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(RING.r + 0.004, 0.012, 6, 24), matSocket); lip.position.z = RING.T; g.add(lip);
+  return g;
+}
+function maleArm() {       // anchor-relative: the arm starts at z = 0, the ball sits in the ring behind it
+  const g = new THREE.Group();
+  const ball = new THREE.Mesh(ballGeo, M(V2_BALL)); ball.scale.setScalar(0.13); ball.position.z = -(ARM_LEN - RING.T - 0.02); g.add(ball);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, ARM_LEN - RING.T - 0.02, 12), M(COL.dark)); neck.rotation.x = Math.PI / 2; neck.position.z = -(ARM_LEN - RING.T - 0.02) / 2; g.add(neck);
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.04, 16), M(V2_STEEL)); col.rotation.x = Math.PI / 2; col.position.z = -0.02; g.add(col);
+  return g;
+}
+function femaleModule() {
+  const g = new THREE.Group(), b = 0.015;
+  const hole = new THREE.Path(rectPts(BOXC.H + b * 2, BOXC.H + b * 2).reverse().map(([x, y]) => new THREE.Vector2(x, y)));
+  const frame = new THREE.Mesh(bevelSolid('boxF', rectPts(BOXC.S - b * 2.4, BOXC.S - b * 2.4), BOXC.D, b, [hole]), M(V2_STEEL)); frame.position.z = BOXC.T - BOXC.D / 2; g.add(frame);
+  const back = new THREE.Mesh(bevelSolid('boxB', rectPts(BOXC.S - b * 2.4, BOXC.S - b * 2.4), BOXC.T - BOXC.D + 0.01, b), M(V2_STEEL)); back.position.z = (BOXC.T - BOXC.D) / 2; g.add(back);
+  const floor = bx(BOXC.H, BOXC.H, 0.01, 0x1a1e22, 0, 0, BOXC.T - BOXC.D + 0.01); g.add(floor);
+  for (const [x, y, w, h] of [[0, BOXC.H / 2, BOXC.H + 0.03, 0.02], [0, -BOXC.H / 2, BOXC.H + 0.03, 0.02], [BOXC.H / 2, 0, 0.02, BOXC.H], [-BOXC.H / 2, 0, 0.02, BOXC.H]]) { const t = new THREE.Mesh(geoBox, matSocket); t.scale.set(w, h, 0.012); t.position.set(x, y, BOXC.T + 0.002); g.add(t); }
+  return g;
+}
+function maleModule() {
+  const g = new THREE.Group(), into = MOD_LEN - BOXC.T + BOXC.D * 0.8;
+  g.add(bx(BOXC.H - 0.02, BOXC.H - 0.02, into, V2_BALL, 0, 0, -MOD_LEN + BOXC.T - BOXC.D * 0.8 + into / 2));
+  g.add(bx(0.3, 0.3, 0.04, COL.dark, 0, 0, -0.02));
+  return g;
+}
+/* ---- lower-half shells. mounts: [face, x, y, z] hip positions; gems: [x, y, z] on the front; h: height ---- */
+const LOWER_SHELLS = {
+  standard: { h: 0.37, bottom: -0.185, top: 0.185, flat: ['top'], w: 1.2, d: 1.2,
+    mesh: () => { const m = new THREE.Mesh(bevelSolid('disc', circlePts(0.585, 36), 0.37, 0.035), M(V2_SHELL)); m.rotation.x = -Math.PI / 2; return m; },
+    mounts: [['left', -0.6, 0, 0], ['right', 0.6, 0, 0]], gems: [[-0.13, 0, 0.586], [0.13, 0, 0.586]] },
+  spider: { h: 0.4, bottom: -0.2, top: 0.2, flat: ['top', 'back'], w: 1.0, d: 1.56,
+    // a tapered block, wider at the back (Luke's trapezoid)
+    xz: [[-0.55, -0.78], [0.55, -0.78], [0.445, 0.78], [-0.445, 0.78]],
+    mounts: [-0.5, 0, 0.5].flatMap(z => { const x = 0.55 - (z + 0.78) / 1.56 * 0.105; return [['left', -x, 0, z], ['right', x, 0, z]]; }), gems: [[-0.12, 0, 0.78], [0.12, 0, 0.78]] },
+  treads: { h: 0.45, bottom: -0.225, top: 0.225, flat: ['top', 'back'], w: 1.24, d: 1.3,
+    // a triangle seen from above: the wide edge at the back carries two treads, the point at the front one
+    xz: [[-0.62, -0.55], [0.62, -0.55], [0.15, 0.75], [-0.15, 0.75]],
+    mounts: [['back', -0.32, 0, -0.55], ['back', 0.32, 0, -0.55], ['front', 0, 0, 0.75]], gems: [[-0.07, 0.1, 0.75], [0.07, -0.1, 0.75]] },
+  wheels: { h: 0.52, bottom: -0.26, top: 0.26, flat: ['top', 'front', 'back', 'left', 'right'], w: 1.12, d: 1.6,
+    xz: [[-0.56, -0.8], [0.56, -0.8], [0.56, 0.8], [-0.56, 0.8]],
+    mounts: [['left', -0.56, 0, -0.55], ['left', -0.56, 0, 0.55], ['right', 0.56, 0, -0.55], ['right', 0.56, 0, 0.55]], gems: [[-0.13, 0, 0.8], [0.13, 0, 0.8]] },
+};
+function anchorAt(parent, face, pos, r = 0.2) {
+  const fg = new THREE.Group(), fr = FACE_ROT[face]; fg.rotation.set(fr[0], fr[1], fr[2]); fg.position.copy(pos); parent.add(fg);
   const a = new THREE.Object3D(); fg.add(a);
-  return { fg, a, set(off) { fg.updateMatrix(); fg.position.set(0, 0, 0); fg.translateZ(off); fg.translateX(u); fg.translateY(v); a.userData = { fq: fg.quaternion.clone(), out: new THREE.Vector3(0, 0, 1).applyQuaternion(fg.quaternion), halo: null, r }; return a; } };
+  a.userData = { fq: fg.quaternion.clone(), out: new THREE.Vector3(0, 0, 1).applyQuaternion(fg.quaternion), halo: null, r };
+  return { fg, a };
+}
+function lowerShellMesh(type) {
+  const S = LOWER_SHELLS[type];
+  return S.mesh ? S.mesh() : prismMesh('low_' + type, S.xz, S.h, 0.035, V2_SHELL);
 }
 function buildLower(g, item, out, reg) {
-  const def = LOWERS[item.type], body = BLOCKS.body, [w, h, d] = body.size;
+  const S = LOWER_SHELLS[item.type], body = BLOCKS.body;
   item.plug = 'bottom';
-  const blk = makeBlock(w, h, d, blockColor(body), [{ face: 'top', r: 0.2 }], 'plain');
-  // the one socket it has (the top, for the torso) keeps its orange ring
-  { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 8, 28), matSocket); ring.rotation.x = Math.PI / 2; ring.position.y = h / 2 - 0.005; blk.group.add(ring); }
-  addQrStickers(blk, item, w, h, d);
-  if (BUILD_ROOT) { const bi = BODY_IDX++; if (item === BUILD_ROOT) addPatch(blk, item, w, h, d, bi); addStickerBomb(blk, item, w, h, d, bi); }
-  const ext = Math.abs(out.x) * w / 2 + Math.abs(out.y) * h / 2 + Math.abs(out.z) * d / 2;
-  blk.group.position.copy(out).multiplyScalar(body.neck + ext);
-  g.add(blk.group);
-  if (!(item === BUILD_ROOT && ROOT_BARE)) { joint(g, [0, 0, 0], 0.15, JOINT_COL); coupler(g, out, body.neck); }
-  if (reg) reg.blocks.push(blk.group);
-  // the built-in legs: real leg models (so they walk with IK and count as legs), registered as parts but with no socket ref,
-  // so the workbench grabs the whole lower half instead of a single leg
-  const legs = lowerLegItems(item), half = { left: w / 2, right: w / 2, front: d / 2, back: d / 2 };
-  def.mounts.forEach(([face, u, v], i) => {
-    const leg = legs[i], A = anchorOn(blk.group, face, u, v);
-    const a = A.set(half[face] - 0.02);
-    // a small hip collar where each leg plugs in
-    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 14), M(COL.dark)); col.rotation.x = Math.PI / 2; col.position.z = 0.02; A.fg.add(col);
-    const p = attachPart(a, leg, reg);
-    p.userData.out = a.userData.out.clone(); p.userData.builtIn = true;
-    if (reg) { reg.parts.push(p); reg.partOf.set(leg, p); reg.legs.push(p); }
+  const grp = new THREE.Group();
+  const shell = lowerShellMesh(item.type);
+  if (CUSTOM.color) shell.material = M(blockColor(body));
+  grp.add(shell);
+  // flat faces carry stickers (a fake "blk" with just those faces)
+  const faces = {}, half = { top: S.top, bottom: -S.bottom, front: S.d / 2, back: S.d / 2, left: S.w / 2, right: S.w / 2 };
+  for (const f of S.flat) { const fg = new THREE.Group(), fr = FACE_ROT[f]; fg.rotation.set(fr[0], fr[1], fr[2]); fg.translateZ(half[f] + 0.002); grp.add(fg); faces[f] = fg; }
+  const blk = { group: grp, faces };
+  if (BUILD_ROOT) {
+    const bi = BODY_IDX++;
+    if (item.type === 'wheels') { addQrStickers(blk, item, S.w, S.h, S.d); if (item === BUILD_ROOT) addPatch(blk, item, S.w, S.h, S.d, bi); }
+    addStickerBomb(blk, item, Math.min(S.w, 0.9), S.h, Math.min(S.d, 0.9), bi);
+  }
+  // the hips sit where the old body's centre was, so the legs still reach the floor
+  grp.position.copy(out).multiplyScalar(body.neck + body.size[1] / 2);
+  g.add(grp);
+  if (!(item === BUILD_ROOT && ROOT_BARE)) { joint(g, [0, 0, 0], 0.15, JOINT_COL); coupler(g, out, body.neck + body.size[1] / 2 + S.bottom); }
+  if (reg) reg.blocks.push(grp);
+  // the built-in legs: real leg models (they walk with IK and count as legs), registered as parts with no socket ref,
+  // so the workbench grabs the whole lower half instead of one leg
+  const legs = lowerLegItems(item);
+  S.mounts.forEach(([face, x, y, z], i) => {
+    const A = anchorAt(grp, face, new THREE.Vector3(x, y, z));
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.08, 14), M(COL.dark)); col.rotation.x = Math.PI / 2; col.position.z = 0.02; A.fg.add(col);
+    const p = attachPart(A.a, legs[i], reg);
+    p.userData.out = A.a.userData.out.clone(); p.userData.builtIn = true;
+    if (reg) { reg.parts.push(p); reg.partOf.set(legs[i], p); reg.legs.push(p); }
   });
   // gem sockets on the front, opened at Mk II and Mk III
   syncGemSlots(item);
   (item.gems || []).forEach((gm, i) => {
-    const gb = makeBlock(0.17, 0.17, 0.08, COL.dark, [{ face: 'front', r: 0.06 }]);
-    gb.group.position.set((i - ((item.gems.length - 1) / 2)) * 0.3, -h * 0.22, d / 2 + 0.03); blk.group.add(gb.group);
+    const gb = makeBlock(0.15, 0.15, 0.07, COL.dark, [{ face: 'front', r: 0.055 }]);
+    const [x, y, z] = S.gems[i]; gb.group.position.set(x, y, z + 0.02); grp.add(gb.group);
     const ga = gb.anchors[0], gref = { owner: item, key: 'gems', i };
     if (reg) reg.sockets.push({ ref: gref, anchor: ga });
     if (gm) mount(ga, gm, gref, reg);
   });
-  // the top hole: the upper half plugs in here
-  const ti = FACE_ORDER.indexOf('top'), ta = blk.anchors[0], tref = { owner: item, key: 'slots', i: ti };
-  if (reg) reg.sockets.push({ ref: tref, anchor: ta });
-  if (item.slots[ti]) mount(ta, item.slots[ti], tref, reg);
+  // the top: the torso plugs in here (an orange-ringed hole)
+  const T = anchorAt(grp, 'top', new THREE.Vector3(0, S.top - 0.03, 0));
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 8, 28), matSocket); ring.position.z = 0.03; T.fg.add(ring);
+  const bore = new THREE.Mesh(new THREE.CircleGeometry(0.2, 24), M(0x1a1e22)); bore.position.z = 0.032; T.fg.add(bore);
+  const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ color: ORANGE, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+  halo.scale.setScalar(0.2); halo.position.z = 0.05; halo.visible = false; T.fg.add(halo); T.a.userData.halo = halo; T.a.position.z = 0.03;
+  const ti = FACE_ORDER.indexOf('top'), tref = { owner: item, key: 'slots', i: ti };
+  if (reg) reg.sockets.push({ ref: tref, anchor: T.a });
+  if (item.slots[ti]) mount(T.a, item.slots[ti], tref, reg);
 }
-/* The upper half: a torso with its own socket layout. Arm sockets are a ball joint (sphere), module sockets a square collar (cube). */
-const UPPER_MAT = {};
+/* The torso: Luke's hull with the socket inserts removed, and his ring / square-recess connectors on its sockets. */
 function buildUpper(g, item, out, reg) {
   const def = BLOCKS[item.type], [w, h, d] = def.size;
   item.plug = 'bottom';
-  const blk = makeBlock(w, h, d, blockColor(def), [{ face: 'bottom', r: 0.2 }], 'plain');
-  addQrStickers(blk, item, w, h, d);
+  const blk = makeBlock(w, h, d, blockColor(def), [], 'plain');
   if (BUILD_ROOT) { const bi = BODY_IDX++; addStickerBomb(blk, item, w, h, d, bi); }
   const ext = Math.abs(out.x) * w / 2 + Math.abs(out.y) * h / 2 + Math.abs(out.z) * d / 2;
   blk.group.position.copy(out).multiplyScalar(def.neck + ext);
@@ -566,15 +654,15 @@ function buildUpper(g, item, out, reg) {
   if (reg) reg.blocks.push(blk.group);
   const half = { left: w / 2, right: w / 2, front: d / 2, back: d / 2, top: h / 2, bottom: h / 2 };
   def.sockets.forEach((sk, i) => {
-    const A = anchorOn(blk.group, sk.face, sk.at[0], sk.at[1], sk.accepts === 'arm' ? 0.2 : 0.17);
-    const arm = sk.accepts === 'arm', len = arm ? 0.16 : 0.12;
-    const a = A.set(half[sk.face] + len);
-    // the connector itself, so you can see what goes where: a ball for arms, a square collar for modules
-    if (arm) { const ball = joint(A.fg, [0, 0, -len * 0.45], 0.17, JOINT_COL); ball.userData.socketKind = 'arm'; A.fg.add(bx(0.34, 0.34, 0.06, COL.dark, 0, 0, -len + 0.02)); }
-    else { A.fg.add(bx(0.3, 0.3, len, COL.dark, 0, 0, -len / 2)); A.fg.add(bx(0.2, 0.2, len + 0.01, ORANGE, 0, 0, -len / 2, 0x6a2800)); }
+    const arm = sk.accepts === 'arm', len = arm ? ARM_LEN : MOD_LEN;
+    // the socket's face frame: x/y along the face, +z out of it
+    const fg = new THREE.Group(), fr = FACE_ROT[sk.face]; fg.rotation.set(fr[0], fr[1], fr[2]); blk.group.add(fg);
+    fg.translateZ(half[sk.face] - 0.01); fg.translateX(sk.at[0]); fg.translateY(sk.at[1]);
+    fg.add(arm ? femaleArm() : femaleModule());
+    const a = new THREE.Object3D(); a.position.z = len; fg.add(a);
     const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ color: ORANGE, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
-    halo.scale.setScalar(arm ? 0.2 : 0.17); halo.position.z = 0.01; halo.visible = false; A.fg.add(halo);
-    a.userData.halo = halo; a.userData.accepts = sk.accepts;
+    halo.scale.setScalar(arm ? 0.16 : 0.17); halo.position.z = (arm ? RING.T : BOXC.T) + 0.01; halo.visible = false; fg.add(halo);
+    a.userData = { fq: fg.quaternion.clone(), out: new THREE.Vector3(0, 0, 1).applyQuaternion(fg.quaternion), halo, r: 0.2, accepts: sk.accepts };
     const ref = { owner: item, key: 'slots', i };
     if (reg) reg.sockets.push({ ref, anchor: a });
     if (item.slots[i]) mount(a, item.slots[i], ref, reg);
