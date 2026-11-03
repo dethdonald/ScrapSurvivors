@@ -172,6 +172,15 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - **This handover file** (`HANDOVER.md`).
 - **Fix:** some ArUco wall stickers were stretched across the terrain. The merged mesh was built from an indexed quad but drawn unindexed, so triangles joined up between stickers. The quads are now unindexed, and the merge helper converts any indexed shape automatically.
 - **Paid (locked) cases:** the prize strip now rolls 1, 2 or 3 **upgrades** instead of parts. The case pops out that many glowing upgrade chips, rarity-coloured with a beam, and walking into one grants a random level-up upgrade. The occasional bonus gem was removed.
+- **0.25.1, Steam Deck self-update:**
+  - **Repo layout** (dethdonald/ScrapSurvivors): `app/` holds exactly what the Deck build runs (main.js, preload.js, index.html, package.json, src/, node_modules/three/build/three.min.js, `VERSION`). There's also a root `VERSION`, `deck/ScrapSurvivors.sh`, README and HANDOVER.
+  - **Publishing:** `/home/claude/publish.sh` (session helper) copies the current game in and pushes. **Run it after every delivery** so the Deck picks up the change. The version comes from `VERSION` in title.js.
+  - **Launcher** (`deck/ScrapSurvivors.sh`):
+    - On each start it fetches `raw.githubusercontent.com/.../main/VERSION`. If that differs from `resources/app/VERSION`, it downloads the codeload tarball of main and swaps `app/` in atomically (app.new → app). It also updates itself.
+    - Activity is logged to `update-log.txt`. It skips silently when offline, and `--no-update` skips the check.
+    - Tested with a simulated download: it swapped to a byte-identical `app/`.
+  - **Needs the repo PUBLIC** (Luke chose public). This session can't change repo settings (403), so Luke flips it himself. While it's private the updater just skips.
+  - The Deck tarball was rebuilt with the updater (6 parts in SteamDeck\).
 - **GitHub:** private repo **dethdonald/ScrapSurvivors**. It has a README with Steam Deck install steps (commit bb26dff). This session type can push commits but **cannot create Releases** (HTTP 403), so Luke uploads the Deck build `.tar.gz` to a Release himself. The source isn't in the repo yet.
 - **Steam Deck / Linux build (v0.25.0):**
   - **What it is:** Electron 33.2.1 for linux-x64 (`electron-v33.2.1-linux-x64.zip`, downloaded from GitHub releases), with the game copied into `resources/app`. The `default_app.asar` was removed and the binary renamed `ScrapSurvivors`.
