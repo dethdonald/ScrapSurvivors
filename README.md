@@ -15,3 +15,16 @@ Grab the latest **`ScrapSurvivors-linux-x64.tar.gz`** from the [Releases page](.
 
 If it won't start: right-click `ScrapSurvivors.sh` → Properties → Permissions → tick **Is executable**.
 Saves live in `~/.config/ScrapSurvivors`.
+
+## Updates
+
+The Deck build updates itself: every time you start it from Steam, `ScrapSurvivors.sh` checks this repo's `VERSION`
+and, if it's newer, downloads the game files in `app/` (about 1 MB) and swaps them in before starting. Saves are never
+touched, and with no internet it just starts the version it has. (`update-log.txt` in the game folder shows what happened.)
+To start without checking, launch with `--no-update`.
+
+## What's here
+
+- `app/` – the game itself (Electron app: `main.js`, `index.html`, `src/`). This is exactly what runs inside the Deck build.
+- `deck/ScrapSurvivors.sh` – the Deck launcher and updater.
+- `HANDOVER.md` – a dated log of every change.

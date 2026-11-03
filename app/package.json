@@ -1,0 +1,40 @@
+{
+  "name": "scrapsurvivors",
+  "version": "0.25.1",
+  "description": "3D survivors-style robot arena game",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win portable",
+    "dist:linux": "electron-builder --linux AppImage"
+  },
+  "dependencies": {
+    "three": "0.128.0",
+    "@dimforge/rapier3d-compat": "0.14.0"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.scrapsurvivors.game",
+    "productName": "ScrapSurvivors",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "src/**/*",
+      "node_modules/three/build/three.min.js",
+      "package.json",
+      "node_modules/@dimforge/rapier3d-compat/**/*"
+    ],
+    "linux": {
+      "target": "AppImage",
+      "category": "Game"
+    },
+    "win": {
+      "target": "portable"
+    }
+  }
+}

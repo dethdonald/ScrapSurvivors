@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Scrap Survivors</title>
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<div id="game">
+  <div id="flash"></div>
+  <canvas id="c"></canvas>
+
+  <!-- ===== HUD ===== -->
+  <div id="hud" hidden>
+    <div id="vignette"></div>
+    <div id="crosshair" class="xh"><i></i><b></b></div>
+    <div id="devHint" hidden><b>TEST RANGE</b> <span><kbd>F1</kbd> dev panel</span> <span><kbd>V</kbd> spawn at crosshair</span> <span><kbd>Enter</kbd> build</span></div>
+    <div id="xhLeft"></div>
+    <div id="xhWrap"><div id="xhAmmo"></div><div id="xhBolts"></div></div>
+    <div id="partUps"></div>
+    <div id="killMul" hidden><div class="km"><small>×</small><b id="kmN">0</b></div><i class="kmBar"><i id="kmFill"></i></i><div class="kmLbl">KILL STREAK</div></div>
+    <div class="tl hbox">
+      <div class="eyebrow">Frame · Stage <span class="mono" id="stageTxt">1</span></div>
+      <div class="hstat"><span data-sym="hp"></span><b class="mono" id="hpTxt">50</b></div>
+      <div class="bar"><i id="hpBar"></i></div>
+      <div class="hstat sh"><span data-sym="shield"></span><b class="mono" id="shTxt">0</b></div>
+      <div class="bar sh"><i id="shBar"></i></div>
+      <div class="mob mono" id="mobility"></div>
+    </div>
+    <div class="tc">
+      <div class="hbox tbox"><div class="eyebrow">Time</div><div id="timer" class="mono">00:00</div></div>
+      <div id="objective">Drop</div>
+    </div>
+    <div class="tr hbox">
+      <div class="eyebrow">Pilot</div>
+      <div class="lvrow"><b class="big mono" id="lvlTxt">LV 1</b></div>
+      <div class="hrow"><span data-sym="kills"></span><b class="mono" id="killTxt">0</b></div>
+      <div class="hrow bolts"><span data-sym="bolts"></span><b class="mono" id="boltTxt">0</b></div>
+      <div class="hrow circ"><span data-sym="circuits"></span><b class="mono" id="circTxt">0</b></div>
+    </div>
+    <div id="bossbar" class="hbox" hidden><div class="eyebrow name" id="bossName">THE WARDEN</div><div class="bar"><i id="bossFill"></i></div></div>
+    <canvas id="qrIntro" hidden></canvas>
+    <div id="countdown" hidden>3</div>
+    <div id="reloadLayer"></div>
+    <div id="dmgLayer"></div>
+    <div id="fzBar" hidden><b>COIN FRENZY</b><i><i id="fzFill"></i></i></div>
+    <div id="xpline"><i id="xpFill"></i><b id="xpEdge"></b><span id="xpPct" class="mono"></span><div id="xpSparks"></div></div>
+    <div id="banner" hidden><div class="h" id="bannerH"></div><div class="s" id="bannerS"></div></div>
+    <div id="marker" hidden><span id="markerTxt">GATE</span></div>
+    <div id="shopMarker" class="smarker" hidden><span id="shopMarkerTxt">STORE</span></div>
+    <div id="prompt" hidden></div>
+    <div id="rewardPop" hidden></div>
+    <div id="loadoutBox" class="hbox"><div class="eyebrow">Armament</div><div id="loadout"></div></div>
+    <div id="hint"></div>
+  </div>
+
+  <!-- ===== WORKBENCH (hangar + field inventory) ===== -->
+  <section id="inv" class="overlay bench" hidden>
+    <div class="bstats">
+      <div class="eyebrow" id="benchEyebrow">Scrap Survivors · hangar</div>
+      <div class="bstat"><span data-sym="hp"></span><b class="mono" id="bHp">100</b></div>
+      <div class="bbar"><i id="bHpBar"></i></div>
+      <div class="bstat sh"><span data-sym="shield"></span><b class="mono" id="bSh">0</b></div>
+      <div class="bbar sh"><i id="bShBar"></i></div>
+    </div>
+    <div class="abilities">
+      <h3>Abilities</h3>
+      <ul id="abil"></ul>
+    </div>
+    <div class="readycheck" id="readyCheck"><div class="eyebrow">Ready check</div><div class="checklist" id="checklist"></div></div>
+    <aside class="parts" id="partsPanel">
+      <div class="chassis" id="chassisRows"></div>
+      <h3 id="partsHead">Parts</h3>
+      <div class="phint" id="partsHint"></div>
+      <div class="plist" id="partList"></div>
+      <div class="scrap recycle" id="scrapZone"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span><b>Recycle</b><small data-sym="bolts"></small></span></div>
+      <button class="btn nav" id="invDoneBtn">Launch</button>
+      <button class="btn ghost nav devtest" id="invTestBtn" hidden>Test range</button>
+      <button class="btn ghost nav" id="invMenuBtn">Main menu</button>
+      <div class="legend">Drag: turn · Scroll: zoom · <kbd>Enter</kbd> close<br><kbd>A</kbd> grab · <kbd>R</kbd> turn · <kbd>B</kbd> back</div>
+    </aside>
+    <div class="toast" id="toast" hidden></div>
+    <svg id="tipLine" class="tipline" hidden><line id="tipL" x1="0" y1="0" x2="0" y2="0" pathLength="1"></line><rect id="tipDot" width="7" height="7"></rect></svg>
+    <div id="tip" class="tip" hidden><div class="tipView" id="tipView"></div><div class="tipName" id="tipName"></div><div class="tipRar" id="tipRar"></div><div class="tipStats" id="tipStats"></div></div>
+    <div id="vcursor" hidden></div>
+  </section>
+
+  <!-- ===== TITLE ===== -->
+  <section id="title" hidden>
+    <button class="btn ghost nav" id="tRandom" title="Blow up this robot and build a new one">⟳ Randomize</button>
+    <div class="tmain">
+      <h1 class="tlogo">SCRAP<br>SURVIVORS<span>!</span></h1>
+      <nav class="tmenu">
+        <button class="tbtn nav" id="tStart">Start</button>
+        <button class="tbtn nav" id="tCustom">Customize</button>
+        <button class="tbtn nav" id="tCatalog">Catalog</button>
+        <button class="tbtn nav uc" id="tStore" aria-disabled="true" data-tip="The store is under construction">Store<span class="ucTag" aria-hidden="true"><i></i><b>UNDER CONSTRUCTION</b></span></button>
+        <button class="tbtn nav" id="tOptions">Options</button>
+        <button class="tbtn nav" id="tQuit">Quit</button>
+      </nav>
+    </div>
+    <div class="tver mono" id="verTxt">VERSION</div>
+    <div class="custpanel" id="custPanel" hidden>
+      <div class="custhead">
+        <div class="eyebrow">Customize</div>
+        <div class="ctabs" role="tablist">
+          <button class="ctab nav on" data-tab="colours">Colours</button><button class="ctab nav" data-tab="stickers">Stickers</button><button class="ctab nav" data-tab="cosmetics">Cosmetics</button>
+        </div>
+      </div>
+      <div class="custbody">
+        <div class="cpage" data-page="colours">
+          <h3>Primary colour</h3>
+          <div class="swatches" id="swatches"></div>
+          <label class="colrow"><span>Any colour</span><input type="color" id="colPick"></label>
+          <h3>Secondary colour</h3>
+          <div class="swatches" id="swatches2"></div>
+          <label class="colrow"><span>Any colour</span><input type="color" id="colPick2"></label>
+        </div>
+        <div class="cpage" data-page="stickers" hidden>
+          <h3>Stickers</h3>
+          <div class="patchwrap"><canvas id="patchCv" width="320" height="320"></canvas>
+            <div class="brushes" id="brushes"></div></div>
+          <div class="custhint"><kbd>LMB</kbd> draw · <kbd>RMB</kbd> erase</div>
+          <div class="patchdir" id="patchDir"></div>
+          <div class="custrow patchbtns"><button class="btn ghost nav" id="patchSave">Save</button><button class="btn ghost nav" id="patchNew">New</button><button class="btn ghost nav" id="patchDup">Duplicate</button><button class="btn ghost nav" id="patchDel">Delete</button><button class="btn ghost nav" id="patchClear">Clear</button></div>
+          <h3>Sticker bomb</h3>
+          <label class="bombrow"><span>Amount</span><input class="nav" id="bombAmt" type="range" min="0" max="12" step="0.01"><b id="bombPeace" title="Maxed out">☮</b></label>
+          <div class="custrow"><button class="btn ghost nav" id="stickerReset">⟳ Reshuffle</button></div>
+          <div class="custhint">Drag: slide · Pull off: peel</div>
+        </div>
+        <div class="cpage" data-page="cosmetics" hidden>
+          <h3>Cosmetics</h3>
+          <div class="cosshelf" id="cosShelf"></div>
+          <div class="custhint">Drag on · Pull off to remove</div>
+        </div>
+      </div>
+      <div class="custfoot">
+        <div class="custhint">Drag: turn</div>
+        <button class="btn nav" id="custDone">Done</button>
+      </div>
+    </div>
+    <div class="catpanel" id="catalog" hidden>
+      <div class="cathead"><h2>CATALOG</h2><span class="catcount mono" id="catCount">0/0</span></div>
+      <div class="ctabs cattabs" id="catTabs" role="tablist"></div>
+      <div class="catbody"><div class="catgrid" id="catGrid"></div><aside class="catdetail" id="catDetail"></aside></div>
+      <div class="catfoot"><button class="btn nav" id="catBack">Back</button></div>
+    </div>
+    <svg id="ttLine" class="tipline" hidden><line id="ttL" x1="0" y1="0" x2="0" y2="0" pathLength="1"></line><rect id="ttDot" width="7" height="7"></rect></svg>
+    <div id="titleTip" class="tip" hidden><div class="tipView" id="ttView"></div><div class="tipName" id="ttName"></div><div class="tipRar" id="ttRar"></div><div class="tipStats" id="ttStats"></div></div>
+  </section>
+
+  <!-- ===== LEVEL UP ===== -->
+  <section id="levelup" class="overlay" hidden>
+    <div class="pickwrap">
+      <h2>LEVEL UP <span class="luq mono" id="luQueue" hidden></span></h2>
+      <div class="cards" id="luCards"></div>
+    </div>
+  </section>
+
+  <section id="wcase" class="overlay" hidden>
+    <div class="pickwrap">
+      <h2>WEAPON CASE</h2>
+      <div class="cards" id="wcCards"></div>
+      <div class="wcfoot"><span id="wcRerolls"></span><button class="btn ghost nav" id="wcSkip" data-tip="Recycle: +6 bolts"><span data-sym="bolts"></span> +6</button></div>
+    </div>
+  </section>
+
+  <section id="perk" class="overlay" hidden>
+    <div class="pickwrap">
+      <div class="eyebrow">Stage cleared</div>
+      <h2>PICK A PERK</h2>
+      <div class="cards" id="perkCards"></div>
+    </div>
+  </section>
+
+  <section id="shop" class="overlay" hidden>
+    <div class="pickwrap">
+      <h2>STORE</h2>
+      <div class="shopbolts"><span data-sym="bolts"></span> <b class="mono" id="shopBolts">0</b></div>
+      <div class="cards" id="shopCards"></div>
+      <div id="shopSub" hidden></div>
+      <button class="btn ghost nav" id="shopLeave">Leave</button>
+    </div>
+  </section>
+
+  <section id="roulette" class="overlay" hidden>
+    <div class="pickwrap">
+      <h2>LOCKED CASE</h2>
+      <div class="roulview" id="roulView"><div class="roulstrip" id="roulStrip"></div><div class="roulmark"></div></div>
+      <div class="slotmsg" id="roulMsg"></div>
+    </div>
+  </section>
+
+  <section id="pause" class="overlay" hidden>
+    <div class="menu pmain" id="pauseMain">
+      <h2>PAUSED</h2>
+      <button class="btn nav" id="resumeBtn">Resume</button>
+      <button class="btn ghost nav" id="invBtn">Inventory</button>
+      <button class="btn ghost nav" id="optBtn">Options</button>
+      <button class="btn ghost nav devtest" id="devPanelBtn" hidden>Dev panel</button>
+      <div class="psep"></div>
+      <button class="btn ghost nav" id="quitBtn">Abandon run</button>
+      <button class="btn ghost nav" id="exitBtn">Quit to desktop</button>
+    </div>
+    <div class="menu optmenu" id="optMenu" hidden>
+      <h2>OPTIONS</h2>
+      <div class="optbody">
+        <div class="optsec">
+          <h3>Controls</h3>
+          <label class="setting"><span>Look sensitivity <b class="mono" id="sensVal">1.0</b></span><input class="nav" id="sens" type="range" min="0.2" max="3" step="0.1"></label>
+          <button class="btn ghost nav" id="invertBtn">Invert look: off</button>
+          <button class="btn ghost nav" id="assistBtn">Gamepad aim assist: on</button>
+        </div>
+        <div class="optsec">
+          <h3>Audio</h3>
+          <label class="setting"><span>Music volume <b class="mono" id="musicVal">60%</b></span><input class="nav" id="musicVol" type="range" min="0" max="1" step="0.05"></label>
+        </div>
+        <div class="optsec">
+          <h3>Display</h3>
+          <label class="setting"><span>UI scale <b class="mono" id="uiScaleVal">100%</b></span><input class="nav" id="uiScale" type="range" min="0.7" max="1.6" step="0.05"></label>
+          <button class="btn ghost nav" id="gfxBtn">Graphics: high</button>
+          <button class="btn ghost nav" id="detailBtn">World detail: on</button>
+          <button class="btn ghost nav" id="physBtn">Physics body: on</button>
+          <button class="btn ghost nav orow" id="fsBtn"><span>Fullscreen</span><kbd>F11</kbd></button>
+        </div>
+        <div class="optsec">
+          <h3>Crosshair &amp; HUD</h3>
+          <div class="xhopts">
+            <button class="btn ghost nav" id="xhStyleBtn">Crosshair: diamond</button>
+            <button class="btn ghost nav" id="xhColorBtn">Colour: white</button>
+            <button class="btn ghost nav" id="xhSizeBtn">Size: medium</button>
+            <div class="xhprev" aria-hidden="true"><div id="xhPreview" class="xh"><i></i><b></b></div></div>
+          </div>
+          <button class="btn ghost nav" id="xhPartsBtn">Part level bar: on</button>
+        </div>
+        <div class="optsec">
+          <h3>Developer</h3>
+          <button class="btn ghost nav" id="devBtn">Developer mode: off</button>
+          <button class="btn ghost nav" id="skipBtn">Skip +1:00</button>
+        </div>
+      </div>
+      <button class="btn nav" id="optBackBtn">Back</button>
+    </div>
+  </section>
+
+  <section id="over" class="overlay" hidden>
+    <div class="menu overcard">
+      <h2>FRAME DESTROYED</h2>
+      <div class="osub" id="overSub"></div>
+      <div class="otiles mono" id="recap"></div>
+      <details class="odetails" id="overDetails">
+        <summary class="btn ghost nav">Details<span class="dArr">▾</span></summary>
+        <div class="ocols">
+          <div class="osec"><h3>Combat</h3><div id="overCombat"></div></div>
+          <div class="osec"><h3>Scrapped</h3><div id="overKills"></div></div>
+        </div>
+        <div class="osec"><h3>Damage by part</h3><div id="overParts"></div></div>
+        <div class="osec"><h3>Final frame</h3><div class="obuilds" id="overBuild"></div></div>
+      </details>
+      <button class="btn nav" id="againBtn">Hangar</button>
+    </div>
+  </section>
+</div>
+
+<script src="node_modules/three/build/three.min.js"></script>
+<script src="src/config.js"></script>
+<script src="src/gfx.js"></script>
+<script src="src/post.js"></script>
+<script src="src/data.js"></script>
+<script src="src/symbols.js"></script>
+<script src="src/shapes.js"></script>
+<script src="src/terrain.js"></script>
+<script src="src/robot.js"></script>
+<script src="src/cosmetics.js"></script>
+<script src="src/input.js"></script>
+<script src="src/player.js"></script>
+<script src="src/combat.js"></script>
+<script src="src/weaponfx.js"></script>
+<script src="src/ragdoll.js"></script>
+<script src="src/inventory.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/music.js"></script>
+<script src="src/shop.js"></script>
+<script src="src/wcase.js"></script>
+<script src="src/title.js"></script>
+<script src="src/catalog.js"></script>
+<script src="src/vendor/rapier.js"></script>
+<script src="src/physics.js"></script>
+<script src="src/props.js"></script>
+<script src="src/worlddetail.js"></script>
+<script src="src/game.js"></script>
+<script src="src/devtest.js"></script>
+<script src="src/windows.js"></script>
+</body>
+</html>
