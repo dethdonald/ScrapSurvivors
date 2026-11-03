@@ -918,7 +918,7 @@ body.win-sizing,body.win-sizing *{cursor:nwse-resize!important;user-select:none}
 .cathead{display:flex;align-items:baseline;gap:14px;margin-top:6px}
 .cathead h2{margin:0;font-size:26px;letter-spacing:.16em}
 .catcount{color:var(--sec);font-size:16px}
-.cattabs{grid-template-columns:repeat(6,1fr)!important;margin-top:0}
+.cattabs{grid-template-columns:repeat(7,1fr)!important;margin-top:0}
 .cattabs .ctab small{color:var(--dim);font-family:var(--f-mono);letter-spacing:0;margin-left:4px}
 .catbody{display:grid;grid-template-columns:minmax(0,1fr) clamp(240px,28%,340px);gap:14px;min-height:0}
 .catgrid{overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px;align-content:start;padding:2px 6px 2px 2px}
@@ -946,3 +946,10 @@ body.win-sizing,body.win-sizing *{cursor:nwse-resize!important;user-select:none}
 .catfoot{display:flex;justify-content:flex-end}
 .catfoot .btn{min-width:160px}
 @media (max-width:760px){.catbody{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}.catdetail{border-left:0;border-top:1px solid var(--frame-dim);padding:10px 0 0;max-height:40vh}.cattabs{grid-template-columns:repeat(3,1fr)!important}}
+/* BERSERK: a red bar like the coin frenzy one (sits just above it) and a pulsing red edge on the screen */
+#bzBar{position:absolute;left:50%;bottom:58px;transform:translateX(-50%);display:grid;justify-items:center;gap:4px;pointer-events:none;z-index:4;animation:fzPulse .35s ease-in-out infinite alternate}
+#bzBar b{font-size:14px;letter-spacing:.24em;color:#ff4a3a;text-shadow:0 0 12px rgba(255,40,30,.8),0 2px 0 #5a0808}
+#bzBar>i{display:block;width:240px;height:5px;background:rgba(0,0,0,.5);border:1px solid #ff4a3a}
+#bzBar>i>i{display:block;height:100%;background:linear-gradient(90deg,#c8101a,#ff9a7a);transform-origin:left}
+body.berserk #vignette{box-shadow:inset 0 0 160px 30px rgba(255,20,20,.45);animation:bzEdge .45s ease-in-out infinite alternate}
+@keyframes bzEdge{from{opacity:.65}to{opacity:1}}

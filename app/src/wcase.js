@@ -34,13 +34,18 @@ function partCardHTML(it) {
 const partTip = it => `${itemName(it)}: ${itemDef(it).desc || (it.kind === 'gem' ? ATTRS[it.type].desc : '')}`;
 
 /* ---------- the case on the ground: a hard-shell case with latches, glowing in your accent colour ---------- */
-function dropCase(p) {
-  const g = new THREE.Group(), spin = new THREE.Group(); g.add(spin);
+/* the case itself (also drawn in the catalog) */
+function caseMesh() {
+  const spin = new THREE.Group();
   spin.add(bx(1.15, 0.42, 0.78, 0x24292e));
   spin.add(bx(1.19, 0.06, 0.82, 0xff7a1a, 0, 0, 0, 0x5a2000));                     // the seam
   for (const x of [-0.36, 0.36]) spin.add(bx(0.12, 0.14, 0.06, 0xb8bec4, x, 0.02, 0.42));      // latches
   spin.add(bx(0.4, 0.06, 0.08, 0x111416, 0, 0.27, 0)); spin.add(bx(0.06, 0.12, 0.08, 0x111416, -0.18, 0.22, 0)); spin.add(bx(0.06, 0.12, 0.08, 0x111416, 0.18, 0.22, 0));   // handle
   for (const x of [-0.5, 0.5]) for (const z of [-0.33, 0.33]) spin.add(bx(0.1, 0.44, 0.1, 0xff7a1a, x, 0, z, 0x5a2000));   // corner guards
+  return spin;
+}
+function dropCase(p) {
+  const g = new THREE.Group(), spin = caseMesh(); g.add(spin);
   const beam = new THREE.Mesh(geoBox, new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.4, depthWrite: false }));
   beam.scale.set(0.16, 7, 0.16); beam.position.y = 3; g.add(beam);
   const halo = new THREE.Mesh(geoRing, new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false }));

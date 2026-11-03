@@ -61,9 +61,9 @@ function rollLoot(luck = 0) {
   const pool = [];
   for (const t of Object.keys(WEAPONS)) pool.push(['weapon', t, 3 * (WEAPONS[t].lootWeight ?? 1)]);
   for (const t of Object.keys(ARMS)) pool.push(['arm', t, 1.5]);
-  for (const t of Object.keys(LEGS)) pool.push(['leg', t, 1]);
+  if (!BUILD_V2) for (const t of Object.keys(LEGS)) pool.push(['leg', t, 1]);       // V2: the lower half never drops
   for (const t of Object.keys(MODULES)) pool.push(['module', t, 1.2]);
-  for (const t of Object.keys(BLOCKS)) if (!BLOCKS[t].body) pool.push(['block', t, 0.8]);
+  if (!BUILD_V2) for (const t of Object.keys(BLOCKS)) if (!BLOCKS[t].body) pool.push(['block', t, 0.8]);    // V2: no free sockets for bricks
   let x = Math.random() * pool.reduce((a, p) => a + p[2], 0), pickd = pool[0];
   for (const p of pool) { x -= p[2]; if (x <= 0) { pickd = p; break; } }
   // a rolled rarity gives exactly the first level of that rarity
@@ -83,6 +83,22 @@ const BLOCKS = {
   body: {
     name: 'Frame Body', body: true, mass: 1.0, hp: 50, shield: 10, speed: 0, size: [1.1, 1.1, 1.1], faces: 'all', color: 0x4b5661, neck: 0.32,
     desc: 'A cube with a socket on every face. Stack one on another for a waist and chest.',
+  },
+  // ---- BUILD V2 upper halves: one sits on the lower half. 'arm' sockets (sphere) take arms, 'module' sockets (cube) take modules.
+  upper_scout: {
+    name: 'Scout Torso', body: true, upper: true, mass: 0.7, hp: 30, shield: 15, speed: 0.3, size: [1.1, 0.95, 0.95], faces: 'none', color: 0x4b5661, neck: 0.28,
+    sockets: [{ face: 'right', at: [0, 0.08], accepts: 'arm' }, { face: 'left', at: [0, 0.08], accepts: 'arm' }, { face: 'top', at: [0, 0], accepts: 'module' }],
+    desc: 'Light and quick. Two arms and one module on top.',
+  },
+  upper_brawler: {
+    name: 'Brawler Torso', body: true, upper: true, mass: 1.1, hp: 50, shield: 10, speed: 0, size: [1.25, 1.2, 1.05], faces: 'none', color: 0x4b5661, neck: 0.28,
+    sockets: [{ face: 'right', at: [-0.24, 0.26], accepts: 'arm' }, { face: 'right', at: [0.24, -0.26], accepts: 'arm' }, { face: 'left', at: [0.24, 0.26], accepts: 'arm' }, { face: 'left', at: [-0.24, -0.26], accepts: 'arm' }],
+    desc: 'Built to fight: four arm sockets, two on each side, but no room for modules.',
+  },
+  upper_carrier: {
+    name: 'Carrier Torso', body: true, upper: true, mass: 1.0, hp: 40, shield: 20, speed: 0, size: [1.2, 1.05, 1.05], faces: 'none', color: 0x4b5661, neck: 0.28,
+    sockets: [{ face: 'right', at: [0, 0.1], accepts: 'arm' }, { face: 'left', at: [0, 0.1], accepts: 'arm' }, { face: 'top', at: [0, 0], accepts: 'module' }, { face: 'back', at: [0, 0.1], accepts: 'module' }, { face: 'front', at: [0, 0.25], accepts: 'module' }],
+    desc: 'A utility frame: two arms and three module sockets (top, back and chest).',
   },
   pack: {
     name: 'Backpack', mass: 0.45, size: [0.95, 1.0, 0.5], faces: 'out', color: 0x5a5244, neck: 0.1, upgradable: true, pack: true,
@@ -362,7 +378,7 @@ const WEAPONS = {
       w.cd = this.cd(lv) / m.rate;
       // first target: the enemy under the crosshair, or the closest one near the line of fire
       let t = te && !te.dead ? te : null;
-      if (!t) { const d = tp.clone().sub(o).normalize(); let best = 2.2 * 2.2; for (const e of enemies) { if (e.dead) continue; const c = aimPt(e), v = c.clone().sub(o), along = v.dot(d); if (along < 0 || along > this.range) continue; const off = v.lengthSq() - along * along; if (off < best) { best = off; t = e; } } }
+      if (!t) { const d = tp.clone().sub(o).normalize(); let best = 2.2 * 2.2; for (const e of enemies) { if (e.dead || e.d.npc) continue; const c = aimPt(e), v = c.clone().sub(o), along = v.dot(d); if (along < 0 || along > this.range) continue; const off = v.lengthSq() - along * along; if (off < best) { best = off; t = e; } } }
       const pts = [o.clone()], power = 0.9 + 1.6 * lvlCurve(lv, 35);      // bigger, more spectacular bolts as it levels
       arcMuzzle(o, tp.clone().sub(o).normalize(), power);
       if (!t) { pts.push(tp.clone()); lightning(pts, power); return; }
@@ -438,6 +454,73 @@ const WEAPONS = {
     fire({ w, lv, m, o, tp, manual }) {
       w.cd = this.cd(lv) / m.rate;
       bullet(o, tp, 260, this.dmg(lv) * m.dmg, { pierce: this.pierce(lv), life: 0.6, manual, knock: this.push, tracer: true });
+    },
+  },
+  gatling: {
+    name: 'Gatling Gun', range: 40, sound: 'autogun', mass: 0.9, push: 0.2, kick: 0.35, casing: 'brass', lootWeight: 0.5,
+    mag: lvl => 120 + 20 * Math.floor(lvl / 15), reload: lvl => 6 / (1 + 0.4 * lvlCurve(lvl, 30)),
+    dmg: lvl => 4.2 * (1 + 0.1 * (lvl - 1)),
+    info(lvl) { return [['Damage', this.dmg(lvl).toFixed(1)], ['Fire rate', '20 /s'], ['Magazine', this.mag(lvl)], ['Reload', `${this.reload(lvl).toFixed(1)} s`], ['Push', 'light'], ['Range', '40 m']]; },
+    desc: 'Six spinning barrels. A huge belt of rounds at a blistering rate, then a very long reload.',
+    model(g, { out }) {
+      joint(g, [0, 0, 0], 0.13, COL.dark);
+      const o = out.z > 0.9 ? [0, 0, 0] : [out.x * 0.22, out.y * 0.22, 0];
+      if (o[0] || o[1]) strut(g, [0, 0, 0], o, 0.1, COL.dark);
+      g.add(bx(0.24, 0.24, 0.36, COL.dark, o[0], o[1] + 0.02, 0.24));                // motor housing
+      g.add(bx(0.2, 0.2, 0.2, 0x3a3128, o[0] + 0.16, o[1] - 0.08, 0.22));           // ammo drum
+      g.add(bx(0.26, 0.05, 0.1, ORANGE, o[0], o[1] + 0.16, 0.2));
+      // the barrel cluster spins about the firing axis (its local y is pointed down the barrels)
+      const spin = new THREE.Group(); spin.position.set(o[0], o[1] + 0.02, 0.62); spin.rotation.x = Math.PI / 2;
+      for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; spin.add(bx(0.045, 0.52, 0.045, COL.joint, Math.cos(a) * 0.075, 0, Math.sin(a) * 0.075)); }
+      spin.add(bx(0.2, 0.04, 0.2, COL.dark, 0, 0.2, 0)); spin.add(bx(0.2, 0.04, 0.2, COL.dark, 0, -0.18, 0));
+      const wrap = new THREE.Group(); wrap.add(spin); g.add(wrap);
+      return { muzzle: [o[0], o[1] + 0.02, 0.9], spin };
+    },
+    fire({ w, lv, m, o, tp, manual }) {
+      w.cd = 0.05 / m.rate;
+      bullet(o, tp, 100, this.dmg(lv) * m.dmg, { spread: 0.05, life: 0.6, manual, knock: this.push });
+    },
+  },
+  katana: {
+    name: 'Katana', range: 3, mass: 0.25, melee: true, kick: 0, lootWeight: 0.6,
+    dmg: lvl => 30 * (1 + 0.12 * (lvl - 1)),
+    arc: lvl => Math.min(180, 90 + 90 * (lvl - 1) / 59),           // degrees: 90 at Lv 1, 180 by Lv 60
+    reach: lvl => 2.6 + 0.6 * lvlCurve(lvl, 30),
+    info(lvl) { return [['Damage', this.dmg(lvl).toFixed(0)], ['Swing arc', `${Math.round(this.arc(lvl))}°`], ['Reach', `${this.reach(lvl).toFixed(1)} m`], ['Arc grows', 'to 180° at Lv 60']]; },
+    desc: 'Melee. Every swing cuts everything in a wide arc in front of the arm: 90° to start, widening to 180° as it levels.',
+    model(g, { out }) {
+      joint(g, [0, 0, 0], 0.11, COL.dark);
+      const o = out.z > 0.9 ? [0, 0, 0] : [out.x * 0.2, out.y * 0.2, 0];
+      if (o[0] || o[1]) strut(g, [0, 0, 0], o, 0.09, COL.dark);
+      g.add(bx(0.09, 0.1, 0.34, 0x1c1a20, o[0], o[1], 0.2));                // wrapped grip
+      for (let k = 0; k < 3; k++) g.add(bx(0.1, 0.11, 0.03, 0xd8d4c8, o[0], o[1], 0.08 + k * 0.1));
+      g.add(bx(0.2, 0.04, 0.2, ORANGE, o[0], o[1], 0.38));                  // round-ish guard (rarity colour)
+      // a long, slightly curved single-edged blade: three segments bending up
+      const bm = M(0xe4ebef);
+      let z = 0.42, y = 0; for (let k = 0; k < 3; k++) { const seg = bx(0.03, 0.08, 0.42, 0xe4ebef, o[0], o[1] + y, z + 0.21); seg.rotation.x = -0.05 * k; g.add(seg); z += 0.41; y += 0.025 * (k + 1); }
+      void bm;
+      return { muzzle: [o[0], o[1] + y, z + 0.05], base: [o[0], o[1], 0.44] };
+    },
+  },
+  chainsaw: {
+    name: 'Chainsaw', range: 3, mass: 0.7, saw: true, kick: 0, lootWeight: 0.6,
+    dmg: lvl => 7 * (1 + 0.1 * (lvl - 1)),                          // per cut; it cuts each enemy about 8 times a second
+    reach: lvl => 1.4 + 2.6 * Math.min(1, (lvl - 1) / 59),          // bar length in metres
+    info(lvl) { return [['Damage', `${this.dmg(lvl).toFixed(1)} × 8 /s`], ['Bar length', `${this.reach(lvl).toFixed(1)} m`], ['Grows', 'longer every level']]; },
+    desc: 'Melee. Rev it and everything along the bar in front of it gets shredded. The bar grows longer as it levels.',
+    model(g, { out, lvl }) {
+      joint(g, [0, 0, 0], 0.12, COL.dark);
+      const o = out.z > 0.9 ? [0, 0, 0] : [out.x * 0.22, out.y * 0.22, 0];
+      if (o[0] || o[1]) strut(g, [0, 0, 0], o, 0.1, COL.dark);
+      const L = WEAPONS.chainsaw.reach(lvl || 1);
+      const rig = new THREE.Group(); rig.position.set(o[0], o[1], 0); g.add(rig);
+      rig.add(bx(0.26, 0.24, 0.34, 0xc0562a, 0, 0.02, 0.2));               // engine block
+      rig.add(bx(0.1, 0.06, 0.2, COL.dark, 0, 0.18, 0.16));                 // top handle
+      rig.add(bx(0.06, 0.12, 0.06, 0x3a3128, 0.1, 0.12, 0.06));             // exhaust stub
+      rig.add(bx(0.27, 0.05, 0.12, ORANGE, 0, -0.08, 0.2));
+      rig.add(bx(0.05, 0.14, L, 0xb8bec4, 0, 0.0, 0.38 + L / 2));          // the bar
+      for (let k = 0; k < Math.round(L * 7); k++) rig.add(bx(0.07, 0.03, 0.06, COL.dark, 0, (k % 2 ? 0.085 : -0.085), 0.42 + k / 7));   // chain teeth
+      return { muzzle: [o[0], o[1], 0.38 + L], base: [o[0], o[1], 0.4], saw: rig, exhaust: [o[0] + 0.1, o[1] + 0.2, 0.06] };
     },
   },
   knife: {
@@ -625,6 +708,24 @@ const attrTag = it => armGems(it).map(g => `<em class="attr" style="color:${ATTR
    plate: { name: 'Armor Plate', desc: '+25 max hull per Mk.', apply(s, lvl) { s.maxHp += 25 * lvl; },
             model(g, { out }) { joint(g, [0,0,0], 0.15, COL.joint); g.add(bx(0.5, 0.6, 0.12, COL.joint, out.x*0.3, out.y*0.3, out.z*0.3)); } },
 */
+/* ---------- BUILD V2 lower halves: a single block with its legs built in. Nothing else plugs into it except the upper half
+   on top, and two shared gem slots that open as it levels (Mk II, Mk III). Gems here change how you move, like leg gems did.
+   mounts: where each built-in leg sits [face, u, v] on the block. Legs use the old LEGS models and stats. ---------- */
+const LOWERS = {
+  standard: { name: 'Walker Legs', legType: 'basic', mass: 1.6, hp: 50, shield: 10, mounts: [['left', 0, 0], ['right', 0, 0]],
+    desc: 'Two sturdy legs. Balanced, and they can scramble a short way up a wall.' },
+  spider:   { name: 'Spider Legs', legType: 'spider', mass: 2.4, hp: 45, shield: 10, mounts: [['left', -0.34, 0], ['left', 0, 0], ['left', 0.34, 0], ['right', -0.34, 0], ['right', 0, 0], ['right', 0.34, 0]],
+    desc: 'Three arched legs a side. Steps up tall ledges and climbs walls for much longer.' },
+  treads:   { name: 'Tread Base', legType: 'tread', mass: 2.6, hp: 65, shield: 10, mounts: [['back', -0.32, 0], ['back', 0.32, 0], ['front', 0, 0]],
+    desc: 'Two treads at the back, one at the front. Heavy, tough and can boost, but no wall climbing.' },
+  wheels:   { name: 'Wheel Base', legType: 'wheel', mass: 1.9, hp: 45, shield: 10, mounts: [['left', -0.32, 0], ['left', 0.32, 0], ['right', -0.32, 0], ['right', 0.32, 0]],
+    desc: 'Four wheels at the corners. Fast and slidey, can boost.' },
+};
+const lowerLegItems = it => {
+  // the built-in legs, made once per lower-half item (they aren't parts of their own: you can't take them off)
+  if (!it._legs || it._legs.length !== LOWERS[it.type].mounts.length) Object.defineProperty(it, '_legs', { value: LOWERS[it.type].mounts.map(() => mkItem('leg', LOWERS[it.type].legType, 1)), enumerable: false, configurable: true, writable: true });
+  return it._legs;
+};
 const MODULES = {
   jetpack: {
     name: 'Jetpack', mass: 0.5,
@@ -794,6 +895,8 @@ const ETYPES = {
   splitter: { hp: 75, speed: 3.9, dmg: 12, r: 1.05, mass: 2.6, xp: 3, color: 0x3fb8a0, size: 1.6, split: 10 },
   splitling: { hp: 14, speed: 5.8, dmg: 5, r: 0.42, mass: 0.5, xp: 1, color: 0x7fe0c8, size: 0.7 },
   brute:   { hp: 2400, speed: 5.0, dmg: 26, r: 1.8,  mass: 10, xp: 30, color: 0xa8233a, size: 2.8, mini: true },
+  // not an enemy: a little cleaning bot that roams the level hoovering up the mess. Shootable (big xp), never targeted by lock-on.
+  robovac: { hp: 320, speed: 2.2, dmg: 0, r: 0.75, mass: 2.5, xp: 12, color: 0xd8dde2, size: 1, npc: true },
   warden:  { hp: 16000, speed: 3.9, dmg: 30, r: 3.0,  mass: 60, xp: 0,  color: 0x6e1c30, size: 5,   boss: true },
 };
 const CRAWLER_SHAPES = ['cube', 'sphere', 'dome'];
@@ -807,19 +910,21 @@ const FACE_ORDER = ['right', 'left', 'front', 'back', 'top', 'bottom'];
 const OPPOSITE = { right: 'left', left: 'right', front: 'back', back: 'front', top: 'bottom', bottom: 'top' };
 let nextItemId = 1;
 /* Arms go Mk I -> III and legs Mk I -> II. Loot rolled at a rarity level maps onto those few marks. */
-const maxLvlOf = it => it.kind === 'arm' ? 3 : it.kind === 'leg' ? 2 : it.kind === 'gem' ? GEM_MAX : MAX_LVL;
+const maxLvlOf = it => it.kind === 'arm' || it.kind === 'lower' ? 3 : it.kind === 'leg' ? 2 : it.kind === 'gem' ? GEM_MAX : MAX_LVL;
 function markFor(kind, lvl) {
+  if (kind === 'lower') return lvl >= 60 ? 3 : lvl >= 10 ? 2 : Math.max(1, Math.min(3, lvl));
   if (kind === 'arm') return lvl >= 60 ? 3 : lvl >= 10 ? 2 : Math.max(1, Math.min(3, lvl));
   if (kind === 'leg') return lvl >= 30 ? 2 : Math.max(1, Math.min(2, lvl));
   return lvl;
 }
 /* stats for arms and legs scale from these equivalents of the old 1..100 levels */
 // arms and legs: a new mark only opens gem slots; their stats stay the same at every mark
-const effLvl = it => it.kind === 'arm' || it.kind === 'leg' ? 1 : it.lvl;
+const effLvl = it => it.kind === 'arm' || it.kind === 'leg' || it.kind === 'lower' ? 1 : it.lvl;
 /* gem slots: arms earn one per mark (none at Mk I), legs one at Mk II, some modules have their own */
 function gemSlotsFor(it) {
   if (it.kind === 'arm') return Math.max(0, Math.min(2, it.lvl - 1));
   if (it.kind === 'leg') return Math.max(0, Math.min(1, it.lvl - 1));
+  if (it.kind === 'lower') return Math.max(0, Math.min(2, it.lvl - 1));
   if (it.kind === 'module' && MODULES[it.type] && MODULES[it.type].gemSlots) return MODULES[it.type].gemSlots(it.lvl);
   return 0;
 }
@@ -832,13 +937,17 @@ function syncGemSlots(it) {
 function mkItem(kind, type, lvl = 1) {
   const it = { id: nextItemId++, kind, type, lvl: markFor(kind, lvl) };
   if (kind === 'arm') { it.weapon = null; if (ARMS[type] && ARMS[type].wrists === 2) it.weapon2 = null; }
-  if (kind === 'block') { it.slots = new Array(6).fill(null); it.plug = 'bottom'; }
+  if (kind === 'block') { it.slots = new Array(BLOCKS[type] && BLOCKS[type].sockets ? BLOCKS[type].sockets.length : 6).fill(null); it.plug = 'bottom'; }
+  if (kind === 'lower') { it.slots = new Array(6).fill(null); it.plug = 'bottom'; }      // only the top slot is used: the upper half
   syncGemSlots(it);
   return it;
 }
 /* Flat side-view drawings of each weapon, for the HUD and the workbench (viewBox 32 x 14, filled in the text colour). */
 const WEAPON_ICONS = {
   pistol: '<path d="M6 3h17v2h2v2h-2v1H14l-1 1h-1l-2 4H6l2-5H6z"/>',
+  gatling: '<path d="M1 3h9l2 1h3v6h-3l-2 1H1z"/><path d="M15 4h16v1.5H15zM15 6.25h16v1.5H15zM15 8.5h16V10H15z"/><path d="M5 11h4v3H5z"/>',
+  katana: '<path d="M1 6h7v2H1z"/><path d="M8 4.5h1.6v5H8z"/><path d="M9.6 6.3l14 -.6c3 0 5.5-.8 7.4-2.2-1.4 2.4-4 3.8-7.4 4.3l-14 .2z"/>',
+  chainsaw: '<path d="M1 3h9v8H1z"/><path d="M3 1h5v2H3z"/><path d="M10 5h19a2 2 0 0 1 0 4H10z"/><path d="M11 4h2v1h-2zM15 4h2v1h-2zM19 4h2v1h-2zM23 4h2v1h-2zM11 9h2v1h-2zM15 9h2v1h-2zM19 9h2v1h-2zM23 9h2v1h-2z"/>',
   autogun: '<path d="M1 5l3-1h4l1 1h12V4h2v1h7v2h-7v1h-5l-1 5h-3l1-5h-2l-1 3H9l1-3H7l-3 2H1z"/>',
   shotgun: '<path d="M1 4h3l3 1h4h20v2H18v2H11l-1 3H7l1-3H4l-3 1z"/><rect x="18" y="8" width="7" height="2"/>',
   sniper: '<path d="M1 4h2l3 2h6V4h2V3h6v1h1v1h-1v1h11v1h-11v1h-5l-1 4h-3l1-4H6l-3 2H1z"/>',
@@ -858,6 +967,13 @@ const weaponIcon = (type, cls = 'wicon') => WEAPON_ICONS[type] ? `<svg class="${
 const PART_ICONS = {
   'block:body': '<path fill-rule="evenodd" d="M2 2h20v20H2zM12 7.5a4.5 4.5 0 1 0 .01 0zm0 2.2a2.3 2.3 0 1 1-.01 0z"/><path d="M4 4h3v1.4H4zM17 18.6h3V20h-3z"/>',
   'block:pack': '<path fill-rule="evenodd" d="M9 2h6v3h2.5A2.5 2.5 0 0 1 20 7.5V22H4V7.5A2.5 2.5 0 0 1 6.5 5H9zM10.5 3.4V5h3V3.4zM7 10h10v3H7z"/><path d="M8 15h8v5H8z" opacity=".55"/>',
+  'lower:standard': '<path d="M5 2h14v8H5z"/><path d="M6 10h3v7l-2 5H4l2-5zM15 10h3v7l2 5h-3l-2-5z"/>',
+  'lower:spider': '<path d="M7 3h10v7H7z"/><path d="M7 5L1 2l-1 2 6 3zM7 8L0 9v2l7-1zM7 9.5L2 16l1.6 1 4.4-6zM17 5l6-3 1 2-6 3zM17 8l7 1v2l-7-1zM17 9.5l5 6.5-1.6 1-4.4-6z"/>',
+  'lower:treads': '<path d="M6 2h12v8H6z"/><path d="M2 12h20a4 4 0 0 1 0 8H2a4 4 0 0 1 0-8zm2 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm16 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/>',
+  'lower:wheels': '<path d="M6 3h12v8H6z"/><circle cx="5" cy="17" r="4"/><circle cx="19" cy="17" r="4"/>',
+  'block:upper_scout': '<path d="M6 6h12v12H6z"/><circle cx="3.5" cy="12" r="2.5"/><circle cx="20.5" cy="12" r="2.5"/><path d="M10 2h4v4h-4z"/>',
+  'block:upper_brawler': '<path d="M6 4h12v16H6z"/><circle cx="3.5" cy="8" r="2.5"/><circle cx="3.5" cy="16" r="2.5"/><circle cx="20.5" cy="8" r="2.5"/><circle cx="20.5" cy="16" r="2.5"/>',
+  'block:upper_carrier': '<path d="M6 6h12v12H6z"/><circle cx="3.5" cy="12" r="2.5"/><circle cx="20.5" cy="12" r="2.5"/><path d="M10 2h4v4h-4zM10 18h4v4h-4z"/>',
   'leg:basic': '<circle cx="8" cy="4" r="3"/><path d="M7.2 6.2l2-1 5 8.3-2 1.1z"/><circle cx="13" cy="13.5" r="2.5"/><path d="M12 14.5h2.4l.6 6h-2.6z"/><path d="M9 20h9v2.5H9z"/>',
   'leg:spider': '<circle cx="4" cy="13" r="2.8"/><path d="M4.6 11.4l8.6-8.8 2 1.9-8.6 8.8z"/><path d="M13.4 3.2l2.2-.6L21 21.5l-1.6.5z"/><circle cx="14.4" cy="3.4" r="1.8"/>',
   'leg:wheel': '<path d="M11 1h2v9h-2z"/><path fill-rule="evenodd" d="M12 6.5a8.25 8.25 0 1 0 .01 0zm0 3a5.25 5.25 0 1 1-.01 0z"/><path d="M11.3 10h1.4v9.5h-1.4zM7 14.05h10v1.4H7z"/>',
@@ -886,9 +1002,9 @@ function partIcon(it, cls = 'picon') {
 const xpNeed = lvl => Math.round(60 + 14 * lvl);                  // xp to go from lvl to lvl+1
 // arms and legs have only a few marks, so each one takes much longer to earn
 // arm xp = damage dealt through its guns (Mk II within the first stage, Mk III takes a few stages); leg xp = 10 per metre walked
-const xpNeedOf = it => it.kind === 'arm' ? [0, 12000, 45000][it.lvl] || 45000 : it.kind === 'leg' ? 15000 : xpNeed(it.lvl);
+const xpNeedOf = it => it.kind === 'arm' ? [0, 12000, 45000][it.lvl] || 45000 : it.kind === 'lower' ? [0, 15000, 40000][it.lvl] || 40000 : it.kind === 'leg' ? 15000 : xpNeed(it.lvl);
 function xpTotal(lvl, it) { let t = 0; for (let l = 1; l < lvl; l++) t += it ? xpNeedOf({ kind: it.kind, lvl: l }) : xpNeed(l); return t; }
-const upgradeable = it => it && it.kind !== 'gem' && (it.kind !== 'block' || (BLOCKS[it.type] && BLOCKS[it.type].upgradable));
+const upgradeable = it => it && it.kind !== 'gem' && (it.kind !== 'block' || (BLOCKS[it.type] && BLOCKS[it.type].upgradable));     // (lower halves level up too)
 /* Adds xp to a part; returns how many levels it gained. */
 function addXP(it, amt) {
   const mx = maxLvlOf(it);
@@ -905,12 +1021,14 @@ function addXP(it, amt) {
 const xpFrac = it => it.lvl >= maxLvlOf(it) ? 1 : clamp((it.xp || 0) / xpNeedOf(it), 0, 1);
 /* Merging a duplicate pours in everything it had earned, plus a full level's worth on top. */
 const mergeXP = (t, h) => xpTotal(h.lvl, h) + (h.xp || 0) + xpNeedOf(t);
-const DEFS = { leg: () => LEGS, arm: () => ARMS, weapon: () => WEAPONS, module: () => MODULES, block: () => BLOCKS, gem: () => GEMS };
+const DEFS = { lower: () => LOWERS, leg: () => LEGS, arm: () => ARMS, weapon: () => WEAPONS, module: () => MODULES, block: () => BLOCKS, gem: () => GEMS };
 function itemDef(it) { return DEFS[it.kind]()[it.type]; }
 function itemName(it) { return itemDef(it).name + (it.kind === 'gem' ? ' ' + ROMAN[it.lvl || 1] : ''); }
-const KIND_LABEL = { leg: 'Leg', arm: 'Arm', weapon: 'Weapon', module: 'Module', block: 'Block', gem: 'Gem' };
+const KIND_LABEL = { lower: 'Lower half', leg: 'Leg', arm: 'Arm', weapon: 'Weapon', module: 'Module', block: 'Block', gem: 'Gem' };
 function itemSub(it) {
   if (it.kind === 'gem') return 'Gem';
+  if (it.kind === 'lower') return 'Lower half';
+  if (it.kind === 'block' && BLOCKS[it.type].upper) return 'Upper half';
   if (it.kind === 'arm') return (ARMS[it.type].auto ? 'Arm · auto-aim' : 'Arm · manual aim');
   if (it.kind === 'block') return BLOCKS[it.type].body ? 'Body' : BLOCKS[it.type].spin ? 'Gear' : BLOCKS[it.type].pack ? 'Pack' : 'Brick';
   return KIND_LABEL[it.kind];
@@ -918,6 +1036,7 @@ function itemSub(it) {
 /* Which faces of a block have usable sockets, given the face it plugs in with. Index = FACE_ORDER. */
 function blockOpenFaces(it) {
   const def = BLOCKS[it.type];
+  if (def.upper) return def.sockets.map(() => true);          // V2 torso: every socket is its own slot
   return FACE_ORDER.map(f => f !== it.plug && (def.faces === 'all' || (def.faces === 'out' && f === OPPOSITE[it.plug])));
 }
 /* Everything plugged into an item (not including the item itself). */
@@ -931,13 +1050,23 @@ function childrenOf(it) {
 /* Rows shown in the workbench hover window for any part. */
 function partInfo(it) {
   const rows = partInfoBase(it);
-  if (it.kind === 'arm' || it.kind === 'leg') rows.unshift(['Mark', `${ROMAN[it.lvl]}/${ROMAN[maxLvlOf(it)]}`], ['Gem slots', `${gemSlotsFor(it)}/${it.kind === 'arm' ? 2 : 1}`]);
+  if (it.kind === 'arm' || it.kind === 'leg' || it.kind === 'lower') rows.unshift(['Mark', `${ROMAN[it.lvl]}/${ROMAN[maxLvlOf(it)]}`], ['Gem slots', `${gemSlotsFor(it)}/${it.kind === 'leg' ? 1 : 2}`]);
+  if (it.kind === 'lower') rows.unshift(['Gems', armGems(it).length ? armGems(it).map(g => `${ATTRS[g.type].name}`).join(' + ') : it.gems && it.gems.length ? `${it.gems.length} empty` : 'opens at Mk II']);
   if (it.kind === 'arm') { rows.unshift(['Gems', armGems(it).length ? armGems(it).map(g => ATTRS[g.type].name).join(' + ') : (it.gems && it.gems.length ? `${it.gems.length} empty` : 'opens at Mk II')]); const ck = armCombo(it); if (ck && COMBOS[ck]) rows.unshift(['Combo', COMBOS[ck][0]]); }
   if (it.kind === 'leg') rows.unshift(['Gem', armGems(it).length ? `${ATTRS[armGems(it)[0].type].name}: ${LEG_GEM[armGems(it)[0].type]}` : it.gems && it.gems.length ? 'empty' : 'opens at Mk II']);
   return rows;
 }
 function partInfoBase(it) {
   const d = itemDef(it), L1 = it.lvl - 1;
+  if (it.kind === 'lower') {
+    const lg = mkItem('leg', d.legType, 1), Ld = LEGS[d.legType], n = d.mounts.length;
+    return [['Legs', `${n} × ${Ld.name.replace(/ Legs?$/, '')}`], ['Health', `+${d.hp}`], ['Run speed', `${(legSpeed(lg) * 2).toFixed(1)} m/s`], ['Jump', `${legJump(lg).toFixed(1)} m`], ['Carries', `${(legCarry(lg) * n).toFixed(1)} t`],
+      ['Boost', Ld.rolling ? 'yes' : 'no'], ...(Ld.climb ? [['Steps up', `${Ld.climb} m ledges`]] : []), ['Weight', `${partMass(it).toFixed(2)} t`]];
+  }
+  if (it.kind === 'block' && d.upper) {
+    const arms = d.sockets.filter(s => s.accepts === 'arm').length, mods = d.sockets.length - arms;
+    return [['Health', `+${d.hp}`], ['Shield', `+${d.shield}`], ['Arm sockets', arms], ['Module sockets', mods], ['Weight', `${partMass(it).toFixed(2)} t`]];
+  }
   if (it.kind === 'block' && d.pack) return [['Storage', `+${d.slots(it.lvl)} slots`], ['Sockets', 1], ['Weight', `${partMass(it).toFixed(2)} t`], ['Upgradable', 'yes']];
   if (it.kind === 'module' && d.whirl) return [['Spin damage', d.dmg(it.lvl).toFixed(0)], ['Radius', `${d.radius(it.lvl).toFixed(1)} m`], ['Timing', 'per weapon cycle'], ['Weight', `${partMass(it).toFixed(2)} t`]];
   if (it.kind === 'module' && d.blades) return [['Blades', `${d.n(it.lvl)} per throw`], ['Damage', `${d.dmg(it.lvl).toFixed(1)} per cut`], ['Every', `${d.cd(it.lvl).toFixed(1)} s`], ['Gem slots', `${gemSlotsFor(it)}/2`], ['Weight', `${partMass(it).toFixed(2)} t`]];

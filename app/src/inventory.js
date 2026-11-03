@@ -24,6 +24,21 @@ let dashLine = null;
 function refGet(r) { return r.i !== undefined ? r.owner[r.key][r.i] : r.owner[r.key]; }
 function refSet(r, v) { if (r.i !== undefined) r.owner[r.key][r.i] = v; else r.owner[r.key] = v; }
 function refAccepts(r, it) {
+  if (BUILD_V2) {
+    // V2: the stand takes a lower half, the lower half's top takes a torso, torso sockets take only what their connector says
+    if (r.key === 'body') return it.kind === 'lower';
+    if (it.kind === 'gem') return r.key === 'gems' || r.key === 'store';
+    if (r.key === 'gems') return false;
+    if (r.key === 'weapon' || r.key === 'weapon2') return it.kind === 'weapon';
+    if (r.key === 'store') return true;
+    if (r.key === 'slots') {
+      const o = r.owner;
+      if (o.kind === 'lower') return it.kind === 'block' && !!BLOCKS[it.type].upper && r.i === FACE_ORDER.indexOf('top');
+      if (o.kind === 'block' && BLOCKS[o.type].upper) return it.kind === BLOCKS[o.type].sockets[r.i].accepts;
+      return it.kind !== 'lower' && !(it.kind === 'block' && BLOCKS[it.type].upper);     // an old brick from a save still works
+    }
+    return false;
+  }
   if (r.key === 'body') return it.kind === 'block' && BLOCKS[it.type].body;
   if (it.kind === 'gem') return r.key === 'gems' || r.key === 'store';
   if (r.key === 'gems') return false;
@@ -32,7 +47,7 @@ function refAccepts(r, it) {
   if (r.key === 'slots') return true;          // block holes take anything: legs, arms, weapons, modules, more blocks
   return false;
 }
-const COMBINABLE = ['leg', 'arm', 'weapon', 'module'];
+const COMBINABLE = ['leg', 'arm', 'weapon', 'module', 'lower'];
 const canCombine = (a, b) => a && b && a !== b && a.kind === b.kind && a.type === b.type && (a.kind === 'gem' ? (a.lvl || 1) < GEM_MAX
   : (COMBINABLE.includes(a.kind) || (a.kind === 'block' && BLOCKS[a.type].upgradable)) && a.lvl < maxLvlOf(a));
 function combineInto(t, h) {
@@ -53,6 +68,7 @@ function combineInto(t, h) {
 function openSockets() {
   const out = [];
   for (const it of mountedItems()) {
+    if (it.kind === 'lower') { const ti = FACE_ORDER.indexOf('top'); if (!it.slots[ti]) out.push({ owner: it, key: 'slots', i: ti, face: 'top' }); }
     if (it.kind === 'block') blockOpenFaces(it).forEach((ok, i) => { if (ok && !it.slots[i]) out.push({ owner: it, key: 'slots', i, face: FACE_ORDER[i] }); });
     if (it.kind === 'arm') for (const k of WRISTS) if (k in it && !it[k]) out.push({ owner: it, key: k });
     (it.gems || []).forEach((g, i) => { if (!g) out.push({ owner: it, key: 'gems', i }); });
@@ -63,6 +79,7 @@ function firstFree(it) {
   const open = openSockets(), top = mountedBodies().find(b => b !== L.body);
   const pickBy = (...tests) => { for (const t of tests) { const f = open.find(t); if (f) return f; } return null; };
   let f = null;
+  if (BUILD_V2) { f = open.find(r => refAccepts(r, it)); return f || { owner: L, key: 'store', i: L.store.length }; }
   if (it.kind === 'leg') f = pickBy(r => r.owner === L.body && (r.face === 'left' || r.face === 'right'), r => r.key === 'slots' && r.face !== 'top');
   else if (it.kind === 'weapon') f = pickBy(r => r.key === 'weapon' || r.key === 'weapon2', r => r.owner === top && r.face === 'front', r => r.key === 'slots' && r.owner !== L.body);
   else if (it.kind === 'arm') f = pickBy(r => r.owner === top && (r.face === 'left' || r.face === 'right'), r => r.key === 'slots' && r.owner !== L.body);
@@ -199,7 +216,15 @@ const ICONS = {
   box: '<svg viewBox="0 0 24 24"><path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>',
 };
 /* Hangar stock with developer mode off: what you can pick and how many of each kind */
-const HANGAR_RULES = {
+const HANGAR_RULES = BUILD_V2 ? {
+  lower:  { max: 1 },
+  block:  { max: 1, types: ['upper_scout', 'upper_brawler', 'upper_carrier'] },
+  leg:    { max: 0 },
+  arm:    { max: 2, types: ['basic', 'sentry'] },
+  weapon: { max: 2 },
+  module: { max: 0 },
+  gem:    { max: 0 },
+} : {
   block:  { max: 2, types: ['body'] },
   leg:    { max: 2, types: ['basic'] },
   arm:    { max: 2, types: ['basic', 'sentry'] },
@@ -213,9 +238,14 @@ function hangarCount(kind) {
 }
 const hangarAllows = (k, t) => SETTINGS.dev || ((HANGAR_RULES[k].max > 0) && (!HANGAR_RULES[k].types || HANGAR_RULES[k].types.includes(t)));
 function hangarLeft(k) { return SETTINGS.dev ? Infinity : HANGAR_RULES[k].max - hangarCount(k); }
-const CAT_LABEL = { block: 'Body parts', leg: 'Legs', arm: 'Arms', weapon: 'Weapons', module: 'Modules', gem: 'Gems' };
+const CAT_LABEL = { lower: 'Lower half', block: BUILD_V2 ? 'Torso' : 'Body parts', leg: 'Legs', arm: 'Arms', weapon: 'Weapons', module: 'Modules', gem: 'Gems' };
 function catalog() {
   const rows = [];
+  if (BUILD_V2) {
+    for (const [kind, table] of [['lower', LOWERS], ['block', BLOCKS], ['arm', ARMS], ['weapon', WEAPONS], ['module', MODULES], ['gem', GEMS]])
+      for (const t of Object.keys(table)) if (kind !== 'block' || table[t].upper || SETTINGS.dev) rows.push([kind, t]);
+    return rows;
+  }
   for (const [kind, table] of [['block', BLOCKS], ['leg', LEGS], ['arm', ARMS], ['weapon', WEAPONS], ['module', MODULES], ['gem', GEMS]])
     for (const t of Object.keys(table)) rows.push([kind, t]);
   return rows;
@@ -299,8 +329,14 @@ function renderBench() {
   {
     const bodies = mountedBodies().length, arms = mountedArms().length, legs = stats ? stats.legs : 0, w = mountedWeapons().length;
     const row = (ok, label, opt) => `<span class="${ok ? 'ok' : opt ? 'opt' : ''}">${label}</span>`;
-    $('#checklist').innerHTML = row(bodies > 0, 'Body') + row(arms > 0, 'Arm') + row(legs >= 2, `Legs ${Math.min(2, legs)}/2`) + row(w > 0, 'Weapon?', true);
-    $('#readyCheck').classList.toggle('ready', bodies > 0 && arms > 0 && legs >= 2);
+    if (BUILD_V2) {
+      const lo = !!(L.body && L.body.kind === 'lower');
+      $('#checklist').innerHTML = row(lo, 'Legs') + row(bodies > 0, 'Torso') + row(arms > 0, 'Arm') + row(w > 0, 'Weapon?', true);
+      $('#readyCheck').classList.toggle('ready', lo && bodies > 0 && arms > 0);
+    } else {
+      $('#checklist').innerHTML = row(bodies > 0, 'Body') + row(arms > 0, 'Arm') + row(legs >= 2, `Legs ${Math.min(2, legs)}/2`) + row(w > 0, 'Weapon?', true);
+      $('#readyCheck').classList.toggle('ready', bodies > 0 && arms > 0 && legs >= 2);
+    }
   }
   $('#partsHead').textContent = INV.hangar ? 'Parts' : `Storage ${storeCount()}/${storeCap()}`;
   $('#partsHint').textContent = INV.hangar ? 'Drag to socket · Click: turn · Twin: upgrade' : 'Drag out: mount · Twin: upgrade · Bin: bolts';
@@ -354,7 +390,7 @@ function spawnBody(item, pos, vel, out) {
   INV.bodies.push(b);
   return b;
 }
-function defaultOut(it) { return it.kind === 'block' ? new THREE.Vector3(0, 1, 0) : it.kind === 'weapon' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0); }
+function defaultOut(it) { return it.kind === 'block' || it.kind === 'lower' ? new THREE.Vector3(0, 1, 0) : it.kind === 'weapon' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0); }
 function removeBody(b) { buildScene.remove(b.obj); const i = INV.bodies.indexOf(b); if (i >= 0) INV.bodies.splice(i, 1); if (INV.drag && INV.drag.body === b) INV.drag = null; }
 function ballWorld(b) { return b.center.clone().negate().applyQuaternion(b.q).add(b.pos); }
 const _q = new THREE.Quaternion(), _v = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), QID = new THREE.Quaternion();

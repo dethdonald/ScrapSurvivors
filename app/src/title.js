@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.25.1 · BUILD NOV 3';
+const VERSION = '0.26.0 · BUILD NOV 3';
 
 function setupTitleScene() {
   if (TITLE.scene) return;
@@ -25,6 +25,16 @@ function setupTitleScene() {
 /* A random but valid frame: one or two bodies, two legs, a weapon or three, sometimes extras. */
 function randomTitleLoadout() {
   const F = f => FACE_ORDER.indexOf(f), lv = () => 1 + Math.floor(Math.pow(Math.random(), 1.6) * 90);
+  if (BUILD_V2) {
+    const guns = Object.keys(WEAPONS), gun = () => mkItem('weapon', pick(guns.filter(g => g !== 'knife' || Math.random() < 0.3)), lv());
+    const TL = { body: mkItem('lower', pick(['standard', 'standard', 'spider', 'treads', 'wheels'])) };
+    const top = mkItem('block', pick(['upper_scout', 'upper_brawler', 'upper_carrier'])); TL.body.slots[F('top')] = top;
+    BLOCKS[top.type].sockets.forEach((sk, i) => {
+      if (sk.accepts === 'arm') { if (Math.random() < 0.9) { const a = mkItem('arm', pick(['sentry', 'basic', 'basic', 'double']), lv()); a.weapon = gun(); if ('weapon2' in a) a.weapon2 = gun(); if (a.gems && a.gems.length && Math.random() < 0.4) a.gems[0] = mkGem(); top.slots[i] = a; } }
+      else if (Math.random() < 0.6) top.slots[i] = mkItem('module', pick(Object.keys(MODULES)), lv());
+    });
+    return TL;
+  }
   const TL = { body: mkItem('block', 'body') };
   const legType = Math.random() < 0.35 ? 'tread' : 'basic';
   TL.body.slots[F('left')] = mkItem('leg', legType, lv()); TL.body.slots[F('right')] = mkItem('leg', legType, lv());

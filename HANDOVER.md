@@ -13,7 +13,8 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.25.1 (`VERSION` in `src/title.js`) |
+| **Version** | 0.26.0 (`VERSION` in `src/title.js`) |
+| **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
 | **Tech** | Electron 33, three.js r128, Rapier 0.14 (WASM physics), WebAudio. No build step. |
@@ -142,6 +143,49 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - **Coin frenzy pickup:** 15 s of guaranteed bolt drops, bolts raining down, coins popping off the XP bar and its own upbeat song. Half the uncollected bolts vanish when it ends.
 - **Bosses:** Warden 5,000 to 16,000 base health; Brute 900 to 2,400.
 - **Title screen:** gun piles occasionally fall on the robot, bounce off with bonks, and the robot flinches with its arms over its head.
+
+### 2026-11-03 (late): 0.26.0
+- **Build revamp (V2), behind `BUILD_V2` in config.js.**
+  - **Revert:** `BUILD_V2 = false` brings back the old cube bodies, loose legs and leg/brick drops (the old code paths are all still there). For a full code revert, use the GitHub branch `pre-build-revamp` (commit 67cc251, version 0.25.1).
+  - **Lower half** (`kind: 'lower'`, table `LOWERS` in data.js): a body-sized block with its legs built in. Four kinds:
+    - Walker Legs (2 legs).
+    - Spider Legs (3 a side).
+    - Tread Base (2 at the back, 1 at the front).
+    - Wheel Base (4 corners). Wheels were kept as a 4th lower.
+  - **How the lower half works:**
+    - The built-in legs are real leg models (`lowerLegItems(it)`, a hidden `_legs` array), so walking IK, grounding and leg stats all still work.
+    - They have no socket ref, so grabbing one in the workbench picks up the whole lower half.
+    - All its legs together count as one pair for carry and speed (`lk = 2 / legs`).
+    - Its only socket is the top hole, which takes the torso.
+    - It levels like an arm, Mk I → III (xp 15,000 / 40,000, earned by walking). Each mark opens a shared gem slot: 0 → 1 → 2, on the front face. Those gems act as leg gems (`s.legGems`, `legWithGem`).
+    - Lower halves never drop (rollLoot skips legs and bricks under V2). You pick one in the hangar (max 1).
+  - **Torsos** (`BLOCKS.upper_*`, `upper: true`, with a `sockets` list): one sits on the lower half.
+    - Scout: 2 arms + 1 module, light, +0.3 speed.
+    - Brawler: 4 arms.
+    - Carrier: 2 arms + 3 modules (top, back, chest).
+    - Arm sockets are a **ball** connector and take only arms. Module sockets are a **square collar** and take only modules. Weapons go on arm wrists.
+  - **Models:** `buildLower` / `buildUpper` in robot.js (`anchorOn` helper). Both halves use a 'plain' hull: dark recesses that aren't sockets. The lower half's top hole has an orange ring.
+  - **Rules:**
+    - `refAccepts` V2 branch; `firstFree` and `openSockets` handle lowers.
+    - `blockOpenFaces` returns one slot per torso socket.
+    - Hangar stock: 1 lower, 1 torso, 2 arms (basic/sentry), 2 weapons.
+    - The ready check reads Legs · Torso · Arm · Weapon?.
+    - `buildProblems` V2; `COMBINABLE` gets 'lower'.
+  - **Elsewhere:** the starter frame is Walker Legs + Scout Torso + 2 arms with pistols. Title-screen robots pick random lowers and torsos. The catalog lists lowers and torsos instead of legs and bricks.
+- **Gatling** (`gatling`): 20 shots/s, 120+ magazine, 6 s reload. The barrel cluster spins.
+- **Katana** (`katana`): a swing hits everything in a cone. The arc is 90° at Lv 1, widening to 180° at Lv 60 (`katanaSweep`, `slashArc`).
+- **Chainsaw** (`chainsaw`): a long forward blade, 1.4 m reaching 4 m at Lv 60. It hits every 0.12 s along a capsule (`sawTick`). It always vibrates (harder when revving) and puffs exhaust smoke.
+- **Berserk power-up:** ×2 fire rate and no reloading or ammo use for 7 s (`berserkMul()`, `#bzBar`, red vignette).
+  - It only drops with 180+ enemies alive, at a 0.12% chance per kill, and at most once every 75 s, so it stays rare.
+- **Catalog:** new Power-ups tab (vacuum, nuke, frenzy, berserk, health, case), using the same models as the drops (`powerMesh`). Power-ups are discovered on pickup.
+- **RoboVac** (`ETYPES.robovac`, `npc: true`): a robot vacuum that wanders to the nearest stain and wipes it.
+  - It never attacks and shows no health bar. It has 320 hp, about a brute's toughness.
+  - It drops 12 xp per kill and takes no fall damage.
+  - Lock-on, auto-aim and chaining all skip it.
+  - There are always 3 per stage (`vacTick`). A kill drops a new one from the sky at an off-screen spot.
+- **Stability:**
+  - The robot squash spring used `P.sqV` before it was set, which made the model scale NaN. Fixed.
+  - NaN guards were added in enemy updates and the collision grid; a NaN position had looped the grid's lists.
 
 ### 2026-11-03
 - **Kill streak multiplier** on the right of the screen: kills within 2.2 s build it. It grows, glows hotter through colour tiers, shakes and sparks at 10, 25, 50, 100 and 200.

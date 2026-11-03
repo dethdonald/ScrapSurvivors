@@ -11,9 +11,9 @@ META.disc = META.disc || {};
 const CAT = { tab: 'limbs', sel: null, thumbs: new Map(), r: null, scene: null, cam: null, sil: null };
 
 const CAT_TABS = [
-  ['limbs', 'Limbs'], ['weapons', 'Weapons'], ['parts', 'Parts'], ['gems', 'Gems'], ['combos', 'Combos'], ['enemies', 'Enemies'],
+  ['limbs', 'Limbs'], ['weapons', 'Weapons'], ['parts', 'Parts'], ['gems', 'Gems'], ['combos', 'Combos'], ['powers', 'Power-ups'], ['enemies', 'Enemies'],
 ];
-const ENEMY_NAMES = { crawler: 'Crawler', drone: 'Drone', spitter: 'Spitter', bomber: 'Bomber', splitter: 'Splitter', splitling: 'Splitling', brute: 'Brute', warden: 'The Warden' };
+const ENEMY_NAMES = { crawler: 'Crawler', drone: 'Drone', spitter: 'Spitter', bomber: 'Bomber', splitter: 'Splitter', splitling: 'Splitling', brute: 'Brute', warden: 'The Warden', robovac: 'RoboVac' };
 const ENEMY_NOTES = {
   crawler: 'The basic swarm. Comes in cube, sphere and dome shapes. Some are elites: bigger, tougher, always worth killing.',
   drone: 'Flies straight at you over any terrain. Crashes and tumbles when shot down.',
@@ -22,6 +22,7 @@ const ENEMY_NOTES = {
   splitter: 'Bursts into a spray of splitlings when it dies.',
   splitling: 'Small, fast and bouncy. Born from splitters.',
   brute: 'A hardened crawler that breaks through now and then. Mini-boss.',
+  robovac: 'Not an enemy: a cleaning bot that roams the level hoovering up the mess. Never attacks, never targeted by lock-on. Shoot it for a big xp drop (another one drops in).',
   warden: 'The stage boss. Arrives at 15:00, or early if you breach the gate. Kill it to open the exit.',
 };
 
@@ -29,12 +30,14 @@ const ENEMY_NOTES = {
 function catEntries() {
   const out = [];
   for (const t of Object.keys(ARMS)) out.push({ key: 'arm:' + t, tab: 'limbs', kind: 'arm', type: t, name: ARMS[t].name });
-  for (const t of Object.keys(LEGS)) out.push({ key: 'leg:' + t, tab: 'limbs', kind: 'leg', type: t, name: LEGS[t].name });
+  if (BUILD_V2) for (const t of Object.keys(LOWERS)) out.push({ key: 'lower:' + t, tab: 'limbs', kind: 'lower', type: t, name: LOWERS[t].name });
+  else for (const t of Object.keys(LEGS)) out.push({ key: 'leg:' + t, tab: 'limbs', kind: 'leg', type: t, name: LEGS[t].name });
   for (const t of Object.keys(WEAPONS)) out.push({ key: 'weapon:' + t, tab: 'weapons', kind: 'weapon', type: t, name: WEAPONS[t].name });
-  for (const t of Object.keys(BLOCKS)) out.push({ key: 'block:' + t, tab: 'parts', kind: 'block', type: t, name: BLOCKS[t].name });
+  for (const t of Object.keys(BLOCKS)) if (!BUILD_V2 || BLOCKS[t].upper) out.push({ key: 'block:' + t, tab: 'parts', kind: 'block', type: t, name: BLOCKS[t].name });
   for (const t of Object.keys(MODULES)) out.push({ key: 'module:' + t, tab: 'parts', kind: 'module', type: t, name: MODULES[t].name });
   for (const t of ATTR_KEYS) out.push({ key: 'gem:' + t, tab: 'gems', kind: 'gem', type: t, name: GEMS[t].name });
   for (const k of Object.keys(COMBOS)) out.push({ key: 'combo:' + k, tab: 'combos', kind: 'combo', type: k, name: COMBOS[k][0] });
+  for (const t of Object.keys(POWER_NAMES)) out.push({ key: 'power:' + t, tab: 'powers', kind: 'power', type: t, name: POWER_NAMES[t] });
   for (const t of Object.keys(ETYPES)) out.push({ key: 'enemy:' + t, tab: 'enemies', kind: 'enemy', type: t, name: ENEMY_NAMES[t] || t });
   return out;
 }
@@ -82,13 +85,22 @@ function catRenderer() {
   CAT.cam = new THREE.PerspectiveCamera(28, 192 / 144, 0.05, 200);
   CAT.sil = new THREE.MeshBasicMaterial({ color: 0x3a434b });
 }
+const POWER_NOTES = {
+  vacuum: 'Every bit of scrap on the field lifts up and drifts in to you.',
+  nuke: 'A warhead whistles down and scraps everything that isn\'t a boss.',
+  frenzy: '15 seconds where every kill pays out bolts, and bolts rain from the sky.',
+  berserk: 'Brief, furious: every weapon fires twice as fast and never reloads. Only turns up when the field is swarming.',
+  health: 'Patches up part of your hull.',
+  case: 'Dropped by tougher enemies and always by the Warden. Opens into a roulette of parts.',
+};
 function catObject(e) {
+  if (e.kind === 'power') return powerMesh(e.type);
   if (e.kind === 'enemy') {
     const g = makeEnemyMesh(e.type, new THREE.Color(ETYPES[e.type].color), e.type === 'crawler' ? 'dome' : null);
     return g;
   }
   const it = mkItem(e.kind, e.type, 1);
-  const out = e.kind === 'block' || e.kind === 'gem' ? new THREE.Vector3(0, 1, 0) : e.kind === 'weapon' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+  const out = e.kind === 'block' || e.kind === 'gem' || e.kind === 'lower' ? new THREE.Vector3(0, 1, 0) : e.kind === 'weapon' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
   return buildPart(it, out, null);
 }
 function catThumb(e, known) {
@@ -127,6 +139,7 @@ function catStats(e) {
     if (d.boss) rows.push(['Type', 'Boss']); else if (d.mini) rows.push(['Type', 'Mini-boss']);
     return { desc: ENEMY_NOTES[e.type] || '', rows: rows.concat([['Stats', 'Stage 1 base']]) };
   }
+  if (e.kind === 'power') return { desc: POWER_NOTES[e.type] || '', rows: e.type === 'berserk' ? [['Lasts', `${BERSERK_T} s`], ['Fire rate', '×2'], ['Reload', 'none'], ['Drops when', `${BERSERK_CROWD}+ enemies are out`]] : [] };
   if (e.kind === 'combo') {
     const [a, b] = e.type.split('+');
     return { desc: COMBOS[e.type][1], rows: [['Gems', `${ATTRS[a].name} + ${ATTRS[b].name}`], ['Where', 'Both in one arm']] };
@@ -136,6 +149,7 @@ function catStats(e) {
   return { desc: d.desc || '', rows: partInfo(it).filter(([a]) => !['Gems', 'Gem', 'Wrist', 'Wrist 2', 'Combo'].includes(a)) };
 }
 function catHint(e) {
+  if (e.kind === 'power') return 'Pick one up to discover it.';
   return e.kind === 'combo' ? 'Socket these two gems into one arm to discover it.'
     : e.kind === 'enemy' ? (ETYPES[e.type].boss || ETYPES[e.type].mini ? 'Encounter it to discover it.' : 'Destroy one to discover it.')
     : 'Pick one up to discover it.';
@@ -183,7 +197,7 @@ function renderCatDetail() {
   const pic = e.kind === 'combo' ? catComboIcon(e.type, known) : `<img alt="" src="${catThumb(e, known)}">`;
   if (!known) { el.innerHTML = `<div class="cdpic">${pic}<i class="cq">?</i></div><h3>???</h3><p class="cdhint">${catHint(e)}</p>`; return; }
   const st = catStats(e);
-  const kindLbl = e.kind === 'enemy' ? (ETYPES[e.type].boss ? 'Boss' : ETYPES[e.type].mini ? 'Mini-boss' : 'Enemy') : e.kind === 'combo' ? 'Gem combo' : KIND_LABEL[e.kind];
+  const kindLbl = e.kind === 'power' ? 'Power-up' : e.kind === 'enemy' && ETYPES[e.type].npc ? 'Bystander' : e.kind === 'enemy' ? (ETYPES[e.type].boss ? 'Boss' : ETYPES[e.type].mini ? 'Mini-boss' : 'Enemy') : e.kind === 'combo' ? 'Gem combo' : KIND_LABEL[e.kind];
   el.innerHTML = `<div class="cdpic">${pic}</div><div class="eyebrow">${kindLbl}</div><h3>${e.name}</h3>${st.desc ? `<p>${st.desc}</p>` : ''}
     <div class="cdstats">${st.rows.map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('')}</div>`;
 }

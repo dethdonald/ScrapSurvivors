@@ -13,6 +13,16 @@ function makeEnemyMesh(type, color, shape) {
   const g = new THREE.Group(), d = ETYPES[type], s = d.size, r = d.r;
   const mat = SM(color, 0, { roughness: 0.5, metalness: 0.3 });
   const eye = 0xffd27a;
+  if (type === 'robovac') {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.26, 24), mat); g.add(body);
+    const bump = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.03, r + 0.03, 0.1, 24, 1, true, -1.2, 2.4), M(0x2b2f33)); bump.position.y = -0.04; g.add(bump);
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.82, r * 0.82, 0.03, 24), M(0x3a3f45)); top.position.y = 0.14; g.add(top);
+    const dome = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.1, 16), M(0x22262a)); dome.position.set(0, 0.19, 0.2); g.add(dome);
+    const led = new THREE.Mesh(geoBox, B(0x4ab8ff)); led.scale.set(0.24, 0.03, 0.05); led.position.set(0, 0.16, -0.25); g.add(led);
+    for (const sx of [-1, 1]) { const brush = bx(0.04, 0.02, 0.34, 0x9aa4ad, sx * 0.48, -0.12, 0.42); brush.rotation.y = sx * 0.6; g.add(brush); }
+    g.userData.mat = mat; g.position.y = 0;
+    return g;
+  }
   if (type === 'bomber') {
     // a round charge with hazard bands and a fuse light on top
     const b = new THREE.Mesh(geoSphere, mat); b.scale.setScalar(r); g.add(b);
@@ -359,6 +369,7 @@ function updateEnemies(dtAll) {
   const pp = player.pos, hold = S.test && DEV.hold ? 0 : 1;     // test range: enemies can be told to stand still
   for (const e of enemies) {
     let dt = dtAll;
+    if (!isFinite(e.pos.x + e.pos.y + e.pos.z + e.vel.x + e.vel.y + e.vel.z)) { const sp = spawnPoint(20, 40); e.pos.set(sp.x, sp.y, sp.z); e.vel.set(0, 0, 0); e.spin.set(0, 0, 0); }
     if (!e.boss && !e.mini && !e.dead) {
       const fx = e.pos.x - pp.x, fz = e.pos.z - pp.z;
       if (fx * fx + fz * fz > LOD_FAR * LOD_FAR) {
@@ -390,8 +401,8 @@ function updateEnemies(dtAll) {
       e.pos.y = Math.max(e.pos.y, groundAt(e.pos.x, e.pos.z) + 0.8);
     } else {
       // close and below you: head straight at the wall and climb rather than walking the long way round
-      const straight = !e.boss && (e.direct || (dy > 1.5 && hd < 16));
-      const [mx, mz] = straight ? [dx / (hd || 1), dz / (hd || 1)] : enemySteer(e, dx, dz, hd);
+      const straight = !e.boss && !d.npc && (e.direct || (dy > 1.5 && hd < 16));
+      const [mx, mz] = d.npc ? vacSteer(e, dt) : straight ? [dx / (hd || 1), dz / (hd || 1)] : enemySteer(e, dx, dz, hd);
       let sp = e.speed * hold * (e.freezeT > 0 ? 0.02 : e.chillT > 0 ? e.chillMul || 0.5 : 1);
       if (hold && d.ranged && hd < 16 && Math.abs(dy) < 8) { sp = 0; e.cd -= dt; if (e.cd <= 0) { e.cd = 2.6; fireHostile(e, pp, 15); } }
       if (e.boss && hold) bossAI(e, dt, hd);
@@ -446,7 +457,7 @@ function updateEnemies(dtAll) {
         e.pos.y = g;
         const impact = -e.vel.y;
         // a hard landing hurts (thrown, knocked off a ledge...)
-        if (impact > 12 && !d.fly && !e.boss) { envDmg(() => damage(e, e.maxHp * Math.min(0.6, (impact - 12) * 0.035))); dust(e.pos, 3); if (e.dead) continue; }
+        if (impact > 12 && !d.fly && !e.boss && !d.npc) { envDmg(() => damage(e, e.maxHp * Math.min(0.6, (impact - 12) * 0.035))); dust(e.pos, 3); if (e.dead) continue; }
         const bounce = (e.roll || e.bouncy) && e.stun > 0 && impact > 2.5;      // balls (and fresh splitlings) bounce while they're knocked about
         if (bounce) { e.vel.y = impact * 0.62; e.sqV = (e.sqV || 0) - 1.2; }
         else if (impact > 7) { e.vel.y *= -0.3; e.spin.multiplyScalar(0.6); } else e.vel.y = Math.max(0, e.vel.y);
@@ -458,7 +469,7 @@ function updateEnemies(dtAll) {
       if (e.boss && e.landed && e.state.slamming) { e.state.slamming = false; slamWave(e); }
     }
     e.support = false;
-    if (Math.hypot(dx, dy, dz) < e.r + 1.1 && e.hitCd <= 0) { e.hitCd = 0.8; hurt(e.dmg, e.pos); }
+    if (!d.npc && Math.hypot(dx, dy, dz) < e.r + 1.1 && e.hitCd <= 0) { e.hitCd = 0.8; hurt(e.dmg, e.pos); }
   }
   collideEnemies(dtAll);
   for (const e of enemies) if (e.ldt > 0) poseEnemy(e, e.ldt, player.pos);
@@ -473,7 +484,7 @@ function cgBuild(list) {
   CG.head.fill(-1);
   if (CG.next.length < list.length) CG.next = new Int32Array(list.length * 2);
   for (let i = 0; i < list.length; i++) {
-    const e = list[i]; if (e.r > 1.2) continue;
+    const e = list[i]; if (e.r > 1.2 || !isFinite(e.pos.x + e.pos.z)) continue;
     const k = cgKey(e.pos.x, e.pos.z); CG.next[i] = CG.head[k]; CG.head[k] = i;
   }
 }
@@ -562,7 +573,8 @@ function poseEnemy(e, dt, pp) {
     e.q.slerp(_eq, Math.min(1, dt * 12));
   } else if (!airborne && !e.roll) {
     // settle upright and turn to face the player
-    const yaw = Math.atan2(pp.x - e.pos.x, pp.z - e.pos.z);
+    const yaw = e.d.npc ? (Math.hypot(e.vel.x, e.vel.z) > 0.2 ? Math.atan2(e.vel.x, e.vel.z) : (e.yawLast || 0)) : Math.atan2(pp.x - e.pos.x, pp.z - e.pos.z);
+    if (e.d.npc) e.yawLast = yaw;            // cleaners face where they're driving
     _eq.setFromAxisAngle(UP3, yaw);
     e.q.slerp(_eq, Math.min(1, dt * (e.d.fly ? 6 : 8)));
     e.spin.multiplyScalar(Math.max(0, 1 - 6 * dt));
@@ -661,6 +673,7 @@ function stain(x, z, size, color) {
   // keep the square on one flat surface (never hanging over a ledge)
   for (const [ox, oz] of [[h, h], [-h, h], [h, -h], [-h, -h]]) if (Math.abs(groundAt(x + ox, z + oz) - g) > 0.05) return;
   const i = stainN % STAIN_MAX; stainN++;
+  STAIN_XZ[i * 2] = x; STAIN_XZ[i * 2 + 1] = z; STAIN_LIVE[i] = 1;
   _sq.setFromAxisAngle(UP3, Math.random() * Math.PI / 2);
   _sm.compose(_sp.set(x, g + 0.015 + (i % 16) * 0.0012, z), _sq, _ss.set(size, 1, size));
   stainMesh.setMatrixAt(i, _sm);
@@ -678,7 +691,17 @@ function splatter(e, n, spread) {
     stain(e.pos.x + Math.cos(a) * r, e.pos.z + Math.sin(a) * r, rand(0.18, 0.55) * Math.max(0.8, e.r * 1.4), col);
   }
 }
-function clearStains() { if (stainMesh) { stainMesh.count = 0; stainN = 0; } }
+function clearStains() { if (stainMesh) { stainMesh.count = 0; stainN = 0; } STAIN_LIVE.fill(0); }
+const STAIN_XZ = new Float32Array(STAIN_MAX * 2), STAIN_LIVE = new Uint8Array(STAIN_MAX);
+const _zeroM = new THREE.Matrix4().makeScale(0, 0, 0);
+/* wipe every stain within r of (x, z); returns how many */
+function wipeStains(x, z, r) {
+  if (!stainMesh) return 0;
+  let n = 0; const r2 = r * r, N = stainMesh.count;
+  for (let i = 0; i < N; i++) { if (!STAIN_LIVE[i]) continue; const dx = STAIN_XZ[i * 2] - x, dz = STAIN_XZ[i * 2 + 1] - z; if (dx * dx + dz * dz < r2) { STAIN_LIVE[i] = 0; stainMesh.setMatrixAt(i, _zeroM); n++; } }
+  if (n) stainMesh.instanceMatrix.needsUpdate = true;
+  return n;
+}
 function killEnemy(e) {
   if (e.dead) return;
   e.dead = true; e.hp = 0;
@@ -707,6 +730,7 @@ function killEnemy(e) {
   if (Math.random() < 0.006 + luck * 0.0004 || (e.elite && Math.random() < 0.25)) dropHealth(e.pos);   // health packs: very rare
   if (Math.random() < 0.0009 + luck * 0.00004) dropPower(e.pos, 'vacuum');       // rare: pulls in every bit of experience
   else if (Math.random() < 0.0004 + luck * 0.00002) dropPower(e.pos, 'nuke');   // rarer still: wipes the field
+  else if (enemies.length >= BERSERK_CROWD && !(S.berserkT > 0) && S.t - (S.berserkLast ?? -999) > BERSERK_GAP && Math.random() < 0.0012 + luck * 0.00004) { S.berserkLast = S.t; dropPower(e.pos, 'berserk'); }   // rare, and only in a big crowd
   else if (Math.random() < 0.0008 + luck * 0.00004 || (e.elite && Math.random() < 0.04) || (e.mini && Math.random() < 0.3)) dropPower(e.pos, 'frenzy');   // coin frenzy
   if ((S.frenzyT || 0) > 0) dropBolt(e.pos, Math.random() < 0.15 ? 3 : 1);          // during a frenzy everything pays out
   // parts (and gems) only come in weapon cases: now and then from tougher enemies, always from the Warden
@@ -884,7 +908,7 @@ function partLeveled(it) {
 function partUseTick(dt) {
   const P = player, hs = Math.hypot(P.vel.x, P.vel.z);
   for (const it of mountedItems()) {
-    if (it.kind === 'leg') { if (P.onGround) partXP(it, hs * dt * XP_RATE.leg); }
+    if (it.kind === 'leg' || it.kind === 'lower') { if (P.onGround) partXP(it, hs * dt * XP_RATE.leg); }
     else if (it.kind === 'module') {
       if (it.type === 'jetpack') { if (P.jetting) partXP(it, dt * XP_RATE.jet); }
       else if (it.type === 'magnet' || it.type === 'radar') partXP(it, dt * XP_RATE.passive);
@@ -893,7 +917,7 @@ function partUseTick(dt) {
   }
 }
 /* ---------- leg gems ---------- */
-const legWithGem = t => groundedLegsCache().find(l => armGems(l).some(g => g.type === t)) || null;
+const legWithGem = t => BUILD_V2 && L.body && L.body.kind === 'lower' ? (armGems(L.body).some(g => g.type === t) ? L.body : null) : groundedLegsCache().find(l => armGems(l).some(g => g.type === t)) || null;
 let _glc = { t: -1, v: [] };
 function groundedLegsCache() { if (_glc.t !== S.t) { _glc = { t: S.t, v: equippedLegs().filter(l => armGems(l).length) }; } return _glc.v; }
 const legHas = t => stats && stats.legGems && stats.legGems.has(t);
@@ -1003,7 +1027,7 @@ function bladeTick(dt) {
     const D = MODULES.blades;
     it.bladeT = (it.bladeT ?? 0.5) - dt;
     if (it.bladeT > 0) continue;
-    it.bladeT = D.cd(it.lvl) / Math.max(0.5, stats.fire || 1);
+    it.bladeT = D.cd(it.lvl) / Math.max(0.5, (stats.fire || 1) * berserkMul());
     const gm = armGems(it); DMG_SRC = it; CUR_ATTRS = gemMap(gm); CUR_ATTRS.combo = gm.length === 2 ? comboKey(gm[0].type, gm[1].type) : null;
     const n = D.n(it.lvl), a0 = Math.random() * Math.PI * 2, o = new THREE.Vector3(player.pos.x, player.pos.y + 1.2, player.pos.z);
     for (let i = 0; i < n; i++) {
@@ -1060,7 +1084,7 @@ function podTick(dt) {
     // pick one of the closest few enemies, so a volley spreads out
     const near = enemies.filter(e => !e.dead && e.pos.distanceToSquared(o) < 40 * 40).sort((a, b) => a.pos.distanceToSquared(o) - b.pos.distanceToSquared(o)).slice(0, 4);
     if (!near.length) { it.podT = 0.2; continue; }
-    it.podT = D.cd(it.lvl) / Math.max(0.5, stats.fire || 1);
+    it.podT = D.cd(it.lvl) / Math.max(0.5, (stats.fire || 1) * berserkMul());
     DMG_SRC = it; CUR_ATTRS = gemMap(armGems(it));            // its gem changes the missiles
     const n = D.volley(it.lvl);
     const attrs = CUR_ATTRS;
@@ -1108,8 +1132,30 @@ function dropHealth(p) {
   gems.push({ kind: 'health', mesh: g, pos, vel: new THREE.Vector3(rand(-2, 2), 7, rand(-2, 2)), val: 0.3, pull: false });
 }
 /* Rare power-ups: the XP vacuum (a cyan magnet) and the nuke (a hazard-striped warhead). */
+const POWER_NAMES = { vacuum: 'Magnet', nuke: 'Nuke', frenzy: 'Coin Frenzy', berserk: 'Berserk', health: 'Repair Kit', case: 'Weapon Case' };
+const POWER_COLOR = { vacuum: COL.cyan, nuke: 0xf2c230, frenzy: 0xffd23a, berserk: 0xff3a3a, health: 0xff5a6a, case: 0xff7a1a };
 function dropPower(p, kind) {
+  const g = powerMesh(kind);
+  const beam = new THREE.Mesh(geoBox, new THREE.MeshBasicMaterial({ color: POWER_COLOR[kind] || 0xf2c230, transparent: true, opacity: 0.3, depthWrite: false }));
+  beam.scale.set(0.1, 5, 0.1); beam.position.y = 2.4; g.add(beam);
+  const pos = new THREE.Vector3(p.x, p.y + 1, p.z); g.position.copy(pos); scene.add(g);
+  gems.push({ kind, mesh: g, pos, vel: new THREE.Vector3(rand(-2, 2), 7, rand(-2, 2)), val: 0, pull: false });
+}
+/* the look of each power-up (shared by the drop and the catalog) */
+function powerMesh(kind) {
   const g = new THREE.Group();
+  if (kind === 'health') {
+    g.add(bx(0.55, 0.4, 0.4, 0xece5d0));
+    g.add(bx(0.36, 0.1, 0.42, COL.red, 0, 0, 0, 0x601020)); g.add(bx(0.1, 0.3, 0.42, COL.red, 0, 0, 0, 0x601020));
+    return g;
+  }
+  if (kind === 'case') { g.add(caseMesh()); return g; }
+  if (kind === 'berserk') {
+    // a red spiked core: angry, unmistakable
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.34, 0), M(0xff3a3a, 0x6a0808)); g.add(core);
+    for (const [x, y, z] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.34, 6), M(0x2b2f33)); sp.position.set(x * 0.38, y * 0.38, z * 0.38); sp.lookAt(x * 2, y * 2, z * 2); sp.rotateX(Math.PI / 2); g.add(sp); }
+    return g;
+  }
   if (kind === 'frenzy') {
     // two fat gold coins, one leaning on the other
     const coin = new THREE.CylinderGeometry(0.34, 0.34, 0.1, 18);
@@ -1126,12 +1172,17 @@ function dropPower(p, kind) {
     for (const r of [0, 1.05, 2.1]) { const b = bx(0.74, 0.1, 0.1, COL.dark, 0, 0, 0); b.rotation.z = r; g.add(b); }
     g.add(bx(0.14, 0.3, 0.14, COL.dark, 0, 0.42, 0));
   }
-  const beam = new THREE.Mesh(geoBox, new THREE.MeshBasicMaterial({ color: kind === 'vacuum' ? COL.cyan : kind === 'frenzy' ? 0xffd23a : 0xf2c230, transparent: true, opacity: 0.3, depthWrite: false }));
-  beam.scale.set(0.1, 5, 0.1); beam.position.y = 2.4; g.add(beam);
-  const pos = new THREE.Vector3(p.x, p.y + 1, p.z); g.position.copy(pos); scene.add(g);
-  gems.push({ kind, mesh: g, pos, vel: new THREE.Vector3(rand(-2, 2), 7, rand(-2, 2)), val: 0, pull: false });
+  return g;
 }
 function usePower(kind) {
+  discover('power:' + kind, POWER_NAMES[kind]);
+  if (kind === 'berserk') {
+    S.berserkT = BERSERK_T;
+    banner('BERSERK', '×2 fire rate · no reload', '#ff3a3a', 2.2);
+    sfx('thoom', 0.7); sfx('jackpot', 0.5); ring(player.pos, 9, 0.5, 0xff3a3a); ring(player.pos, 5, 0.4, 0xff8a6a);
+    cam.shake = Math.max(cam.shake || 0, 0.4); $('#bzBar').hidden = false; document.body.classList.add('berserk');
+    return;
+  }
   if (kind === 'frenzy') {
     S.frenzyT = 15; S.frenzyMax = 15; S.fzRain = 0; S.fzPop = 0;
     banner('COIN FRENZY', '15s', '#ffd23a', 2.2);
@@ -1242,20 +1293,22 @@ function setGateState(s) {
 function nearestEnemy(o, range, exclude) {
   let best = null, bd = range * range;
   for (const e of enemies) {
-    if (e.dead || (exclude && exclude.has(e))) continue;
+    if (e.dead || e.d.npc || (exclude && exclude.has(e))) continue;
     const d = aimPtT(e).distanceToSquared(o);
     if (d < bd) { bd = d; best = e; }
   }
   return best;
 }
 /* Arm Mk: +15% fire rate per level (turn speed is applied in the visuals) */
-function armMods(arm) { const A = ARMS[arm.type]; return { dmg: A.dmg * stats.dmg, rate: armRate(arm) * stats.fire, auto: A.auto, range: A.range || 1 }; }
+const berserkMul = () => (S.berserkT > 0 ? 2 : 1);           // BERSERK: double fire rate on everything
+function armMods(arm) { const A = ARMS[arm.type]; return { dmg: A.dmg * stats.dmg, rate: armRate(arm) * stats.fire * berserkMul(), auto: A.auto, range: A.range || 1 }; }
 
 /* Fire a weapon: plays its sound, and the Split Chamber stat can add extra shots. */
 /* Magazines: each weapon fires its magazine, then reloads (reload speed is its own stat). */
 function weaponReady(w, W, dt) {
   if (!W.mag) return true;
   if (w.ammo === undefined) w.ammo = W.mag(w.lvl);
+  if (S.berserkT > 0) { if (w.reloadT > 0) { w.reloadT = 0; w.ammo = W.mag(w.lvl); } return true; }     // BERSERK: no reloads at all
   if (!(w.reloadT > 0) && w.ammo < W.mag(w.lvl) && S.t - (w.lastShot || 0) > 1.6) { w.reloadT = W.reload(w.lvl) / (stats.reload || 1); sfx('reload', 0.3); }
   if (w.reloadT > 0) {
     w.reloadT -= dt;
@@ -1299,7 +1352,7 @@ function fireW(W, c) {
   }
   // magazine
   c.w.lastShot = S.t;
-  if (W.mag) { c.w.ammo = (c.w.ammo ?? W.mag(c.lv)) - 1; if (c.w.ammo <= 0) { c.w.reloadT = W.reload(c.lv) / (stats.reload || 1); sfx('reload', 0.4); } }
+  if (W.mag && !(S.berserkT > 0)) { c.w.ammo = (c.w.ammo ?? W.mag(c.lv)) - 1; if (c.w.ammo <= 0) { c.w.reloadT = W.reload(c.lv) / (stats.reload || 1); sfx('reload', 0.4); } }
   // kick: an arm soaks up most of it; a gun bolted straight to the body shoves the whole frame
   const kick = W.kick || 0, dir = c.tp.clone().sub(c.o).normalize();
   if (kick) {
@@ -1344,12 +1397,20 @@ function updateWeapons_(dt) {
       if (guns.length > 1 && !ready.get(w)) w = guns[((arm.turn || 0) + 1) % guns.length];
       const W = WEAPONS[w.type], rdy = ready.get(w) && arm.gap <= 0;
       if (W.tick) W.tick({ w, lv: w.lvl, m, arm, dt });
+      if (W.saw) {
+        // chainsaw: revs while you hold fire (manual arm), or while anything is within the bar's reach (auto arm)
+        const o = muzzlePos(w), near = nearestEnemy(o, W.reach(w.lvl) + 1);
+        arm.aimT = m.auto ? (near ? aimPt(near) : null) : aim.point;
+        w.sawOn = m.auto ? !!near : IN.fire;
+        continue;
+      }
       if (W.melee) {
         // swing: on the trigger (manual arm) or when an enemy comes in reach (auto arm)
-        const o = muzzlePos(w), near = nearestEnemy(o, 3.2);
+        const o = muzzlePos(w), near = nearestEnemy(o, W.reach ? W.reach(w.lvl) : 3.2);
         arm.aimT = m.auto ? (near ? aimPt(near) : null) : aim.point;
         if ((arm.swingT || 0) <= 0 && arm.gap <= 0 && (m.auto ? !!near : IN.fire)) {
           arm.swingT = 0.34 / Math.max(0.5, m.rate); arm.swingDir = -(arm.swingDir || 1); sfx('swish', 0.5);
+          if (W.arc) katanaSweep(w, W, m, arm);
           // on a twin arm: swing, then it's the other gun's turn once the swing is through
           if (guns.length > 1) { arm.turn = (arm.turn || 0) + 1; arm.gap = arm.swingT * 0.9; }
         }
@@ -1365,7 +1426,7 @@ function updateWeapons_(dt) {
         const range = (W.range || 40) * m.range;
         let bd = range * range;
         for (const e of enemies) {
-          if (e.dead) continue;
+          if (e.dead || e.d.npc) continue;
           const v = aimPtT(e).sub(o), d2 = v.lengthSq();
           if (d2 >= bd) continue;
           if (facing && v.normalize().dot(facing) < Math.cos(AUTO_CONE)) continue;
@@ -1389,7 +1450,7 @@ function updateWeapons_(dt) {
       const w = it, W = WEAPONS[w.type];
       w.cd = (w.cd || 0) - dt;
       const rdy = weaponReady(w, W, dt);
-      const m = { dmg: stats.dmg * FIXED_DMG, rate: stats.fire, auto: true, range: 1 };
+      const m = { dmg: stats.dmg * FIXED_DMG, rate: stats.fire * berserkMul(), auto: true, range: 1 };
       if (W.tick) W.tick({ w, lv: w.lvl, m, arm: null, dt });
       const mz = ud.muzzleOf.get(w);
       if (!W.fire || w.cd > 0 || !mz || !rdy) continue;
@@ -1408,7 +1469,7 @@ function meleeTick(dt) {
   if (!player.model || dt <= 0) return;
   const ud = player.model.userData, now = S.t;
   for (const w of mountedWeapons()) {
-    const W = WEAPONS[w.type]; if (!W.melee) continue;
+    const W = WEAPONS[w.type]; if (!W.melee || W.arc) continue;
     const tipO = ud.muzzleOf.get(w), baseO = ud.baseOf.get(w); if (!tipO || !baseO) continue;
     tipO.getWorldPosition(_mt); baseO.getWorldPosition(_mb);
     const last = w._lastTip; w._lastTip = _mt.clone();
@@ -1848,9 +1909,9 @@ function updateGems(dt) {
       g.done = true;
       if (g.kind === 'xp') { gainXp(g.val); sfx('xp', 0.25); }
       else if (g.kind === 'bolt') { S.bolts += g.val; if (S.st) S.st.bolts += g.val; sfx('coin', 0.5); }
-      else if (g.kind === 'vacuum' || g.kind === 'nuke' || g.kind === 'frenzy') usePower(g.kind);
-      else if (g.kind === 'health') { if (S.st) S.st.heals++; player.hp = Math.min(stats.maxHp, player.hp + stats.maxHp * g.val); sfx('levelup', 0.5); ring(player.pos, 2.5, 0.4, 0x4fd06b); }
-      else if (g.kind === 'case') openWeaponCase();
+      else if (g.kind === 'vacuum' || g.kind === 'nuke' || g.kind === 'frenzy' || g.kind === 'berserk') usePower(g.kind);
+      else if (g.kind === 'health') { discover('power:health', POWER_NAMES.health); if (S.st) S.st.heals++; player.hp = Math.min(stats.maxHp, player.hp + stats.maxHp * g.val); sfx('levelup', 0.5); ring(player.pos, 2.5, 0.4, 0x4fd06b); }
+      else if (g.kind === 'case') { discover('power:case', POWER_NAMES.case); openWeaponCase(); }
       else if (g.kind === 'upgrade') claimUpgrade(g.offer);
       else pickUpLoot(g.item);
     }
@@ -2148,6 +2209,13 @@ function hitTarget(t, dmg) {
 
 /* ---------- COIN FRENZY: bolts rain down around you, every kill drops one, coins burst off the XP bar.
    When it ends, half the bolts still lying around fizzle away: grab them while you can ---------- */
+const BERSERK_T = 7, BERSERK_CROWD = 180, BERSERK_GAP = 75;     // seconds it lasts · enemies needed on the field · min seconds between drops
+function berserkTick(dt) {
+  if (!(S.berserkT > 0)) return;
+  S.berserkT -= dt;
+  const bar = $('#bzFill'); if (bar) bar.style.width = (Math.max(0, S.berserkT) / BERSERK_T * 100) + '%';
+  if (S.berserkT <= 0) { S.berserkT = 0; $('#bzBar').hidden = true; document.body.classList.remove('berserk'); banner('BERSERK OVER', '', '#ff3a3a', 1.2); }
+}
 function frenzyTick(dt) {
   if (!(S.frenzyT > 0)) return;
   S.frenzyT -= dt;
@@ -2223,4 +2291,120 @@ function streakEnd() {
     sfx('coin', 0.6); sfx('combine', 0.4);
   }
   el.classList.add('out'); setTimeout(() => { if (!(S.streak > 1)) { el.hidden = true; } el.classList.remove('out'); }, c > 0 ? 1300 : 400);
+}
+
+/* ---------- katana: each swing cuts everything inside its arc (90° at Lv 1, widening to 180°) in front of the arm ---------- */
+function katanaSweep(w, W, m, arm) {
+  const ud = player.model && player.model.userData; if (!ud) return;
+  const base = (ud.baseOf.get(w) || ud.muzzleOf.get(w)); if (!base) return;
+  const o = base.getWorldPosition(new THREE.Vector3());
+  const tgt = arm.aimT || aim.point; const fx = tgt.x - o.x, fz = tgt.z - o.z, fl = Math.hypot(fx, fz) || 1;
+  if (!isFinite(o.x + o.y + o.z + fx + fz)) return;          // a degenerate arm pose: skip this swing rather than poison every enemy with NaN
+  const half = THREE.MathUtils.degToRad(W.arc(w.lvl)) / 2, reach = W.reach(w.lvl), cosH = Math.cos(half);
+  const dmg = W.dmg(w.lvl) * m.dmg * (isHeld(w) ? 1 : FIXED_DMG);
+  let hits = 0;
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const p = aimPtT(e), dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz);
+    if (d > reach + e.r || Math.abs(p.y - o.y) > 2.2 + e.r) continue;
+    if (d > 0.3 && (dx * fx + dz * fz) / (d * fl) < cosH) continue;
+    DMG_SRC = w; damage(e, dmg, !m.auto); DMG_SRC = null;
+    if (!e.dead) knock(e, new THREE.Vector3(dx, 0, dz).normalize(), 6, 2);
+    hits++;
+  }
+  if (hits) { sfx('slash', 0.6); spark(o.clone().add(new THREE.Vector3(fx / fl, 0, fz / fl).multiplyScalar(reach * 0.7)), 0xffffff); }
+  slashArc(o, Math.atan2(fx, fz), half, reach);
+}
+/* the white crescent a katana swing leaves in the air */
+function slashArc(o, yaw, half, reach) {
+  const geo = new THREE.RingGeometry(reach * 0.35, reach, 24, 1, -half, half * 2);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+  mesh.rotation.x = -Math.PI / 2; mesh.rotation.z = yaw - Math.PI / 2;
+  const holder = new THREE.Group(); holder.add(mesh); holder.position.copy(o); scene.add(holder);
+  addFx(holder, 0.22, f => { mesh.material.opacity = 0.55 * (f.life / f.max); holder.scale.setScalar(1 + 0.15 * (1 - f.life / f.max)); });
+}
+/* ---------- chainsaw: shreds everything along the bar while it's revving; on a block it's always running ---------- */
+const _sawA = new THREE.Vector3(), _sawB = new THREE.Vector3();
+function sawTick(dt) {
+  if (!player.model) return;
+  const ud = player.model.userData, now = S.t;
+  for (const w of mountedWeapons()) {
+    const W = WEAPONS[w.type]; if (!W.saw) continue;
+    const pg = ud.partOf.get(w), held = isHeld(w);
+    const on = held ? !!w.sawOn : true;
+    // idle shudder and smoke whether it's cutting or not; harder while revving
+    if (pg && pg.userData.saw) { const k = on ? 0.035 : 0.012; pg.userData.saw.position.x = (Math.random() - 0.5) * k; pg.userData.saw.position.y = (Math.random() - 0.5) * k; }
+    w.smokeT = (w.smokeT || 0) - dt;
+    if (pg && pg.userData.exhaust && w.smokeT <= 0) { w.smokeT = on ? 0.06 : 0.16; smokePuff(pg.userData.exhaust.getWorldPosition(new THREE.Vector3()), on ? rand(0.18, 0.3) : rand(0.1, 0.18)); }
+    if (!on) continue;
+    const tipO = ud.muzzleOf.get(w), baseO = ud.baseOf.get(w); if (!tipO || !baseO) continue;
+    tipO.getWorldPosition(_sawB); baseO.getWorldPosition(_sawA);
+    if (!isFinite(_sawA.x + _sawA.y + _sawA.z + _sawB.x + _sawB.y + _sawB.z)) continue;
+    w.revT = (w.revT || 0) - dt; if (w.revT <= 0) { w.revT = 0.18; sfxP('hiss', 0.18, 1.6); }
+    const dmg = W.dmg(w.lvl) * stats.dmg * (held ? 1 : FIXED_DMG);
+    for (const e of enemies) {
+      if (e.dead) continue;
+      const rr = e.r + 0.35 + (e.boss ? 1.6 : 0);
+      if (segDist2(_sawA, _sawB, aimPtT(e)) > rr * rr) continue;
+      e.sawT = e.sawT || {};
+      if ((e.sawT[w.id] || -9) > now - 0.12) continue;
+      e.sawT[w.id] = now;
+      DMG_SRC = w; damage(e, dmg, held); DMG_SRC = null;
+      if (Math.random() < 0.5) spark(aimPtT(e).clone(), Math.random() < 0.5 ? 0xffd27a : 0xff7a2a);
+      if (!e.dead) { e.stun = Math.max(e.stun, 0.08); e.vel.multiplyScalar(0.6); }
+    }
+  }
+}
+
+/* ---------- RoboVacs: harmless cleaning bots. At least VAC_COUNT roam each stage, sucking up the stains your kills leave.
+   They never chase or hurt you, take no fall damage, aren't targeted by auto-aim, lock-on or chains, and have no health bar.
+   Shoot one for a big xp drop; another drops in from the sky somewhere out of sight. ---------- */
+const VAC_COUNT = 3;
+function vacSteer(e, dt) {
+  e.vacT = (e.vacT || 0) - dt;
+  // eat whatever is under it
+  const got = wipeStains(e.pos.x, e.pos.z, e.r + 0.35);
+  if (got) { e.ate = (e.ate || 0) + got; if (Math.random() < 0.5) spark(e.pos.clone().add(new THREE.Vector3(0, 0.3, 0)), 0x9feaff); }
+  // pick a new goal: the nearest stain within reach, or a random spot to wander to
+  if (!e.goal || e.vacT <= 0 || Math.hypot(e.goal.x - e.pos.x, e.goal.z - e.pos.z) < 0.6) {
+    e.vacT = rand(3, 6);
+    let best = null, bd = 30 * 30;
+    if (stainMesh) {
+      const N = stainMesh.count, step = Math.max(1, Math.floor(N / 900));       // a sample is plenty to find a mess
+      for (let i = Math.floor(Math.random() * step); i < N; i += step) { if (!STAIN_LIVE[i]) continue; const dx = STAIN_XZ[i * 2] - e.pos.x, dz = STAIN_XZ[i * 2 + 1] - e.pos.z, d2 = dx * dx + dz * dz; if (d2 < bd) { bd = d2; best = i; } }
+    }
+    if (best !== null) e.goal = { x: STAIN_XZ[best * 2], z: STAIN_XZ[best * 2 + 1] };
+    else { const a = Math.random() * Math.PI * 2, r = rand(6, 18); e.goal = { x: clamp(e.pos.x + Math.cos(a) * r, -HALF + 6, HALF - 6), z: clamp(e.pos.z + Math.sin(a) * r, -HALF + 6, HALF - 6) }; }
+  }
+  const gx = e.goal.x - e.pos.x, gz = e.goal.z - e.pos.z, gl = Math.hypot(gx, gz) || 1;
+  // bumped into a wall: turn away and find somewhere else
+  if (e.bumped) { e.vacT = Math.min(e.vacT, 0.2); }
+  return [gx / gl, gz / gl];
+}
+/* keep the level stocked: top up to VAC_COUNT, dropping replacements in from the sky out of sight */
+function vacTick(dt) {
+  if (S.test || !S.inRun || S.mode !== 'play') return;
+  let n = 0; for (const e of enemies) if (!e.dead && e.d.npc) n++;
+  if (!S.vacSeeded) {        // stage start: the first ones are already down on the ground
+    for (let i = n; i < VAC_COUNT; i++) { const p = vacSpot(); if (p) spawnEnemy('robovac', p); }
+    S.vacSeeded = true; return;
+  }
+  if (n >= VAC_COUNT) { S.vacT = 0; return; }
+  S.vacT = (S.vacT || 0) - dt; if (S.vacT > 0) return;
+  S.vacT = 1.2;
+  const p = vacSpot(); if (!p) return;
+  const v = spawnEnemy('robovac', p);
+  if (S.vacSeeded) { v.pos.y = p.y + 45; v.vel.set(0, -4, 0); v.onGround = false; }     // a replacement falls in from the sky
+}
+/* a spot well away from the player and out of the camera's view */
+function vacSpot() {
+  camera.updateMatrixWorld(); const f = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  for (let i = 0; i < 60; i++) {
+    const x = rand(-HALF + 10, HALF - 10), z = rand(-HALF + 10, HALF - 10), k = idxOf(x, z);
+    if (k < 0 || !inner(k) || Math.hypot(x - player.pos.x, z - player.pos.z) < 30) continue;
+    const p = new THREE.Vector3(x, H[k], z);
+    if (f.containsPoint(p) || f.containsPoint(p.clone().setY(p.y + 45))) continue;
+    return { x, z, y: H[k] };
+  }
+  return null;
 }

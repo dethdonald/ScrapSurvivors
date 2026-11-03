@@ -11,6 +11,13 @@ function freshHangarLoadout() {
   // a ready-to-go frame on the stand: two bodies stacked, two legs, two arms with a pistol each
   L = newLoadout();
   const F = f => FACE_ORDER.indexOf(f);
+  if (BUILD_V2) {
+    // V2 starter: walker legs, a scout torso, two arms with a pistol each
+    L.body = mkItem('lower', 'standard');
+    const top = mkItem('block', 'upper_scout'); L.body.slots[F('top')] = top;
+    for (let i = 0; i < 2; i++) { const a = mkItem('arm', 'basic'); a.weapon = mkItem('weapon', 'pistol'); top.slots[i] = a; }
+    INV.shelf = []; stats = null; refreshLoadout(); return;
+  }
   L.body = mkItem('block', 'body'); L.body.plug = 'bottom';
   L.body.slots[F('left')] = mkItem('leg', 'basic'); L.body.slots[F('right')] = mkItem('leg', 'basic');
   const top = mkItem('block', 'body'); L.body.slots[F('top')] = top;
@@ -49,7 +56,7 @@ function startStage() {
   buildTerrainMesh();
   physResetWorld();
   Object.assign(S, {
-    t: 0, spawnAcc: 0, flowT: 0, rerolls: 3, shopAwayT: 0, gateOpen: false, bossSpawned: false, bossDead: false, boss: null, mini: null, nextMini: 300, hordeIdx: 0,
+    t: 0, spawnAcc: 0, flowT: 0, rerolls: 3, shopAwayT: 0, berserkT: 0, berserkLast: -999, vacSeeded: false, vacT: 0, gateOpen: false, bossSpawned: false, bossDead: false, boss: null, mini: null, nextMini: 300, hordeIdx: 0,
     hordes: [{ t: rand(140, 170) }, { t: rand(400, 440) }, { t: rand(640, 690) }],
   });
   const P = player;
@@ -159,6 +166,8 @@ function simStep(dt) {
   legGemTick(dt);
   skyBarrelTick(dt);
   frenzyTick(dt);
+  berserkTick(dt);
+  vacTick(dt);
   streakTick(dt);
   nukeTick(dt);
   podTick(dt);

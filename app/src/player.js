@@ -30,7 +30,7 @@ function allItems() {
   L.store.forEach(it => { if (it) out.push(it, ...childrenOf(it)); });
   return out;
 }
-function equippedLegs() { return mountedItems().filter(it => it.kind === 'leg'); }
+function equippedLegs() { return BUILD_V2 && L.body && L.body.kind === 'lower' ? lowerLegItems(L.body) : mountedItems().filter(it => it.kind === 'leg'); }
 function mountedArms() { return mountedItems().filter(it => it.kind === 'arm'); }
 function mountedWeapons() { return mountedItems().filter(it => it.kind === 'weapon'); }
 function mountedBodies() { return mountedItems().filter(it => it.kind === 'block' && BLOCKS[it.type].body); }
@@ -58,10 +58,15 @@ function computeStats() {
   const P = L.perks, s = {};
   let hp = 0, sh = 0, sp = 0, jp = 0, air = 0, bodySpeed = 0, carry = 0;
   for (const b of mountedBodies()) { const d = BLOCKS[b.type]; hp += d.hp || 0; sh += d.shield || 0; bodySpeed += d.speed || 0; }
-  const legs = groundedLegs(), n = legs.reduce((t, l) => t + (LEGS[l.type].counts || 1), 0);   // a pogo leg counts as two
+  const V2L = BUILD_V2 && L.body && L.body.kind === 'lower' ? L.body : null;
+  if (V2L) { const d = LOWERS[V2L.type]; hp += d.hp || 0; sh += d.shield || 0; }
+  const legs = groundedLegs();
+  // V2: however many legs a lower half has, together they count as one pair (six spider legs aren't three times the carry)
+  const lk = V2L && legs.length ? 2 / legs.length : 1;
+  const n = legs.reduce((t, l) => t + (LEGS[l.type].counts || 1) * lk, 0);   // a pogo leg counts as two
   s.misLegs = equippedLegs().filter(l => !legs.includes(l)).length;
   // gems in legs that are actually on the ground change how you move
-  s.legGems = gemMap(legs.flatMap(armGems));
+  s.legGems = gemMap(V2L ? armGems(V2L) : legs.flatMap(armGems));
   // leg levels add up: Lv 10 total gives a double jump, 30 a triple, then 60, 100, 150; from 50 every air jump is a flip
   s.legLv = legs.reduce((t, l) => t + effLvl(l), 0);
   s.canSprint = legs.some(l => LEGS[l.type].rolling);      // only treads can sprint / boost
@@ -71,9 +76,9 @@ function computeStats() {
   s.scamper = legs.length && !legs.some(l => LEGS[l.type].rolling || LEGS[l.type].pogo) ? (legs.some(l => l.type === 'spider') ? 2.2 : 0.34) : 0;      // spider legs scramble up walls for much longer
   const grips = legs.map(l => LEGS[l.type].grip || 1); s.grip = grips.length ? grips.reduce((a, b) => a + b, 0) / grips.length : 1;
   for (const l of legs) {
-    const c = LEGS[l.type].counts || 1;
-    sp += legSpeed(l) * c; jp += legJump(l) * c; carry += legCarry(l);
-    if (LEGS[l.type].air) air += LEGS[l.type].air;
+    const c = (LEGS[l.type].counts || 1) * lk;
+    sp += legSpeed(l) * c; jp += legJump(l) * c; carry += legCarry(l) * lk;
+    if (LEGS[l.type].air) air += LEGS[l.type].air * lk;
   }
   // weight: everything you bolt on is carried by the legs on the ground
   s.mass = frameMass();
@@ -117,11 +122,18 @@ function computeStats() {
   if (P.has('payload')) s.dmg *= 1.2;
   if (P.has('scav')) s.xpMult *= 1.3;
   s.airJumps = Math.min(5, s.airJumps); s.dashes = Math.min(3, s.dashes);
-  s.legs = n; s.legsMounted = equippedLegs().reduce((t, l) => t + (LEGS[l.type].counts || 1), 0);
+  s.legs = Math.round(n); s.legsMounted = V2L ? 2 : equippedLegs().reduce((t, l) => t + (LEGS[l.type].counts || 1), 0);
   return s;
 }
 /* What the frame still needs before it can fight. Empty list = ready. */
 function buildProblems() {
+  if (BUILD_V2) {
+    const p = [];
+    if (!L.body) p.push('a lower half');
+    else if (!mountedBodies().length) p.push('a torso');
+    if (!mountedArms().length) p.push('an arm');
+    return p;
+  }
   const p = [], bodies = mountedBodies().length, legs = equippedLegs().reduce((t, l) => t + (LEGS[l.type].counts || 1), 0);
   if (bodies < 1) p.push('a body');
   if (legs < 2) p.push(legs ? '1 more leg' : '2 legs');
@@ -574,7 +586,7 @@ function updatePlayerVisual(dt, alpha) {
     it.kickA = clamp((it.kickA || 0) + it.kickV * dt, -0.2, 0.9);
     // melee swing: a fast sideways slash across the target, alternating direction
     let swing = 0;
-    if (it.swingT > 0) { const T = 0.34; it.swingT -= dt; const p = 1 - clamp(it.swingT / T, 0, 1); swing = (it.swingDir || 1) * 1.35 * Math.sin(p * Math.PI * 2); if (it.swingT <= 0) swing = 0; }   // wind up, slash through, recover
+    if (it.swingT > 0) { const T = 0.34; it.swingT -= dt; const p = 1 - clamp(it.swingT / T, 0, 1); const kat = gs => gs.find(g => WEAPONS[g.type].arc); const kg = kat(armGuns(it)); const amp = kg ? THREE.MathUtils.degToRad(WEAPONS.katana.arc(kg.lvl)) / 2 + 0.25 : 1.35; swing = (it.swingDir || 1) * amp * Math.sin(p * Math.PI * 2); if (it.swingT <= 0) swing = 0; }   // wind up, slash through, recover (a katana swings as wide as its arc)   // wind up, slash through, recover
     _q1.setFromEuler(new THREE.Euler(-P.sway.x * 0.6 - it.kickA * 0.55, swing, -P.sway.y * 0.6));
     ag.quaternion.copy(cur).multiply(_q1);
     ag.userData.q = cur;
@@ -595,7 +607,7 @@ function updatePlayerVisual(dt, alpha) {
   // squash and stretch: a soft spring, stretched a touch while rising fast, squashed on landing
   {
     const target = P.onGround ? 0 : clamp(P.vel.y * 0.006, -0.05, 0.07);
-    P.sqV = (P.sqV || 0) + (-170 * ((P.sq || 0) - target) - 13 * P.sqV) * dt;
+    P.sqV = (P.sqV || 0) + (-170 * ((P.sq || 0) - target) - 13 * (P.sqV || 0)) * dt;
     P.sq = clamp((P.sq || 0) + P.sqV * dt, -0.16, 0.12);
     SQUASH.y = 1 + P.sq; SQUASH.xz = 1 - P.sq * 0.55; SQUASH.foot = P.visY !== undefined ? P.visY : P.pos.y;
     if (!PHYS.active) m.scale.set(SQUASH.xz, SQUASH.y, SQUASH.xz); else m.scale.set(1, 1, 1);
@@ -616,7 +628,7 @@ function updatePlayerVisual(dt, alpha) {
   }
   // spin gears turn whatever is plugged into them
   for (const sp of ud.spinners) sp.anchor.rotation.z += dt * BLOCKS[sp.item.type].spinRate(sp.item.lvl);
-  if (S.mode === 'play') { m.updateMatrixWorld(true); meleeTick(dt); fieldTick(dt); }
+  if (S.mode === 'play') { m.updateMatrixWorld(true); meleeTick(dt); sawTick(dt); fieldTick(dt); }
   // weapons slide back in their mount on each shot
   for (const w of mountedWeapons()) {
     const wg = ud.partOf.get(w); if (!wg) continue;
@@ -830,7 +842,7 @@ function updateAim() {
   if (!hitE && IN.device === 'pad' && SETTINGS.aimAssist) {
     let ba = 0.075;
     for (const e of enemies) {
-      if (e.dead) continue;
+      if (e.dead || e.d.npc) continue;
       const v = _aaV.copy(aimPtT(e)).sub(o), dist = v.length();
       if (dist < minT || dist > 70 || (tt > 0 && dist > tt + 1)) continue;
       const ang = Math.acos(clamp(v.dot(d) / dist, -1, 1));

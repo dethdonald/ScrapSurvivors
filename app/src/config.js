@@ -4,6 +4,10 @@
    Everything that shapes how the frame runs and jumps lives here.
    Units: metres, seconds. Change a number, restart (Ctrl+R in dev).
    ============================================================ */
+/* BUILD V2 (Nov 3): the frame is one LOWER HALF (a block with its legs built in) plus one UPPER HALF (with sphere arm
+   sockets and cube module sockets). Set to false to go back to the old free-form blocks-and-legs build; the old version
+   is also kept on GitHub as the branch "pre-build-revamp". */
+const BUILD_V2 = true;
 const CFG = {
   simHz: 60,            // gameplay tick rate
   playerSubsteps: 2,    // player physics runs at simHz * substeps (120 Hz)
