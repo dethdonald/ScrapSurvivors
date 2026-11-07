@@ -596,7 +596,7 @@ function updatePlayerVisual(dt, alpha) {
   });
   cosmeticTick(m, dt);
   // radar dishes sweep round
-  for (const p of ud.parts) if (p.userData.spinMesh) p.userData.spinMesh.rotation.y += dt * 2.4;
+  for (const p of ud.parts) { if (p.userData.spinMesh) p.userData.spinMesh.rotation.y += dt * 2.4; if (p.userData.spinMesh2) p.userData.spinMesh2.rotation.y -= dt * 2.4; }
   // squash and stretch: a soft spring, stretched a touch while rising fast, squashed on landing
   {
     const target = P.onGround ? 0 : clamp(P.vel.y * 0.006, -0.05, 0.07);

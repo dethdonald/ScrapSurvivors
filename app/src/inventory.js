@@ -944,7 +944,7 @@ function sparkBurst(el, color = '#ffd27a', n = 26) {
   }
 }
 function ensureAudio() { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {} }
-const sfxGap = { tink: 0.04, squeak: 0.035, hurt: 0.09,  flame: 0.07, roar: 0.1, slash: 0.05, swish: 0.08, zap: 0.06, slot: 0.05, reload: 0.08, reloaded: 0.08, jet: 0.07, autogun: 0.055, step: 0.07, chirp: 0.09, land: 0.12, hit: 0.045, kill: 0.04, xp: 0.03, coin: 0.04, pistol: 0.03, shotgun: 0.05 };
+const sfxGap = { tink: 0.04, squeak: 0.035, hurt: 0.09,  flame: 0.07, roar: 0.1, slash: 0.05, swish: 0.08, unfold: 0.5, unfold: 0.5, zap: 0.06, slot: 0.05, reload: 0.08, reloaded: 0.08, jet: 0.07, autogun: 0.055, step: 0.07, chirp: 0.09, land: 0.12, hit: 0.045, kill: 0.04, xp: 0.03, coin: 0.04, pistol: 0.03, shotgun: 0.05 };
 const sfxLast = {};
 const GUN_LAYERS = { pistol: { crack: 0.8, thump: 0.5 }, autogun: { crack: 0.6, thump: 0.35 }, shotgun: { crack: 1, thump: 1.1 }, sniper: { crack: 1.2, thump: 1.2 }, rocket: { crack: 0.5, thump: 0.9 }, zap: { crack: 0.5, thump: 0.25 } };
 const TAILS = { boom: 1, shotgun: 0.45, sniper: 0.6, rocket: 0.5, nukefall: 0.4 };
@@ -1023,6 +1023,7 @@ function sfxPlay(kind, vol, live) {
     if (kind === 'combine') { noise(0.04, 1, 2500); tone(300, 600, 0.12, 'triangle', 0.6); tone(450, 900, 0.16, 'triangle', 0.5, 0.08); }
     if (kind === 'pop') tone(260, 620, 0.07, 'sine', 0.6);
     if (kind === 'grab') tone(900, 700, 0.03, 'square', 0.12);
+    if (kind === 'unfold') { noise(0.5, 0.18, 700); tone(140, 420, 0.55, 'sawtooth', 0.12); tone(300, 90, 0.08, 'square', 0.3, 0.1); tone(300, 90, 0.08, 'square', 0.3, 0.5); tone(2400, 1200, 0.05, 'square', 0.14, 0.8); }
     if (kind === 'tick') tone(1400, 1300, 0.02, 'square', 0.1);
     if (kind === 'deny') tone(140, 110, 0.18, 'square', 0.25);
     if (kind === 'thud') { tone(110, 50, 0.1, 'sine', 0.7); noise(0.03, 0.3, 800); }

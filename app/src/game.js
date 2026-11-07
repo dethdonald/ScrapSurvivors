@@ -213,7 +213,7 @@ function frame(now) {
     const pulse = 0.5 + 0.5 * Math.sin(now / 300);
     padMeshes.forEach(m => m.material.emissive.setRGB(0.1, 0.35 + 0.25 * pulse, 0.38 + 0.25 * pulse));
     if (S.gate) S.gate.beam.material.opacity = 0.12 + 0.08 * pulse;
-    shopTick(dt); caseTick(dt); terminalTick(dt); if (S.inRun) updateSpectators(dt);
+    weaponModelTick(dt); shopTick(dt); caseTick(dt); terminalTick(dt); if (S.inRun) updateSpectators(dt);
     if (S.mode === 'countdown') {
       // hanging at the top of the drop: 3, 2, 1...
       S.countT -= dt;

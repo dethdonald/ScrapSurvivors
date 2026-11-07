@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.38.0 · BUILD NOV 6|
+| **Version** | 0.39.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -23,7 +23,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 
 ### Architecture
 - **Scripts:** classic `<script>` files sharing **one global scope**, so watch for name clashes. A later `function x()` silently replaces an earlier one, and a duplicate `const` breaks the whole page. Load order, from `index.html`:
-  `three.min.js, config, gfx, post, data, symbols, shapes, terrain, robot, cosmetics, input, player, combat, weaponfx, ragdoll, inventory, ui, music, shop, wcase, title, vendor/rapier, physics, props, worlddetail, game, devtest, windows`
+  `three.min.js, config, gfx, post, data, symbols, shapes, terrain, robot, cosmetics, input, player, combat, weaponfx, weaponmodels, ragdoll, inventory, ui, music, shop, wcase, title, vendor/rapier, physics, props, worlddetail, game, devtest, windows`
 - **CSP:** `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'`. No CDNs or external files. Every texture, sound and model is **generated in code**.
 - **Modes:** `S.mode` is one of `title`, `custom`, `hangar`, `inv`, `countdown`, `drop`, `play`, `pause`, `levelup`, `perk`, `shop`, `roulette`, `wcase`, `devpanel`, `dying`, `over`.
 - **Loop:** fixed 60 Hz simulation `simStep()` inside `frame()` (`src/game.js`). Rendering goes through `renderFrame()` (HDR, bloom, ACES) in `src/post.js`.
@@ -68,6 +68,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | `player.js` | stats, movement (coyote time, jump buffer, wall kick, scamper, slide, dash), visuals, camera |
 | `combat.js` | enemies, spawning, damage, shots, explosions, drops, gems, frenzy, kill streak, instancing, effects |
 | `weaponfx.js` | per-weapon looks, sounds and impacts |
+| `weaponmodels.js` | MK I/II/III weapon models by level, tier-up unfold, MK III hook |
 | `inventory.js` | workbench / hangar, parts list, tooltips, `sfx()`, twirl and spark helpers |
 | `ui.js` | HUD, level-up, perks, game over and stats, options, UI scale |
 | `music.js` | dynamic music and the frenzy song |
@@ -116,6 +117,14 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - Hangar: robot auto-centred/framed on pedestal for any size; socket summary; owned (×N) and ORB tags.
 - Death: skippable jingle, YOU DIED fade, stats screen (time, stage, level, kills, bolts, etc.).
 - Reroll 50 bolts and terminal 100 bolts shown.
+
+### 0.39.0 — Chunk 14: Three-tier weapon models
+- New `src/weaponmodels.js` (loaded after `weaponfx.js`): every weapon's `model()` is wrapped; the **tier comes from the part level only** (`wmTier`): **MK I L1-2** = the original crude model (L2 adds a small brass/steel detail), **MK II L3-4** armored (L4 adds extra rivets/band), **MK III L5** overengineered. Visual only: `fire()`/stats untouched, so extra barrels NEVER add shots (shotgun pellets still 6/9/16 by level).
+- Designs: Pistol small box -> revolver -> triple-barrel hand cannon · Autogun single -> twin drum -> four-barrel belt-fed · Shotgun double -> quad -> eight-barrel breacher with recoil pistons · Sniper slim scope -> heavy -> giant rail rifle · Rocket single -> twin -> four-tube · Arc Caster coils -> capacitors/rings -> six-coil Tesla · Flamethrower pipe -> triple nozzle+tanks -> giant furnace · Gatling six-barrel -> heavy drum -> TWIN rotating banks (second bank counter-rotates via `userData.spinMesh2`, player.js) · Katana simple -> segmented -> giant actuated blade · Chainsaw small -> geared -> double-chain shredder · Knife improvised -> serrated -> oscillating motorized cleaver · Gravity Gun 2 -> 4 -> 6 prongs + floating sphere · Forcefield small emitter -> 3 antennae -> rotating concentric rings · Missile Pod module 3 -> 6 -> 12 honeycomb tubes (the rear gem socket stays clear and always shown).
+- Muzzles, bases, spin/saw/exhaust hooks and the mount offset (Twin/Sentry/chest sockets) are returned exactly like the originals, so aiming, gem sockets and previews keep working. Models reuse the shared `bx`/`M` caches and one cached cylinder geometry per size; max mesh count per weapon is 21-77 (chainsaw L5), whole-robot triangles with two L5 guns about +3% against L1.
+- **L2 -> L3 unfold** (`wmMaybeUnfold`, `weaponModelTick(dt)` called from the frame loop): MK II armor panels (`userData.panels`) slide/scale into place over `WMOD.UNFOLD = 1.0` s with sparks and the new `'unfold'` sound (motor whir and clanks, `tink` per panel). It is triggered by a wrapped `upgradeItem` that records a one-shot `WMOD.pending` entry (a WeakMap, so nothing reaches the save file).
+- **L5 hook only (no cinematic yet):** reaching MK III calls every function in `WMOD.hooks.mk3` with the item (chunk 15 pushes its reveal here).
+- Tests: every weapon x level builds with valid muzzle/base/spin/saw; pods tubes 3/6/12 and one gem slot at every level; unfold ramps 0.04 -> 1.0 and finishes; no unfold for L1->L2 or L4->L5; hook fires with L5; all 13 weapons fired at L1 and L5 in a run with no errors; hangar screenshot with L5 Gatling and Shotgun.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
