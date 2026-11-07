@@ -110,6 +110,7 @@ function buildBlock(g, item, out, reg) {
     else if (f === item.plug) { holes.push({ face: f, r: def.body ? 0.2 : 0.15 }); idx.push(-1); }   // the coupler sits in this hole
   });
   const blk = makeBlock(w, h, d, blockColor(def), holes, true);
+  if (def.meshOverride) { blk.group.children[0].visible = false; blk.group.add(def.meshOverride()); }   // a modeled shell in place of the procedural one; sockets/stats are untouched
   if (def.decor) { const of = OPPOSITE[item.plug]; def.decor(blk.group, w, h, d, of === 'left' || of === 'right' ? 'x' : of === 'top' || of === 'bottom' ? 'y' : 'z'); }
   if (def.body) addQrStickers(blk, item, w, h, d);
   if (def.body && BUILD_ROOT) {
@@ -681,6 +682,7 @@ function buildUpper(g, item, out, reg) {
   const def = BLOCKS[item.type], [w, h, d] = def.size;
   item.plug = 'bottom';
   const blk = makeBlock(w, h, d, blockColor(def), [], 'plain');
+  if (def.meshOverride) { blk.group.children[0].visible = false; blk.group.add(def.meshOverride()); }   // a modeled shell in place of the procedural one; sockets/stats are untouched
   if (BUILD_ROOT) { const bi = BODY_IDX++; addStickerBomb(blk, item, w, h, d, bi); }
   const ext = Math.abs(out.x) * w / 2 + Math.abs(out.y) * h / 2 + Math.abs(out.z) * d / 2;
   blk.group.position.copy(out).multiplyScalar(def.neck + ext);

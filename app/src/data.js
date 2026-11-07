@@ -32,6 +32,7 @@ function rollRarity(luck = 0) {
    The balance tables were tuned on the old 1..100 scale, so stat formulas are still written for that scale: LEGACY_LV maps a
    level 1..5 onto the formula level it is evaluated at (see wrapLevelStats). */
 const MAX_LVL = 5;
+const LIMB_MAX_LVL = 3;      // arms, legs and lower halves (the "waist") cap at 3: levelling them only opens gem slots, no stat bonus
 const TIER_START = [0, 1, 2, 3, 4, 5];
 const LEGACY_LV = [0, 1, 10, 30, 60, 100];
 const sLv = lvl => LEGACY_LV[Math.max(1, Math.min(5, Math.round(lvl) || 1))];
@@ -144,7 +145,7 @@ const LEGS = {
     name: 'Frame Leg', speed: 4.6, jump: 3.6, carry: 2.2, mass: 0.4, desc: 'Reliable. Clears any ledge the arena needs.',
     // Articulated: return { ik } and the game plants the foot on the ground and bends the knee to reach it.
     model(g, { lvl, out }) {
-      const t = 0.15 + 0.06 * lvlCurve(sLv(lvl)), a = 0.72, b = 0.72;
+      const t = 0.18, a = 0.72, b = 0.72;    // fixed thickness: levelling a leg only opens its gem slot now, no visual growth
       joint(g, [0, 0, 0], 0.17, JOINT_COL);
       const thigh = new THREE.Group(); g.add(thigh);
       thigh.add(bx(t, a, t, 0x6b7680, 0, -a / 2, 0));
@@ -161,7 +162,7 @@ const LEGS = {
     name: 'Spider Leg', speed: 4.8, jump: 3.0, carry: 2.6, mass: 0.45, climb: 2.4,
     desc: 'Long, jointed and arched. Steps straight up ledges over twice as tall as other legs can.',
     model(g, { lvl, out }) {
-      const t = 0.1 + 0.04 * lvlCurve(sLv(lvl)), a = 0.9, b = 1.0, side = Math.sign(out.x) || 1;
+      const t = 0.12, a = 0.9, b = 1.0, side = Math.sign(out.x) || 1;    // fixed thickness: levelling a leg only opens its gem slot now, no visual growth
       joint(g, [0, 0, 0], 0.15, JOINT_COL);
       const thigh = new THREE.Group(); g.add(thigh);
       thigh.add(bx(t, a, t, 0x2e363e, 0, -a / 2, 0));
@@ -969,15 +970,17 @@ const FACE_ORDER = ['right', 'left', 'front', 'back', 'top', 'bottom'];
 const OPPOSITE = { right: 'left', left: 'right', front: 'back', back: 'front', top: 'bottom', bottom: 'top' };
 let nextItemId = 1;
 /* Everything upgradeable (weapons, arms, modules, lower halves, legacy legs, upgradable blocks, gems) tops out at Level 5. */
-const maxLvlOf = it => it.kind === 'gem' ? GEM_MAX : it.kind === 'adapter' ? 2 : MAX_LVL;
-const markFor = (kind, lvl) => Math.max(1, Math.min(kind === 'adapter' ? 2 : MAX_LVL, Math.round(lvl) || 1));
+const LIMB_KIND = k => k === 'arm' || k === 'leg' || k === 'lower';
+const maxLvlOf = it => it.kind === 'gem' ? GEM_MAX : it.kind === 'adapter' ? 2 : LIMB_KIND(it.kind) ? LIMB_MAX_LVL : MAX_LVL;
+const markFor = (kind, lvl) => Math.max(1, Math.min(kind === 'adapter' ? 2 : LIMB_KIND(kind) ? LIMB_MAX_LVL : MAX_LVL, Math.round(lvl) || 1));
 /* arms, legs and lowers scale on the same five levels (their own stats are set in armRate/armTurn/lowerMul below) */
 const effLvl = it => sLv(it.lvl);
-/* gem slots follow one schedule for arms, lower halves and legs: none at L1, one at L2-L3, two at L4-L5 */
-const SLOT_SCHEDULE = [0, 0, 1, 1, 2, 2];
+/* arms, lower halves and legs only have 3 levels, and levelling them earns nothing but gem slots (no stat bonus):
+   none at L1, one at L2, two at L3 (legs still cap at one, same final count as before). */
+const SLOT_SCHEDULE = [0, 0, 1, 2];
 function gemSlotsFor(it) {
-  if (it.kind === 'arm' || it.kind === 'lower') return SLOT_SCHEDULE[Math.max(1, Math.min(5, it.lvl))];
-  if (it.kind === 'leg') return Math.min(1, SLOT_SCHEDULE[Math.max(1, Math.min(5, it.lvl))]);
+  if (it.kind === 'arm' || it.kind === 'lower') return SLOT_SCHEDULE[Math.max(1, Math.min(LIMB_MAX_LVL, it.lvl))];
+  if (it.kind === 'leg') return Math.min(1, SLOT_SCHEDULE[Math.max(1, Math.min(LIMB_MAX_LVL, it.lvl))]);
   if (it.kind === 'module' && MODULES[it.type] && MODULES[it.type].gemSlots) return MODULES[it.type].gemSlots(it.lvl);
   return 0;
 }
@@ -1168,28 +1171,27 @@ function partInfoBase(it) {
 const AIR_JUMP_AT = [10, 30, 60, 100, 150];
 const FLIP_AT = 50;
 const airJumpsFor = total => AIR_JUMP_AT.filter(t => total >= t).length;
-function legSpeed(l) { return LEGS[l.type].speed * (1 + 0.5 * lvlCurve(effLvl(l))); }
-function legJump(l) { return LEGS[l.type].jump + 1.6 * lvlCurve(effLvl(l)); }
-function legCarry(l) { return (LEGS[l.type].carry || 2) * (1 + 1.0 * lvlCurve(effLvl(l))); }
-/* Arms: each level adds +5% damage, +2.5% fire rate and +8% turn speed (L5 = +20% / +10% / +32%) */
-const armDmgMul = a => 1 + 0.05 * (markFor('arm', a.lvl) - 1);
-function armRate(a) { const A = ARMS[a.type]; return A.rate * (1 + 0.025 * (markFor('arm', a.lvl) - 1)); }
-function armTurn(a) { const A = ARMS[a.type]; return (A.turn || 20) * (1 + 0.08 * (markFor('arm', a.lvl) - 1)); }
+/* levelling a leg only opens its one gem slot now -- speed/jump/carry stay at the base stat at every level. */
+function legSpeed(l) { return LEGS[l.type].speed; }
+function legJump(l) { return LEGS[l.type].jump; }
+function legCarry(l) { return LEGS[l.type].carry || 2; }
+/* Arms: levelling only opens gem slots now (LIMB_MAX_LVL) -- damage/rate/turn stay at the base stat at every level. */
+const armDmgMul = a => 1;
+function armRate(a) { return ARMS[a.type].rate; }
+function armTurn(a) { return ARMS[a.type].turn || 20; }
 /* Twin Arm: both guns fire at once and the pair spreads (half-angle in degrees, by level; never reaches zero).
    Sentry Arm: how far off-target its barrel may be and still fire, and the same tolerance spreads its shots a little (never perfect). */
-const TWIN_SPREAD_DEG = [0, 9, 8, 7, 6, 5];
-const SENTRY_TOL_DEG = [0, 22, 18, 15, 12, 9];
+const TWIN_SPREAD_DEG = 9, SENTRY_TOL_DEG = 22;   // fixed: arms no longer tighten these by level, only gem slots do anything
 /* Level-up XP: stages are 10 minutes now (was 15), so each level costs 1.6x to keep level-ups near 75% of the old count */
 const XP_K = 1.6;
 const xpNeed = lvl => Math.floor((5 + lvl * 3.2 + lvl * lvl * 0.35) * XP_K);
 
-/* Lower halves: hull and shield grow with level (L5 = x1.7 hull, x2.8 shield); wheels get faster, spiders climb longer */
-const LOWER_HP = [0, 1, 1.16, 1.32, 1.5, 1.7], LOWER_SH = [0, 1, 1.4, 1.8, 2.2, 2.8];
-const lowerHp = it => (LOWERS[it.type].hp || 0) * LOWER_HP[markFor('lower', it.lvl)];
-const lowerShield = it => (LOWERS[it.type].shield || 0) * LOWER_SH[markFor('lower', it.lvl)];
-const lowerPerk = (it, kind) => 1 + (kind === 'wheels' ? 0.025 : kind === 'spider' ? 0.0625 : 0) * (markFor('lower', it.lvl) - 1) * (it.type === kind ? 1 : 0);
+/* Lower halves: levelling only opens gem slots now -- hull, shield and the wheel/spider perk stay at the base stat at every level. */
+const lowerHp = it => LOWERS[it.type].hp || 0;
+const lowerShield = it => LOWERS[it.type].shield || 0;
+const lowerPerk = (it, kind) => 1;
 /* Weight in tonnes: higher levels are a little heavier. */
-function partMass(it) { const d = itemDef(it); return (d.mass ?? 0.3) * (it.kind === 'block' ? 1 : 1 + 0.25 * lvlCurve(sLv(it.lvl))); }
+function partMass(it) { const d = itemDef(it); return (d.mass ?? 0.3) * ((it.kind === 'block' || LIMB_KIND(it.kind)) ? 1 : 1 + 0.25 * lvlCurve(sLv(it.lvl))); }
 
 /* ---------- level scaling ----------
    Every stat formula above is written as f(lvl) on the old 1..100 scale. This wraps them once, so callers keep passing the real

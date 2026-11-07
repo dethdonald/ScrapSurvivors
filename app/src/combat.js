@@ -1451,7 +1451,7 @@ function fireW(W, c) {
   CUR_RANGE = Math.max(0.5, ((c.m && c.m.range) || 1) * ((stats && stats.range) || 1));
   // a twin arm fires both guns at once, so the pair is less accurate: a cone that narrows with level but never closes
   if (c.twin && c.arm && c.tp) {
-    const half = THREE.MathUtils.degToRad(TWIN_SPREAD_DEG[Math.max(1, Math.min(5, c.arm.lvl || 1))]), dist = c.o.distanceTo(c.tp), r = Math.tan(half) * Math.sqrt(Math.random()) * dist, a = Math.random() * Math.PI * 2;
+    const half = THREE.MathUtils.degToRad(TWIN_SPREAD_DEG), dist = c.o.distanceTo(c.tp), r = Math.tan(half) * Math.sqrt(Math.random()) * dist, a = Math.random() * Math.PI * 2;
     const fwd = c.tp.clone().sub(c.o).normalize(), side = new THREE.Vector3().crossVectors(fwd, UP3).normalize(), up = new THREE.Vector3().crossVectors(side, fwd);
     c = { ...c, tp: c.tp.clone().addScaledVector(side, Math.cos(a) * r).addScaledVector(up, Math.sin(a) * r), te: null };
   }
@@ -1553,7 +1553,7 @@ function updateWeapons_(dt) {
         tp = aimPt(te);
         const mz = ud.muzzleOf.get(w);
         // Sentry: fires once its barrel is within its tolerance of the target (it narrows with level), and the shot is not corrected, so it lands a little off
-        const tol = THREE.MathUtils.degToRad(SENTRY_TOL_DEG[Math.max(1, Math.min(5, arm.lvl || 1))]);
+        const tol = THREE.MathUtils.degToRad(SENTRY_TOL_DEG);
         if (mz && mz.getWorldDirection(new THREE.Vector3()).dot(tp.clone().sub(o).normalize()) < Math.cos(tol)) continue;   // still turning
         tp.add(new THREE.Vector3(rand(-1, 1), rand(-0.6, 0.6), rand(-1, 1)).multiplyScalar(Math.tan(tol * 0.35) * tp.distanceTo(o)));
       } else {

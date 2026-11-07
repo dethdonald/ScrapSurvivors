@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.42.2 · BUILD NOV 6|
+| **Version** | 0.43.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -160,6 +160,24 @@ This file tracks every change, with dates, plus what anyone picking the project 
 
 ### 2026-11-07: 0.42.2 fix: body turns invisible after an MK III reveal
 - **Fixed:** the MK III cinematic (cinematic.js) built a full copy of your robot to show off the weapon, then on exit disposed every geometry in its own scene — including the shared, cached block/leg/arm geometry your real robot (and everyone else's) draws with everywhere in the game. That could leave your robot's body invisible for the rest of the run. `cineEnd` now only disposes what the cinematic built new for itself (platform, rays, sparks — tracked in `CINE.disp`); the borrowed robot/weapon preview geometry is left to the shared caches that own it.
+
+### 2026-11-07: 0.43.0 modeled parts (preview) + limbs flattened to 3 levels
+
+- **New selectable parts, hangar-pickable, nothing default touched:** Luke's modeled Blender pieces are in as alternate
+  options alongside the existing procedural ones — "Frame Arm (Mesh)" (arm), "Frame Torso (Mesh)" (torso), "Walker Legs
+  (Mesh)" and "Chicken Legs" (lower half, the latter with reversed/digitigrade knees). Same stats as the part each sits
+  beside; pick them from the normal hangar shelf like anything else.
+- **Armor reveal at max level:** each modeled part's armor plate (shoulder, thigh, shin) is built in but held back until
+  the part hits its max level, with a small spark + sfx the first time it bolts on — the same idea as the weapons' MK
+  III reveal, scaled down for something that can happen on every limb.
+- **Optimized for framerate:** meshes are packed as binary (quantized normals, 16-bit indices) instead of raw OBJ text,
+  and mirrored parts (arms, legs) ship only one side's geometry — the other side is a runtime flip, not doubled data.
+  ~75KB total for all four new parts.
+- **Balance change, game-wide:** arms, legs and lower-halves (old and new) now cap at level 3 instead of 5, and no
+  longer scale stats with level at all — leveling one up only earns it gem slots. Weapons, modules, adapters and gems
+  are unaffected.
+- `LEGS.chicken`'s hip shell currently reuses the Walker Legs disc (mounts/gem spots) rather than a bespoke one — say
+  the word and I'll pack Luke's own "Waist" shell piece for it.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.

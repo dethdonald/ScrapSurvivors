@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.42.2 · BUILD NOV 6';
+const VERSION = '0.43.0 · BUILD NOV 6';
 
 function setupTitleScene() {
   if (TITLE.scene) return;
