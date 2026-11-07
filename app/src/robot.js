@@ -647,31 +647,28 @@ function buildLower(g, item, out, reg) {
   if (item.slots[ti]) mount(T.a, item.slots[ti], tref, reg);
 }
 /* An adapter: a small housing that plugs into a torso socket and carries 1 (L1) or 2 (L2) sockets of the converted type
-   on its outer face. It is built in the robot's frame like every part, so its own sockets point the way the torso socket does. */
+   on its outer face. It runs STRAIGHT out of the torso socket: its own sockets face the same way the torso socket does
+   (a side socket stays a side socket), built in that socket's face frame exactly like a torso socket. */
 function buildAdapter(g, item, out, reg) {
   const A = ADAPTERS[item.type], n = Math.max(1, Math.min(2, item.lvl || 1)), toArm = A.to === 'arm';
-  const o = out.clone().normalize();
-  // a short stub along the torso socket's direction, then a head whose sockets always face FORWARD (+z), whatever socket it plugs into
-  const fwd = new THREE.Vector3(0, 0, 1), W = 0.42, gap = 0.5, H = 0.3;
-  const lat = Math.abs(o.x) > 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);       // sockets sit side by side across the head
-  const Hw = W + (n - 1) * gap;
-  const stub = 0.2, steel = V2_STEEL, collar = toArm ? 0x3a6ea8 : 0xa8763a;
-  const sb = o.clone().multiplyScalar(stub / 2); g.add(bx(Math.abs(o.x) * stub + (1 - Math.abs(o.x)) * 0.3, Math.abs(o.y) * stub + (1 - Math.abs(o.y)) * 0.3, Math.abs(o.z) * stub + (1 - Math.abs(o.z)) * 0.3, steel, sb.x, sb.y, sb.z));
-  // the head centre: out along the stub, then up a little when the socket faces backwards so it clears the torso
-  const hc = o.clone().multiplyScalar(stub + 0.02); if (o.z < -0.5) hc.y += 0.3; else if (Math.abs(o.z) < 0.5 && o.y < 0.5) hc.z += H / 2 - 0.1;
-  else hc.z += H / 2 - 0.1;
-  const sx = lat.x ? Hw : W, sy = lat.y ? Hw : W;
-  g.add(bx(sx, sy, H, steel, hc.x, hc.y, hc.z));
-  g.add(bx(sx + 0.04, sy + 0.04, 0.05, collar, hc.x, hc.y, hc.z + H / 2 - 0.02));
-  const q0 = new THREE.Quaternion();
+  const o = out.clone().normalize(), ax = Math.abs(o.x), ay = Math.abs(o.y), az = Math.abs(o.z);
+  const face = ax >= ay && ax >= az ? (o.x > 0 ? 'right' : 'left') : ay >= az ? (o.y > 0 ? 'top' : 'bottom') : (o.z > 0 ? 'front' : 'back');
+  // the adapter's own frame: +z straight out of the torso socket, x across the head
+  const hg = new THREE.Group(), fr = FACE_ROT[face]; hg.rotation.set(fr[0], fr[1], fr[2]); g.add(hg);
+  const W = 0.42, gap = 0.5, H = 0.3, stub = 0.2, steel = V2_STEEL, collar = toArm ? 0x3a6ea8 : 0xa8763a;
+  const Hw = W + (n - 1) * gap, hz = stub + H / 2;
+  hg.add(bx(0.3, 0.3, stub, steel, 0, 0, stub / 2));                                  // the stub, in line with the torso socket
+  hg.add(bx(Hw, W, H, steel, 0, 0, hz));                                              // the head
+  hg.add(bx(Hw + 0.04, W + 0.04, 0.05, collar, 0, 0, hz + H / 2 - 0.02));             // coloured collar: blue = arm, amber = module
+  const fq = hg.quaternion.clone(), oOut = new THREE.Vector3(0, 0, 1).applyQuaternion(fq);
   for (let i = 0; i < n; i++) {
     const off = (i - (n - 1) / 2) * gap;
-    const fg = new THREE.Group(); fg.position.set(hc.x + lat.x * off, hc.y + lat.y * off, hc.z + H / 2 - 0.01); g.add(fg);
+    const fg = new THREE.Group(); fg.position.set(off, 0, hz + H / 2 - 0.01); hg.add(fg);
     fg.add(toArm ? femaleArm() : femaleModule());
     const len = toArm ? ARM_LEN : MOD_LEN, a = new THREE.Object3D(); a.position.z = len; fg.add(a);
     const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ color: ORANGE, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
     halo.scale.setScalar(toArm ? 0.16 : 0.17); halo.position.z = (toArm ? RING.T : BOXC.T) + 0.01; halo.visible = false; fg.add(halo);
-    a.userData = { fq: q0.clone(), out: fwd.clone(), halo, r: 0.2, accepts: A.to };
+    a.userData = { fq: fq.clone(), out: oOut.clone(), halo, r: 0.2, accepts: A.to };
     const ref = { owner: item, key: 'slots', i };
     if (reg) reg.sockets.push({ ref, anchor: a });
     if (item.slots[i]) mount(a, item.slots[i], ref, reg);

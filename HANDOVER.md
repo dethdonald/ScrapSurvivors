@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.4 · BUILD NOV 6|
+| **Version** | 0.43.5 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -202,6 +202,8 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - Bigger, more readable damage numbers
 - Explosive (bomber) enemies no longer take fall damage from hard landings
 - The You Died screen's stat tiles, combat breakdown, and loadout icons now show text labels
+
+- Arm-to-Module and Module-to-Arm adapters now run straight out of the socket they plug into (they used to bend 90° to face forward); their sockets face the same way the torso socket does
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
