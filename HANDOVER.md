@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.29.0 · BUILD NOV 6|
+| **Version** | 0.30.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -81,6 +81,20 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ---
 
 ## Change log
+
+### 2026-11-06: 0.30.0 — Chunk 05/16, Combat and player stats
+- **Twin Arm** fires both guns at the same time. Each gun keeps its own ammo, reload and cooldown (melee guns have their own swing timer). Firing both adds a spread cone (`TWIN_SPREAD_DEG`, 9 degrees at L1 down to 5 at L5, never zero).
+- **Natural spread**: Autogun (0.022 rad on the first round) and Rocket (0.018) now spread a little; precision weapons stay accurate.
+- **Range** (arm range x the new *Long Barrel* stat) now scales projectile life, explosion radius, orbit radius and orbit hit size, lightning search radius, flamer reach, gravity radius and the force field radius. `CUR_RANGE` in combat.js is set around each shot.
+- **Projectile Speed** (*Muzzle Velocity* stat card, `stats.projSpeed`): travelling projectiles only, no hitscan. Life is divided by the speed so the distance stays the same.
+- **Extra Shot (multi)** nerfed: card values 0/3/5/8/11/16 %, chance capped at 35 %, at most one extra shot, at 60 % damage, never on guns with a cooldown under 0.2 s.
+- **Sentry** turns faster (3.4) and fires once its barrel is within `SENTRY_TOL_DEG` (22 degrees at L1 down to 9 at L5); the shot gets a matching aim error instead of perfect tracking.
+- **Kill streaks** harder: window 1.5 s (was 2.2), tiers 15/40/90/180/350, payout starts at 20 kills.
+- **Magnet** pulls XP only. Bolts, loot and other pickups use a fixed 4 m pull (`BASE_PULL`).
+- **Arc Caster** visuals reduced (power 0.5 + 0.9 x curve, was 0.9 + 1.6 x).
+- **Pogo Spring removed**: module, hop physics, spring model, symbol, hangar chip. `module:pogo` is deleted from `META.disc` on load. Pogo never appeared in the persisted saves apart from that key.
+- Tests: t58-t60 (stats, twin fire, magnet, sentry), plus regression t50-t57.
+- Still open: `CFG.unlimitedParts` is on (needs a defined starting shelf).
 
 ### 2026-11-06: 0.29.0 — Chunk 04/16, Universal Upgrade Orb, case loot and inventory
 - **Orb:** new item kind `orb` (`ORBS.universal`, data.js). 5% per weapon case, rolled ONCE in `rollCase()` (wcase.js) and it replaces one random of the 3 choices (never two). Rerolling a slot re-rolls normally (no second orb roll). It lives in storage like any part. Use: drag it onto a mounted part (or onto a stored part's row in the Parts list); eligible targets are highlighted (socket halos / gold outline on rows) and the toast previews the change (`orbPreview`). It goes through the shared `upgradeItem` via `useOrb(orb, target)`: the orb is consumed ONLY when the upgrade succeeds, otherwise it returns to storage. Normal max L5, adapters L2 (via `it.maxLvl`). Torsos/orbs are not targets.

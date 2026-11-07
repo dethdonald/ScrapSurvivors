@@ -302,7 +302,6 @@ function renderBench() {
   if (st.magnet > 4.5) chip(sym('magnet', ''), st.magnet.toFixed(0) + 'm', `Pickup range ${st.magnet.toFixed(0)} m (Magnet Coil)`);
   if (st.radar) chip(sym('radar', ''), st.radar.toFixed(0) + 'm', `Radar ${st.radar.toFixed(0)} m: marks cases, the store, elites, parts and power-ups`);
   if (st.stepUp > CFG.stepHeight) chip(sym('step', ''), st.stepUp.toFixed(1) + 'm', `Steps up ${st.stepUp.toFixed(1)} m ledges (spider legs)`);
-  if (st.pogo) chip(sym('pogo', ''), '', 'Pogo Spring: always bouncing · steer in the air');
   if (st.grip < 1) chip(sym('slip', ''), '', 'Slippery: wheels take longer to grip and turn', true);
   const held = new Set(mountedArms().flatMap(armGuns));
   for (const it of mountedItems()) {

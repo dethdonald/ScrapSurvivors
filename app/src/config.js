@@ -68,6 +68,8 @@ try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem('scrapsurvivors.se
 /* circuits: the second currency, kept between runs */
 const META = { circuits: 0 };
 try { Object.assign(META, JSON.parse(localStorage.getItem('scrapsurvivors.meta') || '{}')); } catch (e) {}
+// Pogo Spring was removed (0.30.0): drop its discovery key so old saves stay clean
+try { if (META.disc && META.disc['module:pogo']) { delete META.disc['module:pogo']; localStorage.setItem('scrapsurvivors.meta', JSON.stringify(META)); } } catch (e) {}
 function saveMeta() { try { localStorage.setItem('scrapsurvivors.meta', JSON.stringify(META)); } catch (e) {} }
 function saveSettings() { try { localStorage.setItem('scrapsurvivors.settings', JSON.stringify(SETTINGS)); } catch (e) {} }
 

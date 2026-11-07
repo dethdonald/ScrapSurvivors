@@ -26,7 +26,6 @@ const SYM = {
   weight:  ['Weight',        '<path d="M9 3h6l1 4h3l2 14H3L5 7h3z"/><circle cx="12" cy="5" r="1.4" fill="#0b0e10"/>'],
   jet:     ['Jetpack thrust', '<rect x="7" y="2" width="10" height="11" rx="2"/><path d="M8 14h3l-1.5 8zM13 14h3l-1.5 8z"/>'],
   step:    ['Step-up height', '<path d="M2 20h6v-5h6v-5h6V4h2v18H2z"/>'],
-  pogo:    ['Pogo spring',   '<path d="M7 3h10v2H7zM7 19h10v2H7zM6 7l12 2v2L6 9zm0 4 12 2v2L6 13zm12 4v2"/>'],
   slip:    ['Slippery wheels', '<circle cx="9" cy="14" r="6" fill="none" stroke="currentColor" stroke-width="3"/><path d="M19 4c2 3 3 4.5 3 6a3 3 0 0 1-6 0c0-1.5 1-3 3-6z"/>'],
   auto:    ['Aims itself',   '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="12" cy="12" r="2.5"/><path d="M11 1h2v5h-2zM11 18h2v5h-2zM1 11h5v2H1zM18 11h5v2h-5z"/>'],
   manual:  ['You aim it',    '<path d="M5 2l14 9-6 1.5 4 7.5-3 1.5-4-7.5L5 18z"/>'],

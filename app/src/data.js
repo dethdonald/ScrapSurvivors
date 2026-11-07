@@ -55,7 +55,9 @@ const STAT_UPGRADES = {
   rate:   { name: 'Trigger Tuning',    unit: '% fire rate',      v: [0, 5, 8, 12, 17, 24],           icon: 'weapon' },
   crit:   { name: 'Targeting Chip',    unit: '% critical hit chance (crits do double damage)', v: [0, 3, 5, 8, 12, 16], icon: 'weapon' },
   slot:   { name: 'Cargo Rack',        unit: ' storage slot',    v: [0, 1, 1, 1, 1, 2],              icon: 'box', weight: 0.35 },
-  multi:  { name: 'Split Chamber',     unit: '% extra projectile chance', v: [0, 10, 18, 28, 40, 60], icon: 'weapon' },
+  multi:  { name: 'Split Chamber',     unit: '% extra projectile chance (the extra shot does 60% damage)', v: [0, 3, 5, 8, 11, 16], icon: 'weapon' },
+  pspeed: { name: 'Muzzle Velocity',   unit: '% projectile speed', v: [0, 6, 10, 15, 22, 32], icon: 'weapon' },
+  range:  { name: 'Long Barrel',       unit: '% weapon range (reach, blast, orbit size)', v: [0, 5, 8, 12, 17, 24], icon: 'weapon', weight: 0.8 },
   luck:   { name: 'Lucky Charm',       unit: ' luck',            v: [0, 5, 9, 14, 20, 28],           icon: 'module' },
 };
 
@@ -239,7 +241,7 @@ const LEGS = {
    The model must return { weaponAnchor } from socketBlock(...) so a weapon can plug in. Point the forearm along +z. */
 const ARMS = {
   sentry: {
-    name: 'Sentry Arm', mass: 0.35, dmg: 1, rate: 0.42, auto: true, range: 1, turn: 1.1, rateUp: 0.22, turnUp: 0.7, desc: 'Aims and fires its weapon at the closest enemy on its own. Slower fire rate.',
+    name: 'Sentry Arm', mass: 0.35, dmg: 1, rate: 0.42, auto: true, range: 1, turn: 3.4, rateUp: 0.22, turnUp: 0.7, desc: 'Aims and fires its weapon at the closest enemy on its own. Slower fire rate.',
     model(g, { out }) {
       // a curling, segmented arm that ends in a weapon socket
       joint(g, [0, 0, 0], 0.17, 0x4f8a8b);
@@ -365,7 +367,7 @@ const WEAPONS = {
     fire({ w, lv, m, o, tp, manual }) {
       w.cd = this.cd(lv) / m.rate;
       const dmg = this.dmg(lv) * m.dmg;
-      for (let s = 0; s < this.rounds(lv); s++) bullet(o, tp, 95, dmg, { pierce: this.pierce(lv), spread: s ? 0.025 : 0.004, life: 0.8, manual, knock: this.push });
+      for (let s = 0; s < this.rounds(lv); s++) bullet(o, tp, 95, dmg, { pierce: this.pierce(lv), spread: s ? 0.03 : 0.022, life: 0.8, manual, knock: this.push });
     },
   },
   lightning: {
@@ -388,14 +390,14 @@ const WEAPONS = {
       // first target: the enemy under the crosshair, or the closest one near the line of fire
       let t = te && !te.dead ? te : null;
       if (!t) { const d = tp.clone().sub(o).normalize(); let best = 2.2 * 2.2; for (const e of enemies) { if (e.dead || e.d.npc) continue; const c = aimPt(e), v = c.clone().sub(o), along = v.dot(d); if (along < 0 || along > this.range) continue; const off = v.lengthSq() - along * along; if (off < best) { best = off; t = e; } } }
-      const pts = [o.clone()], power = 0.9 + 1.6 * lvlCurve(sLv(lv), 35);      // bigger, more spectacular bolts as it levels
+      const pts = [o.clone()], power = 0.5 + 0.9 * lvlCurve(sLv(lv), 35);      // bigger, more spectacular bolts as it levels
       arcMuzzle(o, tp.clone().sub(o).normalize(), power);
       if (!t) { pts.push(tp.clone()); lightning(pts, power); return; }
       let dmg = this.dmg(lv) * m.dmg; const hit = new Set();
       for (let j = 0; t && j <= this.bounces(lv); j++) {
         hit.add(t); const c = aimPt(t); pts.push(c);
         damage(t, dmg, manual); spark(c, COL.cyan); if (CUR_ATTRS.has('fire')) ignite(t, dmg * (0.7 + 0.3 * CUR_ATTRS.get('fire'))); if (CUR_ATTRS.has('ice')) chill(t, CUR_ATTRS.get('ice'));
-        dmg *= 0.85; t = nearestEnemy(c, 9, hit);
+        dmg *= 0.85; t = nearestEnemy(c, 9 * CUR_RANGE, hit);
       }
       lightning(pts, power);
     },
@@ -419,7 +421,7 @@ const WEAPONS = {
     },
     fire({ w, lv, m, o, tp, manual }) {
       w.cd = 0.25;
-      bullet(o, tp, 40, this.dmg(lv) * m.dmg, { kind: 'rocket', explode: this.radius(lv), life: 3, manual, selfHurt: true, knock: 0 });
+      bullet(o, tp, 40, this.dmg(lv) * m.dmg, { kind: 'rocket', explode: this.radius(lv), life: 3, spread: 0.018, manual, selfHurt: true, knock: 0 });
     },
   },
   flamer: {
@@ -440,7 +442,7 @@ const WEAPONS = {
     },
     fire({ w, lv, m, o, tp, manual }) {
       w.cd = 0.05 / m.rate;
-      for (let s = 0; s < 2; s++) flame(o, tp, this.dmg(lv) * m.dmg, this.reach(lv), manual);
+      for (let s = 0; s < 2; s++) flame(o, tp, this.dmg(lv) * m.dmg, this.reach(lv) * CUR_RANGE, manual);
     },
   },
   sniper: {
@@ -567,7 +569,7 @@ const WEAPONS = {
     },
     fire({ w, lv, m, o, tp, manual }) {
       w.cd = this.cd(lv) / m.rate;
-      gravityWell(o, tp, this.dmg(lv) * m.dmg, this.pull(lv), this.radius(lv), manual);
+      gravityWell(o, tp, this.dmg(lv) * m.dmg, this.pull(lv), this.radius(lv) * CUR_RANGE, manual);
     },
   },
   field: {
@@ -830,7 +832,7 @@ Object.assign(MODULES, {
   },
   magnet: {
     name: 'Magnet Coil', mass: 0.35,
-    desc: 'Pulls experience, bolts and pickups in from much further away.',
+    desc: 'Pulls experience orbs in from much further away. (Bolts and loot are not affected.)',
     range: lvl => 5 + 12 * lvlCurve(lvl, 30),
     apply(s, lvl) { s.magnet += this.range(lvl); },
     model(g, { out }) {
@@ -858,23 +860,6 @@ Object.assign(MODULES, {
       const flame = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 10), new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
       flame.rotation.x = -Math.PI / 2; flame.position.set(c[0], c[1], c[2] - 0.88); flame.visible = false; g.add(flame);
       return { dashFx: { flame, glow } };
-    },
-  },
-  pogo: {
-    name: 'Pogo Spring', mass: 0.45, pogoMod: true,
-    desc: 'A big spring under your frame. You never stop bouncing: every landing springs you back up, harder the further you fell, and you can steer through the air. Higher levels bounce higher.',
-    hop: lvl => 1.1 + 1.6 * lvlCurve(lvl, 40), keep: lvl => 0.62 + 0.18 * lvlCurve(lvl, 40),
-    apply(s, lvl) { s.pogo = Math.max(s.pogo || 0, this.hop(lvl)); s.pogoKeep = Math.max(s.pogoKeep || 0, this.keep(lvl)); },
-    model(g, { out }) {
-      joint(g, [0, 0, 0], 0.14, JOINT_COL);
-      const c = [out.x * 0.24, out.y * 0.24, out.z * 0.24];
-      strut(g, [0, 0, 0], c, 0.1, COL.dark);
-      g.add(bx(0.34, 0.12, 0.34, 0x3a4048, c[0], c[1], c[2]));
-      const spring = new THREE.Group(); spring.position.set(c[0], c[1] - 0.06, c[2]); g.add(spring);
-      for (let k = 0; k < 9; k++) spring.add(bx(0.28, 0.035, 0.28, k % 2 ? ORANGE : 0xb85614, 0, -k * 0.06, 0));
-      spring.add(bx(0.07, 0.56, 0.07, 0xb9c2c9, 0, -0.26, 0));
-      const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.1, 14), M(0x22272c)); pad.position.y = -0.56; spring.add(pad);
-      return { pogoSpring: spring };
     },
   },
   whirl: {
@@ -998,7 +983,6 @@ const WEAPON_ICONS = {
   field: '<circle cx="16" cy="7" r="2.5"/><path d="M16 1a6 6 0 1 1 0 12a6 6 0 1 1 0-12zm0 1.5a4.5 4.5 0 1 0 0 9a4.5 4.5 0 1 0 0-9z"/><path d="M5 6h4v2H5zM23 6h4v2h-4zM1 6.5h2v1H1zM29 6.5h2v1h-2z"/>',
   gravity: '<path d="M2 4h10l2 1h6v4h-6l-2 1H2z"/><circle cx="26" cy="7" r="3"/><path d="M26 1a6 6 0 0 1 0 12v-1.5a4.5 4.5 0 0 0 0-9z"/>',
   whirl: '<circle cx="16" cy="7" r="2.2"/><path d="M16 4.5L26 2l-1.5 3zM18 8.8l2.5 4.5-3.2-.7zM13.6 8.2L5 12l1-3z"/>',
-  pogo: '<path d="M10 1h12v3H10z"/><path d="M12 5h8v1.5h-8zM12 7.5h8V9h-8zM12 10h8v1.5h-8z"/><path d="M9 12h14v2H9z"/>',
   blades: '<circle cx="16" cy="7" r="1.6"/><path d="M16 1l2 5-2 1zM22 7l-5 2-1-2zM16 13l-2-5 2-1zM10 7l5-2 1 2z"/>',
   pods: '<path d="M4 6h16v7H4z"/><path d="M6 1h3v5H6zM11 1h3v5h-3zM16 1h3v5h-3z"/><path d="M22 4l6-3-2 4 4 0-8 3z"/>',
 };
@@ -1028,7 +1012,6 @@ const PART_ICONS = {
   'module:whirl': '<circle cx="12" cy="12" r="3"/><path d="M12 1.5c5 0 8.5 3.5 8.5 7l-6.5 2zM20 17c-2.5 4.4-7.5 6-11 4.6l3.2-6zM2.2 13.8C1 8.8 3.6 4.4 7 3.2l2 6.5z"/>',
   'module:blades': '<circle cx="12" cy="12" r="2.6"/><path d="M12 .5l2.6 9.3-2.6.9zM23.5 12l-9.3 2.6-.9-2.6zM12 23.5l-2.6-9.3 2.6-.9zM.5 12l9.3-2.6.9 2.6z"/>',
   'module:pods': '<path d="M2 14h20v8H2z"/><path d="M4.5 6L7 2l2.5 4v7h-5zM9.5 6L12 2l2.5 4v7h-5zM14.5 6L17 2l2.5 4v7h-5z"/>',
-  'module:pogo': '<path d="M5 1h14v3H5z"/><path d="M6 6h12v1.8H6zM6 9.4h12v1.8H6zM6 12.8h12v1.8H6z"/><path d="M10.8 15h2.4v4h-2.4z"/><path d="M4 19h16a2 2 0 0 1 0 4H4a2 2 0 0 1 0-4z"/>',
   'orb:universal': '<circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="9" cy="9" r="2.2" fill="#fff" opacity=".7"/>',
   'adapter:arm2mod': '<circle cx="5" cy="12" r="3.2"/><path d="M8 10.5h5v3H8z"/><path d="M14 6h8v12h-8z"/>',
   'adapter:mod2arm': '<path d="M2 6h8v12H2z"/><path d="M11 10.5h5v3h-5z"/><circle cx="19" cy="12" r="3.2"/>',
@@ -1161,6 +1144,10 @@ function legCarry(l) { return (LEGS[l.type].carry || 2) * (1 + 1.0 * lvlCurve(ef
 const armDmgMul = a => 1 + 0.05 * (markFor('arm', a.lvl) - 1);
 function armRate(a) { const A = ARMS[a.type]; return A.rate * (1 + 0.025 * (markFor('arm', a.lvl) - 1)); }
 function armTurn(a) { const A = ARMS[a.type]; return (A.turn || 20) * (1 + 0.08 * (markFor('arm', a.lvl) - 1)); }
+/* Twin Arm: both guns fire at once and the pair spreads (half-angle in degrees, by level; never reaches zero).
+   Sentry Arm: how far off-target its barrel may be and still fire, and the same tolerance spreads its shots a little (never perfect). */
+const TWIN_SPREAD_DEG = [0, 9, 8, 7, 6, 5];
+const SENTRY_TOL_DEG = [0, 22, 18, 15, 12, 9];
 /* Lower halves: hull and shield grow with level (L5 = x1.7 hull, x2.8 shield); wheels get faster, spiders climb longer */
 const LOWER_HP = [0, 1, 1.16, 1.32, 1.5, 1.7], LOWER_SH = [0, 1, 1.4, 1.8, 2.2, 2.8];
 const lowerHp = it => (LOWERS[it.type].hp || 0) * LOWER_HP[markFor('lower', it.lvl)];

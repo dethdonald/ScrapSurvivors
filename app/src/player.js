@@ -63,7 +63,7 @@ function computeStats() {
   const legs = groundedLegs();
   // V2: however many legs a lower half has, together they count as one pair (six spider legs aren't three times the carry)
   const lk = V2L && legs.length ? 2 / legs.length : 1;
-  const n = legs.reduce((t, l) => t + (LEGS[l.type].counts || 1) * lk, 0);   // a pogo leg counts as two
+  const n = legs.reduce((t, l) => t + (LEGS[l.type].counts || 1) * lk, 0);   
   s.misLegs = equippedLegs().filter(l => !legs.includes(l)).length;
   // gems in legs that are actually on the ground change how you move
   s.legGems = gemMap(V2L ? armGems(V2L) : legs.flatMap(armGems));
@@ -71,9 +71,8 @@ function computeStats() {
   s.legLv = legs.reduce((t, l) => t + effLvl(l), 0);
   s.canSprint = legs.some(l => LEGS[l.type].rolling);      // only treads can sprint / boost
   s.stepUp = Math.max(CFG.stepHeight, ...legs.map(l => LEGS[l.type].climb || 0));   // spider legs walk up tall ledges
-  s.pogo = 0; s.pogoKeep = 0;                // set by a Pogo Spring module
-  // walking legs can scamper a short way up a wall; wheels, treads and pogo sticks can't
-  s.scamper = legs.length && !legs.some(l => LEGS[l.type].rolling || LEGS[l.type].pogo) ? (legs.some(l => l.type === 'spider') ? 2.2 : 0.34) : 0;      // spider legs scramble up walls for much longer
+  // walking legs can scamper a short way up a wall; wheels and treads can't
+  s.scamper = legs.length && !legs.some(l => LEGS[l.type].rolling) ? (legs.some(l => l.type === 'spider') ? 2.2 : 0.34) : 0;      // spider legs scramble up walls for much longer
   const grips = legs.map(l => LEGS[l.type].grip || 1); s.grip = grips.length ? grips.reduce((a, b) => a + b, 0) / grips.length : 1;
   for (const l of legs) {
     const c = (LEGS[l.type].counts || 1) * lk;
@@ -114,7 +113,7 @@ function computeStats() {
   const bo = L.bonus || {};
   s.maxHp += bo.hp || 0; s.maxShield += bo.shield || 0; s.jump += bo.jump || 0;
   s.speed *= 1 + (bo.speed || 0) / 100; s.fire *= 1 + (bo.rate || 0) / 100; s.reload = 1 + (bo.reload || 0) / 100;
-  s.multi = (bo.multi || 0) / 100; s.luck = bo.luck || 0;
+  s.multi = (bo.multi || 0) / 100; s.projSpeed = 1 + (bo.pspeed || 0) / 100; s.range = 1 + (bo.range || 0) / 100; s.luck = bo.luck || 0;
   s.crit = 0.05 + (bo.crit || 0) / 100;      // every hit has a small random chance to crit for double damage
   if (P.has('titan')) s.maxHp += 60;
   if (P.has('aegis')) { s.maxShield += 40; s.shieldDelay -= 1.5; }
@@ -272,14 +271,6 @@ function playerStep(dt) {
   if (st.thrust > 0 && !P.onGround && !jumpedNow && P.fuel > 0 && IN.jumpHeld && ((P.freshJump && !P.airJumps) || P.jetHold || P.vel.y <= 1)) P.jetHold = true;
   if (!IN.jumpHeld || P.onGround || P.fuel <= 0) P.jetHold = false;
   P.freshJump = false;
-  // a pogo leg hops along by itself whenever you move
-  // Pogo Spring: you're always bouncing. Each landing springs you up again: a base hop, or most of your fall
-  // speed back if that's more; jumping on a bounce adds to it
-  if (st.pogo && P.onGround && !jumpedNow && !P.superUp) {
-    const back = (P.lastImpact || 0) * st.pogoKeep;
-    P.vel.y = Math.max(jumpV(st.pogo), back); P.onGround = false; P.coyoteT = 0; P.jumping = false; P.lastImpact = 0;
-    P.pogoSq = 1; P.sqV = (P.sqV || 0) - 1.4; sfx('thud', 0.25); sfx('step', 0.4);
-  }
   if (P.jumping && !IN.jumpHeld && P.vel.y > 0) { P.vel.y *= CFG.jumpCut; P.jumping = false; }
   if (P.vel.y <= 0) P.jumping = false;
 
@@ -611,12 +602,6 @@ function updatePlayerVisual(dt, alpha) {
     P.sq = clamp((P.sq || 0) + P.sqV * dt, -0.16, 0.12);
     SQUASH.y = 1 + P.sq; SQUASH.xz = 1 - P.sq * 0.55; SQUASH.foot = P.visY !== undefined ? P.visY : P.pos.y;
     if (!PHYS.active) m.scale.set(SQUASH.xz, SQUASH.y, SQUASH.xz); else m.scale.set(1, 1, 1);
-  }
-  // pogo spring: squashes on each bounce, stretches out while you're in the air
-  for (const p of ud.parts) {
-    const sp = p.userData.pogoSpring; if (!sp) continue;
-    P.pogoSq = Math.max(0, (P.pogoSq || 0) - dt * 5);
-    sp.scale.y = clamp(1 + (P.onGround ? -0.4 : clamp(P.vel.y * 0.02, -0.15, 0.25)) - P.pogoSq * 0.45, 0.45, 1.3);
   }
   // dash thrusters: idle pilot glow, a long flame while dashing
   const dashing = P.dashT > 0, tt = performance.now() * 0.001;

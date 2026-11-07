@@ -351,7 +351,6 @@ function buildPart(item, out, reg) {
     if (res.saw) g.userData.saw = res.saw;
     if (res.exhaust) { const x = new THREE.Object3D(); x.position.fromArray(res.exhaust); g.add(x); g.userData.exhaust = x; }
     if (res.dashFx) g.userData.dashFx = res.dashFx;
-    if (res.pogoSpring) g.userData.pogoSpring = res.pogoSpring;
     if (res.shock) g.userData.shock = res.shock;
     if (res.jet) g.userData.jet = res.jet;
     addRarityMark(g, item, res);

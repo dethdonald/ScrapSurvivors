@@ -1316,7 +1316,15 @@ function ejectCasing(o, dir, kind) {
   });
 }
 let CUR_ATTRS = new Map();
+let CUR_RANGE = 1;       // weapon range multiplier while a shot is being made (arm range x the Long Barrel stat)
 function fireW(W, c) {
+  CUR_RANGE = Math.max(0.5, ((c.m && c.m.range) || 1) * ((stats && stats.range) || 1));
+  // a twin arm fires both guns at once, so the pair is less accurate: a cone that narrows with level but never closes
+  if (c.twin && c.arm && c.tp) {
+    const half = THREE.MathUtils.degToRad(TWIN_SPREAD_DEG[Math.max(1, Math.min(5, c.arm.lvl || 1))]), dist = c.o.distanceTo(c.tp), r = Math.tan(half) * Math.sqrt(Math.random()) * dist, a = Math.random() * Math.PI * 2;
+    const fwd = c.tp.clone().sub(c.o).normalize(), side = new THREE.Vector3().crossVectors(fwd, UP3).normalize(), up = new THREE.Vector3().crossVectors(side, fwd);
+    c = { ...c, tp: c.tp.clone().addScaledVector(side, Math.cos(a) * r).addScaledVector(up, Math.sin(a) * r), te: null };
+  }
   // attributes live on arms and change whatever gun the arm holds
   CUR_ATTRS = gemMap(armGems(c.arm)); CUR_ATTRS.combo = armCombo(c.arm);
   DMG_SRC = c.w; CUR_KICK = W.kick || 0.6; CUR_WTYPE = c.w.type;
@@ -1346,14 +1354,15 @@ function fireW(W, c) {
   if (W.casing) ejectCasing(c.o, dir, W.casing);
   if (kick) physRecoil(c.w, dir, kick);
   CUR_ATTRS = new Set();
-  let extra = stats.multi || 0, n = Math.floor(extra) + (Math.random() < extra % 1 ? 1 : 0);
-  for (let i = 0; i < n; i++) {
+  // Split Chamber: at most ONE extra shot per trigger pull, at 60% damage, never on very fast guns (no projectile spam)
+  const extra = Math.min(0.35, stats.multi || 0), slow = !W.cd || W.cd(c.lv) >= 0.2;
+  if (slow && Math.random() < extra) {
     const tp = c.tp.clone().add(new THREE.Vector3(rand(-1, 1), rand(-0.5, 0.5), rand(-1, 1)).multiplyScalar(0.06 * c.o.distanceTo(c.tp)));
-    const cd = c.w.cd; W.fire({ ...c, tp }); c.w.cd = cd;
+    const cd = c.w.cd; W.fire({ ...c, tp, m: { ...c.m, dmg: c.m.dmg * 0.6 } }); c.w.cd = cd;
   }
   muzzleFlash(c.o, dir, Math.min(2.2, 0.5 + kick * 0.45));
   wfxFire(c, W, dir);
-  CUR_KICK = 0; CUR_WTYPE = null;
+  CUR_KICK = 0; CUR_WTYPE = null; CUR_RANGE = 1;
   if (W.sound) sfxP(W.sound, c.manual ? 0.55 : c.fixed ? 0.18 : 0.35, wfxShotPitch(c));
 }
 const FIXED_CONE = 0.4;   // radians either side of its barrel that a block-mounted weapon will fire at
@@ -1369,13 +1378,12 @@ function updateWeapons_(dt) {
     if (it.kind === 'arm') {
       const arm = it, m = armMods(arm), guns = armGuns(arm);
       if (!guns.length) { arm.aimT = m.auto ? null : aim.point; continue; }
-      // every gun on the arm cools down and reloads; a double arm fires them in turn, back and forth
+      // every gun on the arm cools down, reloads and fires on its own timers; a twin arm fires both at once (with a spread penalty)
       const ready = new Map();
-      for (const g of guns) { g.cd = (g.cd || 0) - dt; ready.set(g, weaponReady(g, WEAPONS[g.type], dt)); }
-      arm.gap = (arm.gap || 0) - dt;
-      let w = guns[(arm.turn || 0) % guns.length];
-      if (guns.length > 1 && !ready.get(w)) w = guns[((arm.turn || 0) + 1) % guns.length];
-      const W = WEAPONS[w.type], rdy = ready.get(w) && arm.gap <= 0;
+      for (const g of guns) { g.cd = (g.cd || 0) - dt; g.swingCd = (g.swingCd || 0) - dt; ready.set(g, weaponReady(g, WEAPONS[g.type], dt)); }
+      const twin = guns.length > 1;
+      for (const w of guns) {
+      const W = WEAPONS[w.type], rdy = ready.get(w);
       if (W.tick) W.tick({ w, lv: w.lvl, m, arm, dt });
       if (W.saw) {
         // chainsaw: revs while you hold fire (manual arm), or while anything is within the bar's reach (auto arm)
@@ -1388,11 +1396,9 @@ function updateWeapons_(dt) {
         // swing: on the trigger (manual arm) or when an enemy comes in reach (auto arm)
         const o = muzzlePos(w), near = nearestEnemy(o, W.reach ? W.reach(w.lvl) : 3.2);
         arm.aimT = m.auto ? (near ? aimPt(near) : null) : aim.point;
-        if ((arm.swingT || 0) <= 0 && arm.gap <= 0 && (m.auto ? !!near : IN.fire)) {
-          arm.swingT = 0.34 / Math.max(0.5, m.rate); arm.swingDir = -(arm.swingDir || 1); sfx('swish', 0.5);
+        if ((w.swingCd || 0) <= 0 && (m.auto ? !!near : IN.fire)) {
+          w.swingCd = 0.34 / Math.max(0.5, m.rate); arm.swingT = Math.max(arm.swingT || 0, w.swingCd); if ((arm.swingT || 0) >= w.swingCd) arm.swingDir = -(arm.swingDir || 1); sfx('swish', 0.5);
           if (W.arc) katanaSweep(w, W, m, arm);
-          // on a twin arm: swing, then it's the other gun's turn once the swing is through
-          if (guns.length > 1) { arm.turn = (arm.turn || 0) + 1; arm.gap = arm.swingT * 0.9; }
         }
         continue;
       }
@@ -1416,15 +1422,18 @@ function updateWeapons_(dt) {
         if (!te) continue;
         tp = aimPt(te);
         const mz = ud.muzzleOf.get(w);
-        if (mz && mz.getWorldDirection(new THREE.Vector3()).dot(tp.clone().sub(o).normalize()) < Math.cos(AUTO_ALIGN)) continue;   // still turning
+        // Sentry: fires once its barrel is within its tolerance of the target (it narrows with level), and the shot is not corrected, so it lands a little off
+        const tol = THREE.MathUtils.degToRad(SENTRY_TOL_DEG[Math.max(1, Math.min(5, arm.lvl || 1))]);
+        if (mz && mz.getWorldDirection(new THREE.Vector3()).dot(tp.clone().sub(o).normalize()) < Math.cos(tol)) continue;   // still turning
+        tp.add(new THREE.Vector3(rand(-1, 1), rand(-0.6, 0.6), rand(-1, 1)).multiplyScalar(Math.tan(tol * 0.35) * tp.distanceTo(o)));
       } else {
         arm.aimT = aim.point;
         if (!IN.fire) continue;
         tp = aim.point.clone(); te = aim.enemy;
       }
       if (w.cd > 0 || !rdy) continue;
-      fireW(W, { w, lv: w.lvl, m, o, tp, te, manual: !m.auto, arm });
-      if (guns.length > 1) { arm.turn = (arm.turn || 0) + 1; arm.gap = Math.max(0.08, w.cd * 0.5); }
+      fireW(W, { w, lv: w.lvl, m, o, tp, te, manual: !m.auto, arm, twin });
+      }
     } else if (it.kind === 'weapon') {
       // mounted straight on a block: fires continuously the way it faces
       const w = it, W = WEAPONS[w.type];
@@ -1519,7 +1528,7 @@ function fieldTick(dt) {
   if (!player.props || !player.props.length) return;
   for (const s of player.props) {
     const w = s.userData.field; if (!w) continue;
-    const W = WEAPONS.field, R = W.radius(w.lvl), t = S.t;
+    const W = WEAPONS.field, R = W.radius(w.lvl) * ((stats && stats.range) || 1), t = S.t;
     s.position.set(player.pos.x, player.pos.y + 1.2, player.pos.z);
     w.fieldT = (w.fieldT || 0) - dt;
     const ping = Math.max(0, w.fieldPing || 0); w.fieldPing = ping - dt * 1.4;
@@ -1552,13 +1561,15 @@ function rebuildWeaponProps() {
 }
 let CUR_KICK = 0, CUR_WTYPE_POD = false;          // how heavy the gun firing right now is: bigger, brighter, longer rounds
 function bullet(o, tgt, speed, dmg, opt = {}) {
+  const ps = (stats && stats.projSpeed) || 1;      // Muzzle Velocity: travelling shots fly faster, but live shorter so their distance stays the same
+  speed *= ps; if (opt.life) opt = { ...opt, life: opt.life / ps };
   const dir = tgt.clone().sub(o).normalize();
   if (opt.spread) { dir.x += rand(-opt.spread, opt.spread); dir.y += rand(-opt.spread, opt.spread); dir.z += rand(-opt.spread, opt.spread); dir.normalize(); }
   const rocket = opt.kind === 'rocket';
   const m = rocket ? bx(0.25, 0.25, 0.6, COL.red, 0, 0, 0, 0x701020) : new THREE.Mesh(geoBullet, B(0xffd9a8));
   m.position.copy(o); scene.add(m);
-  const s = { mesh: m, pos: o.clone(), last: o.clone(), vel: dir.multiplyScalar(speed), life: opt.life || 1.4, r: rocket ? 0.45 : 0.25, dmg,
-    pierce: opt.pierce || 0, hit: new Set(), explode: opt.explode || 0, src: DMG_SRC, target: opt.target, rocket, speed, manual: opt.manual, knock: opt.knock ?? 1.5,
+  const s = { mesh: m, pos: o.clone(), last: o.clone(), vel: dir.multiplyScalar(speed), life: (opt.life || 1.4) * CUR_RANGE, r: rocket ? 0.45 : 0.25, dmg,
+    pierce: opt.pierce || 0, hit: new Set(), explode: (opt.explode || 0) * CUR_RANGE, src: DMG_SRC, target: opt.target, rocket, speed, manual: opt.manual, knock: opt.knock ?? 1.5,
     selfHurt: !!opt.selfHurt, attrs: CUR_ATTRS };
   // homing rockets loft up first, then dive onto their target
   if (rocket && opt.target && !opt.noArc) { s.vel.y += speed * 0.55; s.climb = 0.16; }
@@ -1577,8 +1588,8 @@ function bullet(o, tgt, speed, dmg, opt = {}) {
     if (!rocket) { m.material = B(new THREE.Color(col).getHex()); m.scale.setScalar(1.3); }
     if (A.has('bounce')) { s.grav = 22; s.bounces = 2 + T('bounce'); s.life = Math.max(s.life, 2 + 0.4 * T('bounce')); s.vel.y += 3; }
     if (A.has('homing')) { s.target = opt.target || aim.enemy; s.homing = true; s.homeRate = 2.5 + 1.2 * T('homing'); s.life = Math.max(s.life, 2 + 0.4 * T('homing')); s.vel.multiplyScalar(0.7); s.speed = speed * 0.7; if (!opt.child) { s.vel.y += s.speed * 0.75; s.climb = 0.14; } }
-    if (A.has('orbit')) { s.orbit = { a: Math.atan2(dir.z, dir.x), r: 2.2 + 0.4 * T('orbit') + Math.random() * 0.8, y: rand(0.8, 1.8) }; s.life = 2.4 + 0.8 * T('orbit'); s.pierce = 99; s.hitCd = new Map(); }
-    if (A.has('explode') && !s.explode) s.miniBoom = 1.3 + 0.5 * T('explode');
+    if (A.has('orbit')) { s.orbit = { a: Math.atan2(dir.z, dir.x), r: (2.2 + 0.4 * T('orbit') + Math.random() * 0.8) * CUR_RANGE, y: rand(0.8, 1.8) }; s.r *= Math.sqrt(CUR_RANGE); s.life = 2.4 + 0.8 * T('orbit'); s.pierce = 99; s.hitCd = new Map(); }
+    if (A.has('explode') && !s.explode) s.miniBoom = (1.3 + 0.5 * T('explode')) * CUR_RANGE;
     applyComboToShot(s, A.combo);
   }
   shots.push(s);
@@ -1820,6 +1831,7 @@ function bonusDrop() {
   S.mode = 'drop'; startDropRag(); cam.pitch = 1.2; cam.dist = 30; cam.shake = 0.5;
 }
 /* ---------- scrap ---------- */
+const BASE_PULL = 4;    // bolts, loot and other pickups come to you only from this close; the Magnet module pulls XP only
 const SKY_PICK = 7;    // pickup reach while falling (shown as a glowing ring around you)
 let pickRing = null;
 /* a tiny gold mote drawn from a bolt into the frame */
@@ -1861,7 +1873,7 @@ function updateGems(dt) {
       if (d < 1.4) { g.float = null; g.pull = true; }
       g.mesh.position.copy(g.pos); g.mesh.rotation.y += dt * 4; continue;
     }
-    if (g.kind !== 'loot' && g.kind !== 'case' && g.kind !== 'upgrade' && d < (g.sky ? SKY_PICK : stats.magnet)) g.pull = true;
+    if (g.kind !== 'loot' && g.kind !== 'case' && g.kind !== 'upgrade' && d < (g.sky ? SKY_PICK : g.kind === 'xp' ? stats.magnet : BASE_PULL)) g.pull = true;
     if (g.pull && g.sky) {
       // falling: the bolt eases in (faster the closer it gets), shrinking, with a thin stream of motes ahead of it
       g.pullT = (g.pullT || 0) + dt;
@@ -2231,8 +2243,8 @@ function fzCoinPop() {
 
 /* ---------- KILL STREAK MULTIPLIER: on the right of the screen. Kills within 2.2 s of each other build it;
    it grows, glows hotter, shakes and throws sparks as it climbs. When it runs out it pays circuits. ---------- */
-const STREAK_WINDOW = 2.2;
-const KM_TIERS = [[0, '#e6e9ea'], [10, '#ffe46a'], [25, '#ffa23a'], [50, '#ff5a3a'], [100, '#ff4ad2'], [200, '#8a7aff']];
+const STREAK_WINDOW = 1.5;      // seconds between kills before the streak breaks (was 2.2)
+const KM_TIERS = [[0, '#e6e9ea'], [15, '#ffe46a'], [40, '#ffa23a'], [90, '#ff5a3a'], [180, '#ff4ad2'], [350, '#8a7aff']];
 function streakKill(e) {
   if (!S.inRun) return;
   S.streak = (S.streak || 0) + 1; S.streakT = STREAK_WINDOW;
@@ -2262,7 +2274,7 @@ function streakEnd() {
   const n = S.streak || 0; S.streak = 0; S.streakT = 0;
   const el = $('#killMul'); if (!el) return;
   // pay out: a few circuits for a good streak, more the longer it ran
-  const c = n >= 10 ? Math.floor(Math.pow(n / 10, 1.25)) : 0;
+  const c = n >= 20 ? Math.floor(Math.pow(n / 20, 1.2)) : 0;
   if (c > 0) {
     META.circuits += c; saveMeta(); if (S.st) S.st.circuits = (S.st.circuits || 0) + c;
     const pop = document.createElement('div'); pop.className = 'kmPay'; pop.innerHTML = `+${c} ${sym('circuits', '')}`;
