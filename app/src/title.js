@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.43.6 · BUILD NOV 6';
+const VERSION = '0.43.7 · BUILD NOV 6';
 
 function setupTitleScene() {
   if (TITLE.scene) return;
@@ -220,8 +220,8 @@ function renderTitle(dt) {
   TITLE.t += dt; TITLE.life += dt;
   const W = innerWidth, Hh = innerHeight;
   TITLE.cam.aspect = W / Hh; TITLE.cam.updateProjectionMatrix();
-  // the frame stands right of centre; the menu sits on the left
-  const off = Math.min(4.6, 2.2 * W / Hh);
+  // the frame stands right of centre (about 65% across the screen); the menu sits on the left
+  const off = Math.min(3.2, 1.0 * W / Hh);
   TITLE.cam.position.set(-off + Math.sin(TITLE.t * 0.15) * 0.3, 3.0, 10.5);
   TITLE.cam.lookAt(-off, 2.3, 0);
   if (TITLE.shake > 0) { TITLE.cam.position.x += rand(-1, 1) * TITLE.shake * 0.3; TITLE.cam.position.y += rand(-1, 1) * TITLE.shake * 0.3; TITLE.shake -= dt * 1.5; }
