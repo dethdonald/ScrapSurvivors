@@ -10,7 +10,7 @@ const IN = {
 };
 let mouseFire = false, mouseLook = false, mouseZoom = false;
 
-function menuOpen() { return ['catalog', 'wcase', 'devpanel', 'roulette', 'title', 'custom', 'hangar', 'inv', 'levelup', 'perk', 'pause', 'over', 'shop'].includes(S.mode); }
+function menuOpen() { return ['catalog', 'wcase', 'devpanel', 'roulette', 'title', 'custom', 'hangar', 'inv', 'levelup', 'perk', 'pause', 'over', 'shop', 'terminal'].includes(S.mode); }
 function playing() { return S.mode === 'play' || S.mode === 'drop'; }   // (the drop countdown is not 'playing': nothing moves yet)
 
 addEventListener('keydown', e => {
@@ -168,6 +168,7 @@ function navMove(dx, dy) {
 function menuBack() {
   if (S.mode === 'catalog') closeCatalog();
   else if (S.mode === 'devpanel') devPanelClose();
+  else if (S.mode === 'terminal') { if (TERM.sel >= 0) { TERM.sel = -1; renderTerminal(); focusFirst(); } else closeTerminal(); }
   else if (S.mode === 'pause') pauseBack();
   else if (S.mode === 'inv' || S.mode === 'hangar') invBack();
 }

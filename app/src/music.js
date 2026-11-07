@@ -199,7 +199,7 @@ function musicTick(dt) {
   if (!actx) return;
   if (!MUSIC.ready) musicInit();
   if (!MUSIC.ready || actx.state !== 'running') return;
-  const inRun = S.inRun && ['play', 'drop', 'levelup', 'perk', 'pause', 'inv', 'shop', 'countdown', 'dying'].includes(S.mode);
+  const inRun = S.inRun && ['play', 'drop', 'levelup', 'perk', 'pause', 'inv', 'shop', 'terminal', 'countdown', 'dying'].includes(S.mode);
   let ti = 0.05, td = 0;
   if (inRun && player && player.pos) {
     let near = 0, close = 0;
@@ -236,7 +236,7 @@ function musicTick(dt) {
   set(B.snare, smooth(0.75, 0.9, I));
   set(B.heart, smooth(0.1, 0.5, D));
   set(B.drone, 0.9 * D * D);
-  const duck = S.mode === 'pause' || S.mode === 'inv' || S.mode === 'shop' ? 0.45 : 1;
+  const duck = S.mode === 'pause' || S.mode === 'inv' || S.mode === 'shop' || S.mode === 'terminal' ? 0.45 : 1;
   MUSIC.out.gain.setTargetAtTime(dead ? 0 : SETTINGS.music * duck * 0.9, now, dead ? 0.08 : 0.6);
   musicPump();
 }

@@ -7,6 +7,7 @@
      Buy            - one high-rarity part, on offer once.
    ============================================================ */
 const SHOP_COST = { slot: 12, attr: 35 };
+const SHOP_REROLL = 50;                                // fixed price: never scales with deals made
 const SHOP_MOVE_T = 30, SHOP_PRICE_UP = 0.12;          // seconds before it reappears · +12% on every price per deal
 const shopMul = () => 1 + SHOP_PRICE_UP * (S.shopBuys || 0);
 const shopCost = k => Math.round(SHOP_COST[k] * shopMul());
@@ -104,6 +105,7 @@ function renderShop() {
     card('slot', shopCost('slot'), 'Gamble', 'Slots', 'Three of a kind: rare part · Pair: +8 bolts', '') +
     card('attr', shopCost('attr'), 'Gem', 'Random gem', 'Socket into an arm · changes its gun', '') +
     `<div class="shopsep"><span>Parts</span></div>` +
+    card('reroll', SHOP_REROLL, 'Restock', 'Reroll parts', 'Replace the three parts on offer · fixed price', '') +
     sh.offers.map((off, i) => { const it = off.item, r = rarityOf(it.lvl); return card('buy' + i, offerPrice(off), `<span style="color:${r.css}">${r.name}</span>`, `${partIcon(it)}${itemName(it)} ${mkTag(it.lvl)}`, `${itemName(it)}: ${itemDef(it).desc || ''}`, KIND_LABEL[it.kind]); }).join('');
   for (const el of $$('#shopCards .card')) el.addEventListener('click', () => { if (el.classList.contains('poor')) { sfx('deny'); denyFx(el); return; } shopAction(el.dataset.act); });
 }
@@ -115,6 +117,9 @@ function shopAction(act) {
     const it = off.item, stored = receiveItem(it); sfx('loot');
     closeShop();
     shopDone({ h: itemName(it).toUpperCase(), s: `Lv ${it.lvl}${stored ? '' : ' · storage full'}`, c: rarityOf(it.lvl).css });
+  } else if (act === 'reroll') {
+    if ((S.bolts || 0) < SHOP_REROLL) return;
+    S.bolts -= SHOP_REROLL; sh.offers = rollShopOffers(); sfx('swish', 0.6); renderShop(); focusFirst();
   } else if (act === 'slot') spinSlot();
   else if (act === 'attr') pickAttrPart();
 }

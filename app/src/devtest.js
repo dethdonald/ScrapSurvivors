@@ -126,7 +126,7 @@ function devSpawn(at) {
 function devDrop(kind) {
   const p = devFront(4);
   if (kind === 'health') dropHealth(p);
-  else if (kind === 'vacuum' || kind === 'nuke' || kind === 'frenzy') dropPower(p, kind);
+  else if (kind === 'vacuum' || kind === 'nuke' || kind === 'frenzy') dropPower(p, kind, true);
   else if (kind === 'xp') { for (let i = 0; i < 25; i++) dropGem(p, 3); }
   else { const [k, t] = pick(catalog().filter(r => r[0] === kind)); dropLoot(p, mkItem(k, t, 1)); }
 }

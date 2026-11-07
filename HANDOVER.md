@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.31.0 · BUILD NOV 6|
+| **Version** | 0.32.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -81,6 +81,14 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ---
 
 ## Change log
+
+### 2026-11-06: 0.32.0 — Chunk 07/16, Economy, store reroll and Service Terminal
+- **Bolt income about -20%**: kill drop 9% to 7%, target-box drop 35% to 28%, elites 4 to 3 bolts, brute minis 6 to 5.
+- **Temporary power-ups rarer**: vacuum, berserk, coin frenzy about -35%; **Nuke about 70% rarer** (the rarest). `powerActive(kind)` stops an identical power-up dropping while it is active or still lying on the field (`dropPower(p, kind, true)` forces, used by the dev panel).
+- **Store reroll**: a *Reroll parts* card, fixed `SHOP_REROLL = 50` bolts (ignores the per-deal price rise, does not count as a deal).
+- **Service Terminal** (`src/terminal.js`, overlay `#terminal`): rare orange console. Deposit one STORAGE part (weapon, arm, lower half, gem, module) and pay a fixed `TERMINAL_COST = 100` for a random replacement of the SAME level in any of those five categories (never the identical type, never an adapter/orb/torso). Parts holding gems, guns or attachments are refused. Explicit Confirm / Cancel (Cancel and Esc cost nothing). The swap happens in the same storage slot, so nothing is lost or duplicated. One terminal at a time, removed on success, min `TERMINAL_GAP = 60` s between spawns (checked every 10 s, 5% chance, not before 0:45), placed only on flat ground (+-2.5 m height within 0.8) away from the store and gate. Run state is not saved, so no save data is touched.
+- Tests: t62 (3000 rolls keep level/category, refusals, poor/cancel/confirm transaction, min gap 60.6 s, duplicate power-ups, reroll price).
+- Equipped parts cannot be deposited directly (take them off first); easy to extend later.
 
 ### 2026-11-06: 0.31.0 — Chunk 06/16, Ten-minute stages
 - **Clock**: `STAGE_LEN=600`, `BOSS_AT=510`, `TIME_K=1.5` (combat.js). `S.t` only advances in `play` (verified for inventory, level-up, case, shop, roulette, pause, dev panel, perk: 0 drift), so build time is unlimited.

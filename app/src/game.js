@@ -43,7 +43,7 @@ function clearWorld() {
   targets.forEach(t => scene.remove(t.mesh)); targets = []; shots.forEach(s => scene.remove(s.mesh)); gems.forEach(g => scene.remove(g.mesh)); fx.forEach(f => scene.remove(f.obj));
   enemies = []; shots = []; gems = []; fx = []; WRECKS = 0; clearSkyRings(); wdClear(); wfxClear(); S.streak = 0; S.streakT = 0; $('#killMul').hidden = true; S.frenzyT = 0; $('#fzBar').hidden = true;
   if (S.gate) { scene.remove(S.gate.group); S.gate = null; }
-  clearShop(); clearCases(); clearLegTrail(); clearStains();
+  clearShop(); clearTerminal(); TERM.nextAt = 0; TERM.checkT = 0; clearCases(); clearLegTrail(); clearStains();
   if (S.nuke) { scene.remove(S.nuke.obj); S.nuke = null; }
   physDestroyRobot();
   clearRagdoll();
@@ -127,7 +127,7 @@ function updateTimeline() {
   if (!S.bossSpawned && S.t >= BOSS_AT) { if (!S.gate) placeGate(); spawnBoss(); setGateState('sealed'); }
 }
 function updateInteract() {
-  let prompt = shopPrompt() || casePrompt();
+  let prompt = shopPrompt() || casePrompt() || terminalPrompt();
   if (S.mode !== 'play') return;
   const P = player;
   if (S.gate) {
@@ -212,7 +212,7 @@ function frame(now) {
     const pulse = 0.5 + 0.5 * Math.sin(now / 300);
     padMeshes.forEach(m => m.material.emissive.setRGB(0.1, 0.35 + 0.25 * pulse, 0.38 + 0.25 * pulse));
     if (S.gate) S.gate.beam.material.opacity = 0.12 + 0.08 * pulse;
-    shopTick(dt); caseTick(dt);
+    shopTick(dt); caseTick(dt); terminalTick(dt);
     if (S.mode === 'countdown') {
       // hanging at the top of the drop: 3, 2, 1...
       S.countT -= dt;

@@ -960,3 +960,5 @@ body.berserk #vignette{box-shadow:inset 0 0 160px 30px rgba(255,20,20,.45);anima
 .wcard .own.auto{color:#7fe0ff;border-color:#7fe0ff}.wcard .own.orb{color:#ffd24a;border-color:#ffd24a}
 .prow.orbok{outline:2px solid #ffd24a;animation:orbpulse .9s ease-in-out infinite}
 @keyframes orbpulse{50%{outline-color:rgba(255,210,74,.3)}}
+
+.termbody{display:grid;gap:8px;width:min(520px,92vw)}.termnote{margin:0;color:var(--dim);text-align:center}.termnote b{color:#e8c35a}.termrow{display:flex;gap:10px;align-items:center;justify-content:flex-start;text-align:left}.termrow em{margin-left:auto;font-style:normal;opacity:.6;font-size:12px}.termrow[aria-disabled]{opacity:.45}.termbtns{display:flex;gap:12px;justify-content:center}#termYes[aria-disabled]{opacity:.4}

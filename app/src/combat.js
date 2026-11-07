@@ -738,20 +738,20 @@ function killEnemy(e) {
   if (e.bar) { scene.remove(e.bar); e.bar = null; }
   const luck = stats.luck || 0;
   if (e.d.xp) dropGem(e.pos, e.elite ? ELITE.xp : e.d.xp);
-  if (Math.random() < 0.09 + luck * 0.003) dropBolt(e.pos, 1);       // currency: rarer than experience
+  if (Math.random() < 0.07 + luck * 0.0025) dropBolt(e.pos, 1);       // currency: rarer than experience
   if (Math.random() < 0.006 + luck * 0.0004 || (e.elite && Math.random() < 0.25)) dropHealth(e.pos);   // health packs: very rare
-  if (Math.random() < 0.0009 + luck * 0.00004) dropPower(e.pos, 'vacuum');       // rare: pulls in every bit of experience
-  else if (Math.random() < 0.0004 + luck * 0.00002) dropPower(e.pos, 'nuke');   // rarer still: wipes the field
-  else if (enemies.length >= BERSERK_CROWD && !(S.berserkT > 0) && S.t - (S.berserkLast ?? -999) > BERSERK_GAP && Math.random() < 0.0012 + luck * 0.00004) { S.berserkLast = S.t; dropPower(e.pos, 'berserk'); }   // rare, and only in a big crowd
-  else if (Math.random() < 0.0008 + luck * 0.00004 || (e.elite && Math.random() < 0.04) || (e.mini && Math.random() < 0.3)) dropPower(e.pos, 'frenzy');   // coin frenzy
+  if (Math.random() < 0.0006 + luck * 0.00003) dropPower(e.pos, 'vacuum');       // rare: pulls in every bit of experience
+  else if (Math.random() < 0.00012 + luck * 0.000006) dropPower(e.pos, 'nuke');   // rarer still: wipes the field
+  else if (enemies.length >= BERSERK_CROWD && !(S.berserkT > 0) && S.t - (S.berserkLast ?? -999) > BERSERK_GAP && Math.random() < 0.0008 + luck * 0.00003) { S.berserkLast = S.t; dropPower(e.pos, 'berserk'); }   // rare, and only in a big crowd
+  else if (Math.random() < 0.0005 + luck * 0.00003 || (e.elite && Math.random() < 0.025) || (e.mini && Math.random() < 0.2)) dropPower(e.pos, 'frenzy');   // coin frenzy
   if ((S.frenzyT || 0) > 0) dropBolt(e.pos, Math.random() < 0.15 ? 3 : 1);          // during a frenzy everything pays out
   // parts (and gems) only come in weapon cases: now and then from tougher enemies, always from the Warden
   {
     const ch = e.boss ? 1 : e.mini ? 0.5 : e.elite ? 0.1 : e.type === 'brute' ? 0.1 : e.type === 'splitter' ? 0.025 : e.type === 'spitter' ? 0.004 : 0;
     if (ch && Math.random() < ch * (1 + luck * 0.02)) dropCase(e.pos.clone().setY(e.pos.y + 0.6));
   }
-  if (e.elite) { for (let i = 0; i < 4; i++) dropBolt(e.pos, 1); for (let i = 0; i < 3; i++) dropGem(e.pos, 2); }   // tough enemies pay out, but no parts
-  if (e.mini) { for (let i = 0; i < 6; i++) dropGem(e.pos, 3); for (let i = 0; i < 6; i++) dropBolt(e.pos, 1); }
+  if (e.elite) { for (let i = 0; i < 3; i++) dropBolt(e.pos, 1); for (let i = 0; i < 3; i++) dropGem(e.pos, 2); }   // tough enemies pay out, but no parts
+  if (e.mini) { for (let i = 0; i < 6; i++) dropGem(e.pos, 3); for (let i = 0; i < 5; i++) dropBolt(e.pos, 1); }
   sfx('kill', 0.35);
   if (e.boss) onBossDown(e);
 }
@@ -1126,7 +1126,16 @@ function dropHealth(p) {
 /* Rare power-ups: the XP vacuum (a cyan magnet) and the nuke (a hazard-striped warhead). */
 const POWER_NAMES = { vacuum: 'Magnet', nuke: 'Nuke', frenzy: 'Coin Frenzy', berserk: 'Berserk', health: 'Repair Kit', case: 'Weapon Case' };
 const POWER_COLOR = { vacuum: COL.cyan, nuke: 0xf2c230, frenzy: 0xffd23a, berserk: 0xff3a3a, health: 0xff5a6a, case: 0xff7a1a };
-function dropPower(p, kind) {
+/* a temporary power-up never drops while the same one is already active or still lying on the field */
+function powerActive(kind) {
+  if (kind === 'berserk' && (S.berserkT || 0) > 0) return true;
+  if (kind === 'frenzy' && (S.frenzyT || 0) > 0) return true;
+  if (kind === 'nuke' && S.nuke) return true;
+  if (kind === 'vacuum' && gems.some(g => g.float)) return true;
+  return gems.some(g => g.kind === kind);
+}
+function dropPower(p, kind, force) {
+  if (!force && powerActive(kind)) return;
   const g = powerMesh(kind);
   const beam = new THREE.Mesh(geoBox, new THREE.MeshBasicMaterial({ color: POWER_COLOR[kind] || 0xf2c230, transparent: true, opacity: 0.3, depthWrite: false }));
   beam.scale.set(0.1, 5, 0.1); beam.position.y = 2.4; g.add(beam);
@@ -2200,11 +2209,11 @@ function hitTarget(t, dmg) {
   if (Math.random() < 0.03) dropHealth(drop);
   if (Math.random() < 0.08 + luck * 0.004) { dropLoot(t.pos.clone(), rollWorldLoot(luck)); sfx('loot'); }
   else if (Math.random() < 0.025 + luck * 0.001) { dropLoot(t.pos.clone(), mkGem()); sfx('loot'); }      // now and then a gem
-  if (Math.random() < 0.35) dropBolt(drop, 1 + (Math.random() < 0.3 ? 1 : 0));
+  if (Math.random() < 0.28) dropBolt(drop, 1 + (Math.random() < 0.3 ? 1 : 0));
   // a good handful of experience every time
   for (let i = 0; i < 4 + (Math.random() * 4 | 0); i++) dropGem(drop, 1);
   for (let i = 0; i < 1 + (Math.random() * 2 | 0); i++) dropGem(drop, 3);
-  if (Math.random() < 0.012) dropPower(drop, 'vacuum'); else if (Math.random() < 0.005) dropPower(drop, 'nuke');
+  if (Math.random() < 0.008) dropPower(drop, 'vacuum'); else if (Math.random() < 0.0012) dropPower(drop, 'nuke');
   // the experience, bolts and health it dropped stream straight to you (parts and power-ups wait to be picked up)
   for (let i = g0; i < gems.length; i++) if (['xp', 'bolt', 'health'].includes(gems[i].kind)) { gems[i].pull = true; gems[i].vac = true; }
   targets = targets.filter(x => !x.dead);
