@@ -1,5 +1,8 @@
 # Scrap Survivors: Handover
 
+
+> **Working folder (important):** the game lives in `C:\Users\LukeM\Documents\ScrapSurvivors` (it has `main.js`, `node_modules`, `Play.bat`, `SteamDeck`, `art`, `models`). Deliver ALL changes there. A stray `Documents\Scrapfall` folder (src/index.html only, no launcher) was created by mistake in earlier sessions and is obsolete; it can be deleted.
+
 A 3D survivors-like robot arena game. You build a robot from parts in the hangar, drop from the sky into a
 blocky arena, survive swarms, level up, open cases, beat the Warden and move to the next stage.
 
