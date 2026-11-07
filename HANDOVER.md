@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.35.0 · BUILD NOV 6|
+| **Version** | 0.36.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -88,6 +88,13 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - Limits: combo heals share a 6 HP/s pool on top of the arm cap; every proc has a per-second budget (`procOK`); spread poison carries `gen:1` and never spreads again (no chains); bosses keep their stack caps and ignore Neurotoxin stagger; Septic Frost slow is capped (45% / 25% on bosses); Blood Bank shield capped at 10+5×level and decays after 8 s; Cryostasis has a 12 s cooldown.
 - Lower-half gems unchanged (combos are arm-only).
 - Tested: all 55 combos fire 4 s against 12 enemies with no errors, max 52 live shots, 0.84 ms/step.
+
+### 0.36.0 — Chunk 11: Arena and gameplay polish
+- **Spectators** (`src/arena.js`, new, loaded after gemfx.js): ~60 low-detail booths in the inner face of the four outer walls (28 m up; skipped where terrain rises near them). Each = dark frame, back panel, 2–4 little robots (body, head, eye bar) and a semi-transparent glass pane. All instanced: 6 draw calls, 180 robots. They only bob and turn their heads (limited to ±1.1 rad) toward you; eyes turn red in overtime; they hop when you die. No AI, no physics, no collision, so arena navigation and spawn access are unchanged. Booths beyond 140 m freeze; updates run every other frame (~0.06 ms avg, 0.3 ms worst).
+- **Death celebration:** `gameOver()` calls `startCelebration()`: the 12 nearest survivors (within 70 m; not bosses, held/attached or NPC enemies) hop (flyers bob) and play a mechanical `chirp`; everyone else stops and watches. Chirps are capped at 5 per second. Only runs during the 'dying' phase; the game-over UI is untouched.
+- **Overtime fire:** clock flames 11→17 with 14 embers, a pulsing glow on the clock box, plus an `#ovfire` layer at the bottom of the screen (14 blurred flame blobs and a red edge glow), all CSS compositor animation, hidden outside overtime.
+- **Movement weight:** non-heavy frames now get a soft `land` thump on hard landings (heavy frames keep `thud`); footsteps already existed.
+- Tested: booth counts on all four walls, no scene leak over repeated stages, head turn, celebration caps (12 hoppers, 5 chirps/s), overtime flags, 55 combos unaffected.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.

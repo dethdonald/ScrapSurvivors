@@ -327,7 +327,7 @@ function playerStep(dt) {
       P.sqV = (P.sqV || 0) - Math.min(2.6, 0.5 + impact * 0.09) * hw;   // squash on landing
       cam.dip = Math.min(0.7, impact / 60 * hw);
       cam.bobV -= Math.min(5, impact * 0.18) * hw; cam.shake = Math.max(cam.shake, clamp((impact - 10) / 40, 0, 0.45) * hw);
-      if (impact > 9) { cam.lagDelay = 0.05; cam.lagImp = -Math.min(5, (impact - 6) * 0.16) * hw; if (st.heavy > 0.3) sfx('thud', Math.min(0.7, 0.2 + impact * 0.015)); }
+      if (impact > 9) { cam.lagDelay = 0.05; cam.lagImp = -Math.min(5, (impact - 6) * 0.16) * hw; if (st.heavy > 0.3) sfx('thud', Math.min(0.7, 0.2 + impact * 0.015)); else sfx('land', Math.min(0.5, 0.12 + impact * 0.012)); }
       if (impact > 14) dust(P.pos, Math.min(10, impact / 3 | 0));
       const fall = P.peak - P.pos.y;
       legGemLanding(impact, fall);

@@ -452,6 +452,7 @@ function gameOver() {
   S.mode = 'dying'; S.dieT = 2.4; S.total += S.t;
   $('#crosshair').hidden = true; $('#prompt').hidden = true;
   banner('FRAME DOWN', '', 'var(--hostile)', 2.2);
+  startCelebration();
   physDestroyRobot(true);
   startRagdoll();
 }
@@ -544,9 +545,13 @@ function clockHeat(dt) {
   if (!CLOCK.built) {
     CLOCK.built = true;
     const f = document.createElement('div'); f.className = 'clockfire'; f.setAttribute('aria-hidden', 'true');
-    f.innerHTML = Array.from({ length: 11 }, (_, i) => `<i style="--x:${(i / 10 * 100).toFixed(0)}%;--d:${(0.45 + Math.random() * 0.35).toFixed(2)}s;--del:${(-Math.random()).toFixed(2)}s;--h:${(0.8 + Math.random() * 0.6).toFixed(2)}"></i>`).join('')
-      + Array.from({ length: 8 }, (_, i) => `<b style="--x:${(Math.random() * 100).toFixed(0)}%;--d:${(1 + Math.random() * 1.2).toFixed(2)}s;--del:${(-Math.random() * 2).toFixed(2)}s;--dx:${(Math.random() * 40 - 20).toFixed(0)}px"></b>`).join('');
+    f.innerHTML = Array.from({ length: 17 }, (_, i) => `<i style="--x:${(i / 16 * 100).toFixed(0)}%;--d:${(0.45 + Math.random() * 0.35).toFixed(2)}s;--del:${(-Math.random()).toFixed(2)}s;--h:${(0.8 + Math.random() * 0.6).toFixed(2)}"></i>`).join('')
+      + Array.from({ length: 14 }, (_, i) => `<b style="--x:${(Math.random() * 100).toFixed(0)}%;--d:${(1 + Math.random() * 1.2).toFixed(2)}s;--del:${(-Math.random() * 2).toFixed(2)}s;--dx:${(Math.random() * 40 - 20).toFixed(0)}px"></b>`).join('');
     box.appendChild(f);
+    // overtime also licks up the screen edges: a handful of blurred flame blobs and an ember haze, all CSS (compositor only, no per-frame JS, no extra 3D)
+    const e = document.createElement('div'); e.id = 'ovfire'; e.setAttribute('aria-hidden', 'true'); e.hidden = true;
+    e.innerHTML = '<s class="glow"></s>' + Array.from({ length: 14 }, (_, i) => `<i style="--x:${(i / 13 * 100).toFixed(1)}%;--d:${(0.7 + Math.random() * 0.7).toFixed(2)}s;--del:${(-Math.random() * 1.4).toFixed(2)}s;--h:${(0.6 + Math.random() * 0.9).toFixed(2)}"></i>`).join('');
+    document.body.appendChild(e);
   }
   const inRun = S.inRun && !S.test;
   const k = inRun ? clamp(S.t / OVERTIME_T, 0, 1) : 0, lit = inRun && overtime() > 0;
@@ -556,7 +561,7 @@ function clockHeat(dt) {
   box.style.setProperty('--beat', (1.6 - 1.25 * h).toFixed(2) + 's');
   box.classList.toggle('hot', h > 0.35 && !lit);
   if (lit !== CLOCK.lit) {
-    CLOCK.lit = lit; box.classList.toggle('onfire', lit);
+    CLOCK.lit = lit; box.classList.toggle('onfire', lit); const ov = $('#ovfire'); if (ov) ov.hidden = !lit;
     if (lit) { sfx('fwoomp', 0.9); sfx('thoom', 0.6); cam.shake = Math.max(cam.shake || 0, 0.6); banner('OVERTIME', 'They only get stronger', '#ff4a1a', 3); sparkBurst(box, '#ff7a1a', 40); }
   }
 }

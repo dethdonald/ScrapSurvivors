@@ -458,10 +458,11 @@ function updateEnemies(dtAll) {
       if (e.burnT <= 0) e.burnDps = 0;
     }
     const dx = pp.x - e.pos.x, dz = pp.z - e.pos.z, dy = (pp.y + 1.3) - (e.pos.y + (d.fly ? 0 : e.r)), hd = Math.hypot(dx, dz);
+    if (e.cele) celeTick(e, dt);                                  // after the frame goes down: stand still, a few hop and chirp
     if (d.fly) {
       e.bob += dt * 3;
-      const ty = pp.y + 1.8 + Math.sin(e.bob) * 0.8;
-      const len = Math.max(0.001, Math.hypot(dx, ty - e.pos.y, dz)), sp = e.speed * hold * (e.freezeT > 0 ? 0 : e.chillT > 0 ? e.chillMul || 0.5 : 1);
+      const ty = e.cele ? e.cele.y + (e.cele.quiet ? 0 : Math.abs(Math.sin(e.bob * 2)) * 1.4) : pp.y + 1.8 + Math.sin(e.bob) * 0.8;
+      const len = Math.max(0.001, Math.hypot(dx, ty - e.pos.y, dz)), sp = (e.cele ? 0 : e.speed) * hold * (e.freezeT > 0 ? 0 : e.chillT > 0 ? e.chillMul || 0.5 : 1);
       const steer = e.stun > 0 ? 0.6 : 2.5;
       e.vel.x = lerp(e.vel.x, dx / len * sp, dt * steer); e.vel.z = lerp(e.vel.z, dz / len * sp, dt * steer); e.vel.y = lerp(e.vel.y, (ty - e.pos.y) / len * sp, dt * steer);
       const nx = e.pos.x + e.vel.x * dt, nz = e.pos.z + e.vel.z * dt;
@@ -472,7 +473,7 @@ function updateEnemies(dtAll) {
       // close and below you: head straight at the wall and climb rather than walking the long way round
       const straight = !e.boss && !d.npc && (e.direct || (dy > 1.5 && hd < 16));
       const [mx, mz] = d.npc ? vacSteer(e, dt) : e.steer ? e.steer : straight ? [dx / (hd || 1), dz / (hd || 1)] : enemySteer(e, dx, dz, hd);
-      let sp = (e.steer ? (e.steerSpd || e.speed) : e.speed) * hold * (e.freezeT > 0 ? 0.02 : e.chillT > 0 ? e.chillMul || 0.5 : 1);
+      let sp = (e.cele ? 0 : e.steer ? (e.steerSpd || e.speed) : e.speed) * hold * (e.freezeT > 0 ? 0.02 : e.chillT > 0 ? e.chillMul || 0.5 : 1);
       if (e.stand) sp = 0;
       if (hold && d.ranged && hd < 16 && Math.abs(dy) < 8) { sp = 0; e.cd -= dt; if (e.cd <= 0) { e.cd = 2.6; fireHostile(e, pp, 15); } }
       if (e.boss && hold) bossAI(e, dt, hd);

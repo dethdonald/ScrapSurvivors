@@ -904,12 +904,22 @@ body.win-sizing,body.win-sizing *{cursor:nwse-resize!important;user-select:none}
 @keyframes fireShake{0%{translate:0 0}50%{translate:1px -1px}100%{translate:-1px 1px}}
 .clockfire{position:absolute;left:-22px;right:-22px;bottom:-16px;height:96px;pointer-events:none;display:none;mix-blend-mode:screen;z-index:-1}
 .tbox.onfire .clockfire{display:block}
+.tbox.onfire{animation:clockhot .5s ease-in-out infinite alternate}
+@keyframes clockhot{from{box-shadow:0 0 14px 2px rgba(255,90,20,.45)}to{box-shadow:0 0 28px 8px rgba(255,150,40,.7)}}
 .clockfire i{position:absolute;bottom:0;left:var(--x);width:calc(26px + var(--h) * 16px);height:calc(var(--h) * 80px);margin-left:-20px;border-radius:50% 50% 45% 45% / 85% 85% 15% 15%;
   background:radial-gradient(ellipse 50% 60% at 50% 88%,#fff6c0 0%,#ffd23a 25%,#ff7a1a 52%,#e02a0a 78%,transparent 100%);
   transform-origin:50% 100%;animation:flame var(--d) ease-in-out var(--del) infinite alternate;filter:blur(3px)}
 @keyframes flame{0%{transform:scale(.75,.7) skewX(-6deg);opacity:.75}50%{transform:scale(1.05,1.15) skewX(5deg);opacity:1}100%{transform:scale(.85,.95) skewX(-3deg);opacity:.85}}
 .clockfire b{position:absolute;bottom:20px;left:var(--x);width:4px;height:4px;background:#ffd23a;box-shadow:0 0 6px #ff7a1a;animation:ember var(--d) linear var(--del) infinite}
 @keyframes ember{0%{transform:translate(0,0);opacity:1}100%{transform:translate(var(--dx),-110px) scale(.3);opacity:0}}
+/* overtime: heat flicker at the bottom of the screen and a red edge glow (pointer-events none; transform/opacity only) */
+#ovfire{position:fixed;left:0;right:0;bottom:0;height:22vh;pointer-events:none;z-index:4;mix-blend-mode:screen;overflow:hidden}
+#ovfire[hidden]{display:none}
+#ovfire .glow{position:fixed;inset:0;display:block;box-shadow:inset 0 0 120px 20px rgba(255,60,20,.28);animation:ovpulse 1.6s ease-in-out infinite alternate}
+@keyframes ovpulse{from{opacity:.55}to{opacity:1}}
+#ovfire i{position:absolute;bottom:-30px;left:var(--x);width:calc(5vw + var(--h) * 3vw);height:calc(var(--h) * 17vh);margin-left:-4vw;border-radius:50% 50% 40% 40% / 85% 85% 15% 15%;
+  background:radial-gradient(ellipse 50% 70% at 50% 100%,rgba(255,235,150,.55) 0%,rgba(255,130,30,.5) 40%,rgba(210,40,10,.32) 70%,transparent 100%);
+  filter:blur(8px);transform-origin:50% 100%;animation:flame var(--d) ease-in-out var(--del) infinite alternate;will-change:transform,opacity}
 .prow.wrow>i{margin-right:8px}
 /* ---------- CATALOG (main menu) ---------- */
 .catpanel{position:absolute;inset:clamp(14px,4vh,44px) clamp(14px,4vw,60px);zoom:var(--uiz,1);display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;gap:10px;

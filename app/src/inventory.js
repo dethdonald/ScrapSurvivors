@@ -914,7 +914,7 @@ function sparkBurst(el, color = '#ffd27a', n = 26) {
   }
 }
 function ensureAudio() { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {} }
-const sfxGap = { tink: 0.04, squeak: 0.035, hurt: 0.09,  flame: 0.07, roar: 0.1, slash: 0.05, swish: 0.08, zap: 0.06, slot: 0.05, reload: 0.08, reloaded: 0.08, jet: 0.07, autogun: 0.055, step: 0.07, hit: 0.045, kill: 0.04, xp: 0.03, coin: 0.04, pistol: 0.03, shotgun: 0.05 };
+const sfxGap = { tink: 0.04, squeak: 0.035, hurt: 0.09,  flame: 0.07, roar: 0.1, slash: 0.05, swish: 0.08, zap: 0.06, slot: 0.05, reload: 0.08, reloaded: 0.08, jet: 0.07, autogun: 0.055, step: 0.07, chirp: 0.09, land: 0.12, hit: 0.045, kill: 0.04, xp: 0.03, coin: 0.04, pistol: 0.03, shotgun: 0.05 };
 const sfxLast = {};
 const GUN_LAYERS = { pistol: { crack: 0.8, thump: 0.5 }, autogun: { crack: 0.6, thump: 0.35 }, shotgun: { crack: 1, thump: 1.1 }, sniper: { crack: 1.2, thump: 1.2 }, rocket: { crack: 0.5, thump: 0.9 }, zap: { crack: 0.5, thump: 0.25 } };
 const TAILS = { boom: 1, shotgun: 0.45, sniper: 0.6, rocket: 0.5, nukefall: 0.4 };
@@ -981,6 +981,9 @@ function sfx(kind, vol = 1) {
     if (kind === 'loot') { tone(520, 780, 0.14, 'triangle', 0.5); tone(780, 1170, 0.18, 'triangle', 0.45, 0.1); tone(1040, 1560, 0.3, 'triangle', 0.4, 0.2); }
     if (kind === 'levelup') { tone(440, 440, 0.12, 'triangle', 0.4); tone(660, 660, 0.12, 'triangle', 0.4, 0.1); tone(880, 880, 0.25, 'triangle', 0.4, 0.2); }
     if (kind === 'step') tone(90, 50, 0.06, 'sine', 0.5);
+    if (kind === 'land') { tone(70, 38, 0.1, 'sine', 0.7); noise(0.04, 0.3, 500); }                                                         // soft body-weight thump, for frames that aren't heavy
+    if (kind === 'chirp') { const f = 1200 + Math.random() * 700; tone(f, f * 1.5, 0.05, 'square', 0.22); tone(f * 1.5, f * 1.15, 0.06, 'square', 0.2, 0.06); tone(f * 0.75, f * 1.9, 0.07, 'triangle', 0.18, 0.12); }   // a little mechanical "wheee-bip"
+
     if (kind === 'whoops') { tone(720, 300, 0.22, 'triangle', 0.6); tone(420, 640, 0.14, 'triangle', 0.5, 0.24); tone(640, 560, 0.1, 'sine', 0.3, 0.38); }
     if (kind === 'hurt') { tone(320, 120, 0.16, 'square', 0.35); noise(0.08, 0.5, 900); tone(90, 50, 0.18, 'sine', 0.8); }            // a dull clank + buzz
     if (kind === 'squeak') { const f = 900 + Math.random() * 500; tone(f, f * 1.9, 0.06, 'triangle', 0.5); tone(f * 1.9, f * 1.4, 0.05, 'sine', 0.3, 0.05); }
