@@ -1216,7 +1216,7 @@ function dropLoot(p, item) {
   const model = buildPart(item, new THREE.Vector3(1, 0, 0), null);
   const box = new THREE.Box3().setFromObject(model), c = box.getCenter(new THREE.Vector3());
   model.position.copy(c).negate(); const spin = new THREE.Group(); spin.add(model); g.add(spin);
-  const col = item.kind === 'gem' ? new THREE.Color(ATTRS[item.type].color).getHex() : rarityOf(item.lvl).color;
+  const col = item.kind === 'gem' ? new THREE.Color(ATTRS[item.type].color).getHex() : item.kind === 'orb' ? 0xffd24a : rarityOf(item.lvl).color;
   const beam = new THREE.Mesh(geoBox, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.35, depthWrite: false }));
   beam.scale.set(0.12, 6, 0.12); beam.position.y = 2.5; g.add(beam);
   const halo = new THREE.Mesh(geoRing, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }));
@@ -1880,7 +1880,7 @@ function updateGems(dt) {
     g.mesh.position.copy(g.pos);
     if (g.kind === 'loot' || g.kind === 'case' || g.kind === 'upgrade') { g.spin.rotation.y += dt * 1.6; g.spin.position.y = Math.sin(performance.now() / 400) * 0.12; }
     else g.mesh.rotation.y += dt * 3;
-    if (g.kind === 'loot' && d < 2.2 && storeFull()) {
+    if (g.kind === 'loot' && d < 2.2 && storeFull() && !allItems().some(o => o.autoUp && canCombine(o, g.item))) {
       // no free storage slot: leave it lying there
       if (!g.warnT || performance.now() - g.warnT > 4000) { g.warnT = performance.now(); banner('STORAGE FULL', '', 'var(--hostile)', 1.6); sfx('deny', 0.5); }
       g.mesh.position.copy(g.pos); continue;
@@ -1899,10 +1899,9 @@ function updateGems(dt) {
   gems = gems.filter(g => { if (g.done) { scene.remove(g.mesh); return false; } return true; });
 }
 function pickUpLoot(it) {
-  const r = rarityOf(it.lvl);
   const stored = receiveItem(it);
   sfx('loot');
-  banner(`${itemName(it).toUpperCase()}`, `Lv ${it.lvl}${stored ? '' : ' · storage full'}`, r ? r.css : 'var(--orange)', 2);
+  banner(`${itemName(it).toUpperCase()}`, `${it.kind === 'orb' ? 'In storage' : 'Lv ' + it.lvl}${stored ? '' : ' · storage full'}`, partColor(it), 2);
   renderLoadoutHUD();
 }
 function gainXp(v) {
@@ -2175,7 +2174,7 @@ function hitTarget(t, dmg) {
   const luck = stats.luck || 0;
   const drop = t.pos.clone().setY(t.pos.y - 0.4), g0 = gems.length;
   if (Math.random() < 0.03) dropHealth(drop);
-  if (Math.random() < 0.08 + luck * 0.004) { dropLoot(t.pos.clone(), rollLoot(luck)); sfx('loot'); }
+  if (Math.random() < 0.08 + luck * 0.004) { dropLoot(t.pos.clone(), rollWorldLoot(luck)); sfx('loot'); }
   else if (Math.random() < 0.025 + luck * 0.001) { dropLoot(t.pos.clone(), mkGem()); sfx('loot'); }      // now and then a gem
   if (Math.random() < 0.35) dropBolt(drop, 1 + (Math.random() < 0.3 ? 1 : 0));
   // a good handful of experience every time

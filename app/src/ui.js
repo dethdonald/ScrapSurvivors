@@ -370,6 +370,7 @@ function syncSettingsUI() {
   optRow('#gfxBtn', 'Graphics', SETTINGS.gfx);
   optRow('#devBtn', 'Developer mode', !!SETTINGS.dev);
   optRow('#xhPartsBtn', 'Part level bar', !!SETTINGS.xhParts);
+  optRow('#autoModBtn', 'Auto-upgrade new modules', SETTINGS.autoUpMods !== false);
   $('#xhLeft').hidden = !SETTINGS.xhParts;
   $('#skipBtn').hidden = !SETTINGS.dev || !!S.test;
   $('#devPanelBtn').hidden = !S.test;
@@ -425,6 +426,7 @@ const cycle = (arr, v) => arr[(arr.indexOf(v) + 1) % arr.length];
 $('#xhStyleBtn').addEventListener('click', () => { SETTINGS.xhStyle = cycle(XH_STYLES, SETTINGS.xhStyle); saveSettings(); syncSettingsUI(); });
 $('#xhColorBtn').addEventListener('click', () => { SETTINGS.xhColor = cycle(Object.keys(XH_COLORS), SETTINGS.xhColor); saveSettings(); syncSettingsUI(); });
 $('#xhSizeBtn').addEventListener('click', () => { SETTINGS.xhSize = cycle(XH_SIZES.map(s => s[1]), SETTINGS.xhSize); saveSettings(); syncSettingsUI(); });
+$('#autoModBtn').addEventListener('click', () => { SETTINGS.autoUpMods = !(SETTINGS.autoUpMods !== false); saveSettings(); syncSettingsUI(); });
 $('#xhPartsBtn').addEventListener('click', () => { SETTINGS.xhParts = !SETTINGS.xhParts; saveSettings(); syncSettingsUI(); });
 $('#devBtn').addEventListener('click', () => {
   SETTINGS.dev = !SETTINGS.dev; saveSettings(); syncSettingsUI();

@@ -5,17 +5,28 @@
    chance of a module. Take one and it goes to your storage. Each stage gives you 3 rerolls; a reroll re-spins one slot.
    (Locked cases you pay bolts for are different: those give level-up upgrades. See shop.js.)
    ============================================================ */
-const WC = { items: [], spin: [], lock: 0, teased: [] };
-/* a tempting part for the near miss: a top-mark weapon or limb, or a module */
-function caseTease() { const it = rollLootOf(Math.random() < 0.4 ? ['module'] : ['weapon'], 60); it.lvl = Math.max(it.lvl, Math.min(TIER_START[5], maxLvlOf(it))); return it; }
+const WC = { items: [], spin: [], lock: 0, orbRolled: false };
 
-/* one part: limb, weapon or gem, sometimes a module; cases roll with a little extra luck */
+/* ---- what a case can hold ----
+   Each slot is one part: a weapon (most often), a gem, a module, an occasional limb, and now and then an adapter. Parts you already
+   carry come up more often (a duplicate can be merged), but never exclusively. The roulette is honest: what you see land is what was
+   rolled, and the cards it flickers through are drawn from the very same odds. */
+const CASE_KIND_ODDS = [['module', 0.14], ['gem', 0.18], ['weapon', 0.50], ['arm', 0.12], ['adapter', 0.06]];
+const CASE_DUP_BIAS = 0.35;           // chance a weapon/arm slot picks one you already have equipped (when you have any)
+const ORB_CHANCE = 0.05;              // evaluated once per case, replaces one of its three choices
+function ownedTypes(kind) { return [...new Set(allItems().filter(o => o.kind === kind).map(o => o.type))]; }
 function rollCasePart() {
-  const luck = (stats && stats.luck || 0) + 6, r = Math.random();
-  if (r < 0.14) return rollLootOf(['module'], luck);
-  if (r < 0.32) return mkGem();
-  if (r < 0.62) return rollLootOf(['weapon'], luck);
-  return rollLootOf(['arm', 'leg'], luck);
+  const luck = (stats && stats.luck || 0) + 6;
+  let r = Math.random(), kind = 'weapon';
+  for (const [k, w] of CASE_KIND_ODDS) { if (r < w) { kind = k; break; } r -= w; }
+  if (kind === 'gem') return mkGem();
+  if (kind === 'module') return rollLootOf(['module'], luck);
+  if (kind === 'adapter') return BUILD_V2 ? rollLootOf(['adapter'], luck) : rollLootOf(['weapon'], luck);
+  if ((kind === 'weapon' || kind === 'arm') && Math.random() < CASE_DUP_BIAS) {
+    const own = kind === 'weapon' ? mountedWeapons().map(w => w.type) : mountedArms().map(a => a.type);
+    if (own.length) { const t = pick(own), it = mkItem(kind, t, kind === 'arm' ? 1 : TIER_START[rollRarity(luck)]); return it; }
+  }
+  return rollLootOf([kind === 'arm' ? 'arm' : 'weapon'], luck);
 }
 /* one that isn't already showing in another slot */
 function rollCaseOffer(except = []) {
@@ -23,15 +34,43 @@ function rollCaseOffer(except = []) {
   return rollCasePart();
 }
 const caseKey = o => o.kind + ':' + o.type;
-/* the card for a part: rarity, its icon big, its name, Mk level and what kind of part it is */
+/* the three choices of one case; the orb roll happens here, once */
+function rollCase() {
+  const items = [];
+  for (let i = 0; i < 3; i++) items.push(rollCaseOffer(items.map(caseKey)));
+  WC.orbRolled = Math.random() < ORB_CHANCE;
+  if (WC.orbRolled) items[Math.floor(Math.random() * 3)] = mkItem('orb', 'universal', 1);
+  return items;
+}
+/* the card for a part: rarity, its icon big, its name, level and what kind of part it is, plus whether you own it / it will auto-upgrade */
+function ownBadge(it) {
+  if (it.kind === 'orb') return '<span class="own orb">+1 LEVEL</span>';
+  const own = allItems().filter(o => o.kind === it.kind && o.type === it.type);
+  const auto = own.some(o => o.autoUp && canCombine(o, it));
+  return (own.length ? `<span class="own">OWNED ×${own.length}</span>` : '') + (auto ? '<span class="own auto">AUTO-UPGRADES</span>' : '');
+}
 function partCardHTML(it) {
-  const R = rarityOf(it.lvl || 1), gem = it.kind === 'gem';
-  return `<div class="tag"><b style="color:${gem ? ATTRS[it.type].color : R.css}">${gem ? 'Gem' : R.name}</b></div>
-    <div class="bigsym partbig" style="color:${gem ? ATTRS[it.type].color : R.css}">${partIcon(it)}</div>
+  const R = rarityOf(it.lvl || 1), gem = it.kind === 'gem', orb = it.kind === 'orb', col = partColor(it);
+  return `<div class="tag"><b style="color:${col}">${orb ? 'Orb' : gem ? 'Gem' : R.name}</b></div>
+    <div class="bigsym partbig" style="color:${col}">${partIcon(it)}</div>
     <div class="nm sm">${itemName(it)}</div>
-    <div class="ft">${KIND_LABEL[it.kind]}${gem ? '' : ' · ' + mkTag(it.lvl)}</div>`;
+    <div class="ft">${KIND_LABEL[it.kind]}${gem || orb ? '' : ' · ' + mkTag(it.lvl)}</div>
+    <div class="owns">${ownBadge(it)}</div>`;
 }
 const partTip = it => `${itemName(it)}: ${itemDef(it).desc || (it.kind === 'gem' ? ATTRS[it.type].desc : '')}`;
+/* hands the player a reward: merged/stored if there's room, otherwise it drops beside the robot as a pickup, never lost */
+function awardPart(it) {
+  const auto = allItems().some(o => o.autoUp && canCombine(o, it));
+  if (!auto && storeFull()) {
+    const a = player.legYaw || 0, p = player.pos.clone(); p.x += Math.sin(a) * 2.6; p.z += Math.cos(a) * 2.6; p.y = groundAt(p.x, p.z) + 1;
+    dropLoot(p, it);
+    banner(itemName(it).toUpperCase(), 'Storage full · dropped beside you', partColor(it), 2.4);
+    return 'dropped';
+  }
+  const fits = receiveItem(it);
+  if (!auto) banner(itemName(it).toUpperCase(), fits ? 'In storage' : 'Storage full · recycle at the workbench', partColor(it), 2);
+  return auto ? 'merged' : 'stored';
+}
 
 /* ---------- the case on the ground: a hard-shell case with latches, glowing in your accent colour ---------- */
 /* the case itself (also drawn in the catalog) */
@@ -59,8 +98,7 @@ function dropCase(p) {
 /* ---------- the pick screen: three part cards ---------- */
 function openWeaponCase() {
   S.prevMode = S.mode === 'wcase' ? S.prevMode : S.mode; S.mode = 'wcase'; unlockPointer();
-  WC.items = [];
-  for (let i = 0; i < 3; i++) WC.items.push(rollCaseOffer(WC.items.map(caseKey)));
+  WC.items = rollCase();
   const wrap = $('#wcCards'); wrap.innerHTML = '';
   WC.items.forEach((o, i) => {
     const col = document.createElement('div'); col.className = 'wccol';
@@ -75,20 +113,15 @@ function openWeaponCase() {
 /* a slot flickers through random parts, slowing down, then lands on what's really in it */
 function wcSpin(i, dur) {
   const card = $(`#wcCards [data-take="${i}"]`); if (!card) return;
-  WC.spin[i] = true; WC.teased[i] = false;
+  WC.spin[i] = true;
   WC.lock = Math.max(WC.lock, performance.now() + dur + 350);
   twirlSound(dur / 1000 + 0.1, 0.8);
   let t = 0;
-  const show = o => { const t = tierOf(o.lvl || 1); card.innerHTML = partCardHTML(o); card.dataset.tip = partTip(o); card.className = `card nav rar wcard symcard r${t}` + (WC.spin[i] ? ' spinning' : ' landed'); card.style.setProperty('--rar', RARITY[t].css); };
+  const show = o => { const t = o.kind === 'orb' ? 5 : tierOf(o.lvl || 1); card.innerHTML = partCardHTML(o); card.dataset.tip = partTip(o); card.className = `card nav rar wcard symcard r${t}` + (WC.spin[i] ? ' spinning' : ' landed'); card.style.setProperty('--rar', o.kind === 'orb' ? ORB_COLOR : RARITY[t].css); };
   const step = () => {
     if ($('#wcase').hidden) return;
-    if (t >= dur) { WC.spin[i] = false; show(WC.items[i]); sfx('sparks', 0.7); const tr = tierOf(WC.items[i].lvl || 1); sparkBurst(card, RARITY[tr].css, tr >= 4 ? 40 : 24); if (tr >= 4 || WC.items[i].kind === 'module') sfx('jackpot', 0.5); syncRerolls(); return; }
+    if (t >= dur) { WC.spin[i] = false; show(WC.items[i]); sfx('sparks', 0.7); const orbL = WC.items[i].kind === 'orb', tr = orbL ? 5 : tierOf(WC.items[i].lvl || 1); sparkBurst(card, orbL ? ORB_COLOR : RARITY[tr].css, tr >= 4 ? 40 : 24); if (tr >= 4 || WC.items[i].kind === 'module') sfx('jackpot', 0.5); syncRerolls(); return; }
     const gap = 45 + 260 * (t / dur) ** 2;
-    // near miss: the flicker just before it lands is often something much better (a high-mark part or a module)
-    if (t + gap >= dur && !WC.teased[i] && tierOf(WC.items[i].lvl || 1) < 4 && Math.random() < 0.55) {
-      WC.teased[i] = true; show(caseTease()); sfxP('tick', 0.2, 1.3);
-      t += gap; setTimeout(step, gap + 260); return;          // hang on it a moment longer
-    }
     show(rollCasePart()); sfx('tick', 0.07);
     t += gap; setTimeout(step, gap);
   };
@@ -115,9 +148,7 @@ $('#wcCards').addEventListener('click', e => {
     if (performance.now() < WC.lock || WC.spin.some(Boolean)) { sfx('deny', 0.3); return; }
     const it = WC.items[+take.dataset.take];
     closeWeaponCase();
-    const auto = allItems().some(o => o.autoUp && canCombine(o, it));   // a part set to auto-upgrade takes it in (with its own banner)
-    const fits = receiveItem(it);
-    if (!auto) banner(itemName(it).toUpperCase(), fits ? 'In storage' : 'Storage full · recycle at the workbench', it.kind === 'gem' ? ATTRS[it.type].color : rarityOf(it.lvl).css, 2);
+    awardPart(it);
     sfx('loot', 0.7);
   }
 });

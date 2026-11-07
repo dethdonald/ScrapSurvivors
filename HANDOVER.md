@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.28.1 · BUILD NOV 6|
+| **Version** | 0.29.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -81,6 +81,16 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ---
 
 ## Change log
+
+### 2026-11-06: 0.29.0 — Chunk 04/16, Universal Upgrade Orb, case loot and inventory
+- **Orb:** new item kind `orb` (`ORBS.universal`, data.js). 5% per weapon case, rolled ONCE in `rollCase()` (wcase.js) and it replaces one random of the 3 choices (never two). Rerolling a slot re-rolls normally (no second orb roll). It lives in storage like any part. Use: drag it onto a mounted part (or onto a stored part's row in the Parts list); eligible targets are highlighted (socket halos / gold outline on rows) and the toast previews the change (`orbPreview`). It goes through the shared `upgradeItem` via `useOrb(orb, target)`: the orb is consumed ONLY when the upgrade succeeds, otherwise it returns to storage. Normal max L5, adapters L2 (via `it.maxLvl`). Torsos/orbs are not targets.
+- **Ordinary module drops** from the world are always L1 (`rollWorldLoot`, used for target drops). Store/case/terminal rewards still roll rarity-based levels.
+- **Case contents** (`CASE_KIND_ODDS`): weapon 50%, gem 18%, module 14%, arm 12% (limbs occasional), adapter 6%. `CASE_DUP_BIAS` 35%: a weapon/arm slot picks a type you already have equipped, so duplicates come up more often (measured about 40% of weapon slots) while all 13 weapons still appear.
+- **Honest roulette:** `caseTease` and all near-miss flickers removed; the flicker only shows cards drawn from the real odds.
+- **Indicators:** case cards show OWNED x n and AUTO-UPGRADES (when an owned duplicate with auto-upgrade could absorb it); orb cards show +1 LEVEL.
+- **Full storage:** `awardPart()` drops the chosen case reward beside the robot as a normal pickup (never lost); pickups wait on the ground until there is room, but a full-storage pickup that an auto-upgrade part would absorb is taken. The taken reward banner/colours use `partColor`.
+- **Module auto-upgrade:** new setting `SETTINGS.autoUpMods` (default ON, persisted via saveSettings; a saved choice wins). New modules get `autoUp = true` at creation (`mkItem`). Option row added in Options. Per-item right-click toggle unchanged.
+- Tests (t57): orb rate 4.98% over 20000 cases, never more than one per case, always 3 cards; world modules 1668/1668 L1; transaction on weapon/arm/module/lower/gem/adapter, refusals at max, adapter L2 cap, torso/orb targets rejected, single use; inventory commit consumes, failed commit returns the orb; full-storage drop; setting survives reload; case UI renders with indicators.
 
 ### 2026-11-06: 0.28.1 — adapter sockets auto-orient forward
 - `buildAdapter` (robot.js) now builds a short stub along the torso socket's direction, then a head whose sockets always face forward (+z) whatever socket it plugs into (back sockets lift the head up to clear the torso). Arms/modules inside adapters therefore point forward instead of up/sideways. Socket rules, merging and tests unchanged (t52/t53 pass).

@@ -63,7 +63,7 @@ const CFG = {
 // TESTING: the hangar shelf hands out unlimited copies of every part. Set to false for the real starting shelf.
 CFG.unlimitedParts = true;
 
-const SETTINGS = { sens: 1, invertY: false, aimAssist: true, dev: false, xhStyle: 'square', xhColor: 'white', xhSize: 1, xhParts: true, uiScale: 1 };
+const SETTINGS = { sens: 1, invertY: false, aimAssist: true, dev: false, xhStyle: 'square', xhColor: 'white', xhSize: 1, xhParts: true, uiScale: 1, autoUpMods: true };      // autoUpMods: new modules start with auto-upgrade on (a saved choice overrides this)
 try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem('scrapsurvivors.settings') || localStorage.getItem('scrapfall.settings') || '{}')); } catch (e) {}
 /* circuits: the second currency, kept between runs */
 const META = { circuits: 0 };

@@ -343,6 +343,7 @@ function buildPart(item, out, reg) {
   else if (item.kind === 'block' && BLOCKS[item.type].upper) buildUpper(g, item, out, reg);
   else if (item.kind === 'block') buildBlock(g, item, out, reg);
   else if (item.kind === 'adapter') buildAdapter(g, item, out, reg);
+  else if (item.kind === 'orb') { const m = new THREE.Mesh(ballGeo, new THREE.MeshBasicMaterial({ color: 0xffd24a })); m.scale.setScalar(0.28); g.add(m); const sh = new THREE.Mesh(ballGeo, new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.3, depthWrite: false })); sh.scale.setScalar(0.4); g.add(sh); }
   else {
     const res = (def.model ? def.model(g, { lvl: item.lvl, out, item }) : null) || {};
     if (res.ik) { g.userData.ik = res.ik; res.ik.restV = new THREE.Vector3().fromArray(res.ik.rest); if (res.ik.hint) res.ik.hintV = new THREE.Vector3().fromArray(res.ik.hint).normalize(); legPose(res.ik, res.ik.restV); }

@@ -63,6 +63,8 @@ const STAT_UPGRADES = {
    Targets and elite enemies can drop a part. Its Mk (rarity) is rolled with your luck. */
 function rollLootOf(kinds, luck = 0) { let it; for (let i = 0; i < 40; i++) { it = rollLoot(luck); if (kinds.includes(it.kind)) break; } return it; }
 const isLimb = kind => kind === 'arm' || kind === 'leg';
+/* Loot lying around the world is never a leveled module: a module found out in the field is always Lv 1 (store, case and terminal rewards may be higher). */
+function rollWorldLoot(luck = 0) { const it = rollLoot(luck); return it.kind === 'module' ? mkItem('module', it.type, 1) : it; }
 function rollLoot(luck = 0) {
   const pool = [];
   for (const t of Object.keys(WEAPONS)) pool.push(['weapon', t, 3 * (WEAPONS[t].lootWeight ?? 1)]);
@@ -738,6 +740,27 @@ const ADAPTERS = {
   mod2arm: { name: 'Module-to-Arm Adapter', from: 'module', to: 'arm', mass: 0.2, maxLvl: 2,
     desc: 'Plugs into a MODULE socket (cube) and turns it into an ARM socket (sphere). Level 2 holds two arms.' },
 };
+/* ---------- the Universal Upgrade Orb ----------
+   Found only in weapon cases (5% per case). It sits in storage; drag it onto any part that can still go up a level and it raises it by one
+   through upgradeItem(). It is only used up when the upgrade succeeds. */
+const ORBS = { universal: { name: 'Universal Upgrade Orb', desc: 'Drag it onto a weapon, arm, module, gem, lower half or adapter to raise it one level (normal parts max at Lv 5, adapters at Lv 2).' } };
+const ORB_COLOR = '#ffd24a';
+const partColor = it => it.kind === 'gem' ? ATTRS[it.type].color : it.kind === 'orb' ? ORB_COLOR : rarityOf(it.lvl || 1).css;
+/* Uses an orb on a target in one step: the orb is consumed only if the upgrade went through. Returns {ok, from, to, reason}. */
+function useOrb(orb, target) {
+  if (!orb || orb.kind !== 'orb' || orb.spent) return { ok: false, reason: 'no orb' };
+  if (target === orb) return { ok: false, reason: 'not a target' };
+  const r = upgradeItem(target, 1);
+  if (r.ok) orb.spent = true;
+  return r;
+}
+/* What a +1 would change, read off the hover rows. */
+function orbPreview(target) {
+  const c = upgradeCheck(target); if (!c.ok) return null;
+  const a = partInfo(target), b = partInfo({ ...target, lvl: c.to, gems: target.gems, slots: target.slots });
+  const diff = b.filter((r, i) => a[i] && String(a[i][1]) !== String(r[1]) && r[0] !== 'Weight').map(r => `${r[0].toLowerCase()} ${a.find(x => x[0] === r[0])[1]} → ${r[1]}`);
+  return `${itemName(target)}  Lv ${c.from} → ${c.to}` + (diff.length ? ' · ' + diff.slice(0, 3).join(', ') : '');
+}
 const lowerLegItems = it => {
   // the built-in legs, made once per lower-half item (they aren't parts of their own: you can't take them off)
   if (!it._legs || it._legs.length !== LOWERS[it.type].mounts.length) Object.defineProperty(it, '_legs', { value: LOWERS[it.type].mounts.map(() => mkItem('leg', LOWERS[it.type].legType, 1)), enumerable: false, configurable: true, writable: true });
@@ -954,6 +977,7 @@ function mkItem(kind, type, lvl = 1) {
   if (kind === 'arm') { it.weapon = null; if (ARMS[type] && ARMS[type].wrists === 2) it.weapon2 = null; }
   if (kind === 'block') { it.slots = new Array(BLOCKS[type] && BLOCKS[type].sockets ? BLOCKS[type].sockets.length : 6).fill(null); it.plug = 'bottom'; }
   if (kind === 'lower') { it.slots = new Array(6).fill(null); it.plug = 'bottom'; }
+  if (kind === 'module' && typeof SETTINGS !== 'undefined' && SETTINGS.autoUpMods) it.autoUp = true;     // new modules start with auto-upgrade on
   if (kind === 'adapter') { it.maxLvl = 2; it.slots = new Array(it.lvl).fill(null); }      // only the top slot is used: the upper half
   syncGemSlots(it);
   return it;
@@ -1005,6 +1029,7 @@ const PART_ICONS = {
   'module:blades': '<circle cx="12" cy="12" r="2.6"/><path d="M12 .5l2.6 9.3-2.6.9zM23.5 12l-9.3 2.6-.9-2.6zM12 23.5l-2.6-9.3 2.6-.9zM.5 12l9.3-2.6.9 2.6z"/>',
   'module:pods': '<path d="M2 14h20v8H2z"/><path d="M4.5 6L7 2l2.5 4v7h-5zM9.5 6L12 2l2.5 4v7h-5zM14.5 6L17 2l2.5 4v7h-5z"/>',
   'module:pogo': '<path d="M5 1h14v3H5z"/><path d="M6 6h12v1.8H6zM6 9.4h12v1.8H6zM6 12.8h12v1.8H6z"/><path d="M10.8 15h2.4v4h-2.4z"/><path d="M4 19h16a2 2 0 0 1 0 4H4a2 2 0 0 1 0-4z"/>',
+  'orb:universal': '<circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="9" cy="9" r="2.2" fill="#fff" opacity=".7"/>',
   'adapter:arm2mod': '<circle cx="5" cy="12" r="3.2"/><path d="M8 10.5h5v3H8z"/><path d="M14 6h8v12h-8z"/>',
   'adapter:mod2arm': '<path d="M2 6h8v12H2z"/><path d="M11 10.5h5v3h-5z"/><circle cx="19" cy="12" r="3.2"/>',
   'gem': '<path d="M6 2.5h12l4.5 6.5L12 22 1.5 9z"/><path d="M1.5 9h21M8.5 2.5L12 9l3.5-6.5M12 9v13" stroke="rgba(0,0,0,.35)" stroke-width="1" fill="none"/>',
@@ -1019,7 +1044,7 @@ function partIcon(it, cls = 'picon') {
 /* ---------- upgrades ----------
    One place decides whether a part can go up a level and does it: merging duplicates, auto-upgrade, and later the Upgrade Orb all
    go through upgradeItem(). Parts have no experience of their own. */
-const upgradeable = it => it && (it.kind === 'gem' || it.kind !== 'block' || (BLOCKS[it.type] && BLOCKS[it.type].upgradable));
+const upgradeable = it => it && it.kind !== 'orb' && (it.kind === 'gem' || it.kind !== 'block' || (BLOCKS[it.type] && BLOCKS[it.type].upgradable));
 /* ceiling for this part: normal parts L5 (adapters get their own lower cap in a later chunk via it.maxLvl) */
 const levelCap = it => Math.min(maxLvlOf(it), it && it.maxLvl ? it.maxLvl : 99);
 function upgradeCheck(it, by = 1) {
@@ -1039,11 +1064,12 @@ function upgradeItem(it, by = 1) {
 }
 /* Same kind, same type, same level, below the cap: the rule for merging two parts. */
 const sameLevelPair = (a, b) => !!a && !!b && a !== b && a.kind === b.kind && a.type === b.type && (a.lvl || 1) === (b.lvl || 1);
-const DEFS = { adapter: () => ADAPTERS, lower: () => LOWERS, leg: () => LEGS, arm: () => ARMS, weapon: () => WEAPONS, module: () => MODULES, block: () => BLOCKS, gem: () => GEMS };
+const DEFS = { orb: () => ORBS, adapter: () => ADAPTERS, lower: () => LOWERS, leg: () => LEGS, arm: () => ARMS, weapon: () => WEAPONS, module: () => MODULES, block: () => BLOCKS, gem: () => GEMS };
 function itemDef(it) { return DEFS[it.kind]()[it.type]; }
 function itemName(it) { return itemDef(it).name + (it.kind === 'gem' ? ' ' + ROMAN[it.lvl || 1] : ''); }
-const KIND_LABEL = { adapter: 'Adapter', lower: 'Lower half', leg: 'Leg', arm: 'Arm', weapon: 'Weapon', module: 'Module', block: 'Block', gem: 'Gem' };
+const KIND_LABEL = { orb: 'Upgrade orb', adapter: 'Adapter', lower: 'Lower half', leg: 'Leg', arm: 'Arm', weapon: 'Weapon', module: 'Module', block: 'Block', gem: 'Gem' };
 function itemSub(it) {
+  if (it.kind === 'orb') return 'Upgrade orb';
   if (it.kind === 'adapter') return 'Adapter';
   if (it.kind === 'gem') return 'Gem';
   if (it.kind === 'lower') return 'Lower half';
@@ -1077,6 +1103,7 @@ function partInfo(it) {
 }
 function partInfoBase(it) {
   const d = itemDef(it), L1 = it.lvl - 1;
+  if (it.kind === 'orb') return [['Effect', '+1 level'], ['Works on', 'weapons, arms, modules, gems, lowers, adapters'], ['Normal max', 'Lv 5'], ['Adapter max', 'Lv 2']];
   if (it.kind === 'adapter') return [['Plugs into', `${d.from} socket`], ['Holds', `${d.to}s`], ['Sockets', `${it.lvl}/2`], ['Weight', `${partMass(it).toFixed(2)} t`]];
   if (it.kind === 'lower') {
     const lg = mkItem('leg', d.legType, 1), Ld = LEGS[d.legType], n = d.mounts.length;

@@ -267,7 +267,7 @@ function partRow(it, attrs, tag) {
   const xp = '';
   void sub;
   const wpn = it.kind === 'weapon', armGunIcons = it.kind === 'arm' ? armGuns(it).map(g => weaponIcon(g.type)).join('') : '';
-  return `<div class="prow${wpn ? ' wrow' : ''}" ${attrs}><i>${icon}</i><span><b>${itemName(it)} ${it.kind === 'gem' ? '' : mkTag(it.lvl)} ${attrTag(it)}${armGunIcons ? `<em class="rowguns">${armGunIcons}</em>` : ''}${extra && it.kind !== 'arm' ? `<em class="rowx">+${extra}</em>` : ''}</b>${xp}</span>${it.autoUp ? '<span class="tagS auto">AUTO</span>' : ''}${tag ? `<span class="tagS">${tag}</span>` : ''}</div>`;
+  return `<div class="prow${wpn ? ' wrow' : ''}" ${attrs}><i>${icon}</i><span><b>${itemName(it)} ${it.kind === 'gem' || it.kind === 'orb' ? '' : mkTag(it.lvl)} ${attrTag(it)}${armGunIcons ? `<em class="rowguns">${armGunIcons}</em>` : ''}${extra && it.kind !== 'arm' ? `<em class="rowx">+${extra}</em>` : ''}</b>${xp}</span>${it.autoUp ? '<span class="tagS auto">AUTO</span>' : ''}${tag ? `<span class="tagS">${tag}</span>` : ''}</div>`;
 }
 function xpBarHTML(it) {
   if (!upgradeable(it) || it.kind === 'gem') return '';
@@ -455,7 +455,19 @@ function stepBodies(dt) {
 }
 
 /* ---------- snapping ---------- */
+/* An orb's targets: every mounted part that can still go up a level (the orb is used where it lands, only if the upgrade succeeds) */
+function orbTargets(item) {
+  const out = [];
+  for (const sk of previewModel.userData.sockets) {
+    const cur = refGet(sk.ref);
+    if (!cur || cur === item || !upgradeCheck(cur).ok) continue;
+    const p = new THREE.Vector3(); sk.anchor.getWorldPosition(p);
+    out.push({ ref: sk.ref, anchor: sk.anchor, combine: false, orb: true, pos: p, out: sk.anchor.userData.out.clone() });
+  }
+  return out;
+}
 function snapTargets(item) {
+  if (item.kind === 'orb') return orbTargets(item);
   const out = [];
   for (const sk of previewModel.userData.sockets) {
     const cur = refGet(sk.ref);
@@ -485,6 +497,8 @@ function nearestTarget(b) {
 }
 function showHalos(item) {
   for (const sk of previewModel.userData.sockets) if (sk.anchor.userData.halo) sk.anchor.userData.halo.visible = false;
+  // an orb in hand also lights up the stored parts it could upgrade
+  $$('#partList [data-store]').forEach(r => { const it = item && item.kind === 'orb' ? L.store[+r.dataset.store] : null; r.classList.toggle('orbok', !!(it && upgradeCheck(it).ok)); });
   if (!item) return;
   for (const t of snapTargets(item)) if (t.anchor.userData.halo) t.anchor.userData.halo.visible = true;
 }
@@ -512,10 +526,21 @@ function stepSnap(b, dt) {
   }
   b.obj.position.copy(b.pos); b.obj.quaternion.copy(b.q);
 }
+function orbDone(target, r, pos) {
+  say(`${itemName(target)} ▲ Lv ${r.to}`); sfx('combine'); sfx('levelup', 0.4);
+  if (S.inRun && stats) partLeveled(target);
+  if (pos) snapBurst(pos, UP);
+  changed();
+}
 function commitSnap(b) {
   const t = b.target, it = b.item;
   removeBody(b);
   const cur = refGet(t.ref);
+  if (it.kind === 'orb') {      // consumed only when the upgrade really happens
+    const r = cur ? useOrb(it, cur) : { ok: false };
+    if (r.ok) orbDone(cur, r, t.pos); else { storePut(it); say('That can’t be upgraded', true); sfx('deny'); renderBench(); }
+    return;
+  }
   if (t.combine && cur && canCombine(cur, it)) {
     const left = combineInto(cur, it);
     say(cur.kind === 'gem' ? `${itemName(cur)} ${cur.lvl >= GEM_MAX ? '· MAX' : '▲'}` : `${itemName(cur)} ▲ Lv ${cur.lvl}`);
@@ -681,6 +706,10 @@ function endDrag(x, y, putAway) {
   if (dashLine) dashLine.visible = false;
   $('#partsPanel').classList.remove('drop'); $('#scrapZone').classList.remove('hot');
   if (overScrap(x, y) && !INV.hangar && !putAway) { scrapBody(b); return; }
+  if (b.item.kind === 'orb' && !putAway) {
+    const el = document.elementFromPoint(x, y), row = el && el.closest && el.closest('[data-store]'), tgt = row ? L.store[+row.dataset.store] : null;
+    if (tgt && upgradeCheck(tgt).ok) { const r = useOrb(b.item, tgt); if (r.ok) { removeBody(b); orbDone(tgt, r); return; } }
+  }
   if (putAway || overPanel(x, y)) { returnToPanel(b, false); return; }
   if (d.cand) { beginSnap(b, d.cand); return; }
   b.state = 'loose';
@@ -738,7 +767,7 @@ function stepDrag(dt) {
   const cand = nearestTarget(b);
   const same = (a, c) => a && c && a.anchor === c.anchor;
   if (!same(cand, d.cand)) {
-    if (cand) { sfx('tick'); if (!b.out.equals(cand.out)) setBodyModel(b, cand.out); }
+    if (cand) { sfx('tick'); if (!b.out.equals(cand.out)) setBodyModel(b, cand.out); if (cand.orb) { const cur = refGet(cand.ref), pv = cur && orbPreview(cur); if (pv) say(pv); } }
     d.cand = cand;
   }
   if (d.cand) target.lerp(d.cand.pos.clone().add(b.center).addScaledVector(d.cand.out, 0.35), 0.6);   // magnet
@@ -1033,7 +1062,7 @@ function setTip(item, obj, row) {
   }
   const r = rarityOf(item.lvl || 1), showRar = item.kind !== 'block' || BLOCKS[item.type].upgradable;
   $('#tipName').innerHTML = partIcon(item, 'picon tipicon') + itemName(item) + armGems(item).map(g => ` <span class="tipAttr" style="color:${ATTRS[g.type].color}">✦ ${ATTRS[g.type].name}</span>`).join('');
-  $('#tipRar').innerHTML = item.kind === 'gem' ? `<span style="color:${ATTRS[item.type].color}">Tier ${ROMAN[item.lvl || 1]}</span> of V · ${itemSub(item)}` : showRar ? `<span style="color:${r.css}">${r.name}</span> · Lv ${item.lvl} · ${itemSub(item)}` + xpBarHTML(item) : itemSub(item);
+  $('#tipRar').innerHTML = item.kind === 'orb' ? `<span style="color:${ORB_COLOR}">Upgrade orb</span> · drag onto a part` : item.kind === 'gem' ? `<span style="color:${ATTRS[item.type].color}">Tier ${ROMAN[item.lvl || 1]}</span> of V · ${itemSub(item)}` : showRar ? `<span style="color:${r.css}">${r.name}</span> · Lv ${item.lvl} · ${itemSub(item)}` + xpBarHTML(item) : itemSub(item);
   const cmp = compareTo(item), cmpRows = cmp ? new Map(partInfo(cmp)) : null;
   $('#tipStats').innerHTML = partInfo(item).map(([a, b]) => `<div><span>${a}</span><b>${b}${cmpRows ? statDelta(a, b, cmpRows.get(a)) : ''}</b></div>`).join('')
     + armGems(item).map(g => `<div class="tipDesc" style="color:${ATTRS[g.type].color}">✦ ${item.kind === 'leg' ? LEG_GEM[g.type] : ATTRS[g.type].desc}</div>`).join('')
