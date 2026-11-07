@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.28.0 · BUILD NOV 6|
+| **Version** | 0.28.1 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -81,6 +81,9 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ---
 
 ## Change log
+
+### 2026-11-06: 0.28.1 — adapter sockets auto-orient forward
+- `buildAdapter` (robot.js) now builds a short stub along the torso socket's direction, then a head whose sockets always face forward (+z) whatever socket it plugs into (back sockets lift the head up to clear the torso). Arms/modules inside adapters therefore point forward instead of up/sideways. Socket rules, merging and tests unchanged (t52/t53 pass).
 
 ### 2026-11-06: 0.28.0 — Chunk 03/16, robot construction and adapters
 - **Adapters** (new item kind `adapter`, table `ADAPTERS` in data.js): `arm2mod` plugs into a torso ARM socket (sphere) and turns it into a MODULE socket; `mod2arm` plugs into a MODULE socket (cube) and turns it into an ARM socket. L1 = 1 socket, L2 = 2 independent sockets in the same original torso socket. `maxLvl = 2`, so `levelCap`/`upgradeItem` refuse above it. Two identical L1 adapters merge into an L2 (contents of both move into the new sockets, nothing lost). Adapters hold only their `to` kind: never another adapter, a gem, a weapon, or the wrong socket type (`refAccepts`). Torso sockets accept the matching adapter as well as their normal kind.
