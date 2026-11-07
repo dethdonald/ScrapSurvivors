@@ -381,27 +381,32 @@ function syncSettingsUI() {
 function openPause() {
   if (!playing()) return;
   S.prevMode = S.mode; S.mode = 'pause'; unlockPointer();
-  showOptions(false); syncSettingsUI(); $('#pause').hidden = false; focusFirst();
+  showOptionsRaw(false); syncSettingsUI(); $('#pause').hidden = false; focusFirst();
 }
 /* the pause screen has four pages: the short pause menu, Options (opened from it or from the title screen), and
-   Options' own Graphics / Developer Tools sub-pages */
-function showOptions(on) {
+   Options' own Graphics / Developer Tools sub-pages.
+   The Raw versions toggle instantly (used when the screen is already mid-transition, e.g. opening Pause itself);
+   the plain versions wrap the swap in an ASCII wipe, for an actual menu-to-menu jump. */
+function showOptionsRaw(on) {
   $('#pauseMain').hidden = on; $('#optMenu').hidden = !on;
   if (!on) { $('#optGfxMenu').hidden = true; $('#optDevMenu').hidden = true; }
   if (on) { syncSettingsUI(); $('#optMenu .optbody').scrollTop = 0; }
   if (!$('#pause').hidden) focusFirst();
 }
+function showOptions(on) { asciiWipe(() => showOptionsRaw(on)); }
 const optionsOpen = () => !$('#optMenu').hidden;
-function showGfxMenu(on) {
+function showGfxMenuRaw(on) {
   $('#optMenu').hidden = on; $('#optGfxMenu').hidden = !on;
   if (on) { syncSettingsUI(); $('#optGfxMenu .optbody').scrollTop = 0; }
   if (!$('#pause').hidden) focusFirst();
 }
-function showDevMenu(on) {
+function showGfxMenu(on) { asciiWipe(() => showGfxMenuRaw(on)); }
+function showDevMenuRaw(on) {
   $('#optMenu').hidden = on; $('#optDevMenu').hidden = !on;
   if (on) { syncSettingsUI(); $('#optDevMenu .optbody').scrollTop = 0; }
   if (!$('#pause').hidden) focusFirst();
 }
+function showDevMenu(on) { asciiWipe(() => showDevMenuRaw(on)); }
 const gfxMenuOpen = () => !$('#optGfxMenu').hidden;
 const devMenuOpen = () => !$('#optDevMenu').hidden;
 function pauseBack() {
@@ -411,8 +416,14 @@ function pauseBack() {
   resume();
 }
 function resume() {
+  if (TITLE.fromOptions) {
+    asciiWipe(() => {
+      $('#pause').hidden = true; TITLE.fromOptions = false; $('#pause').classList.remove('fromTitle');
+      showOptionsRaw(false); S.mode = 'title'; $('#title').hidden = false; focusFirst();
+    });
+    return;
+  }
   $('#pause').hidden = true;
-  if (TITLE.fromOptions) { TITLE.fromOptions = false; $('#pause').classList.remove('fromTitle'); showOptions(false); S.mode = 'title'; $('#title').hidden = false; focusFirst(); return; }
   S.mode = S.prevMode || 'play'; lockPointer();
 }
 $('#resumeBtn').addEventListener('click', resume);

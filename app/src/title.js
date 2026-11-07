@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.43.7 · BUILD NOV 6';
+const VERSION = '0.43.8 · BUILD NOV 6';
 
 function setupTitleScene() {
   if (TITLE.scene) return;
@@ -250,8 +250,10 @@ $('#tStart').addEventListener('click', () => { ensureAudio(); leaveTitle(); fres
 $('#tOptions').addEventListener('click', () => {
   ensureAudio();
   TITLE.fromOptions = true; S.prevMode = 'title'; S.mode = 'pause';
-  $('#title').hidden = true;
-  $('#pause').classList.add('fromTitle'); $('#pause').hidden = false; showOptions(true);
+  asciiWipe(() => {
+    $('#title').hidden = true;
+    $('#pause').classList.add('fromTitle'); $('#pause').hidden = false; showOptionsRaw(true);
+  });
 });
 $('#tQuit').addEventListener('click', () => { if (window.desktop) window.desktop.quit(); else window.close(); });
 
@@ -270,7 +272,6 @@ function rebuildTitleRobot() {
 function openCustomize() {
   ensureAudio();
   S.mode = 'custom';
-  $('.tmain').hidden = true; $('#custPanel').hidden = false;
   TITLE.pieces.length && clearTitlePieces();
   if (!TITLE.robot || TITLE.respawnT > 0) { TITLE.respawnT = 0; spawnTitleRobot(); TITLE.robot.position.y = 0; TITLE.robot.userData.landed = true; }
   TITLE.tipPart = null; hideTitleTip();
@@ -284,7 +285,7 @@ function openCustomize() {
   for (const el of $$('#swatches .sw')) el.addEventListener('click', () => setPaint(el.dataset.c));
   for (const el of $$('#brushes .br')) el.addEventListener('click', () => { brush = el.dataset.b || null; $$('#brushes .br').forEach(b => b.classList.toggle('on', b === el)); });
   drawPatchEditor(); renderPatchDir(); syncBomb();
-  focusFirst();
+  asciiWipe(() => { $('.tmain').hidden = true; $('#custPanel').hidden = false; focusFirst(); });
 }
 /* ---------- drag stickers around on the robot (Customize) ---------- */
 const _sray = new THREE.Raycaster(), _sv2 = new THREE.Vector2();
@@ -448,7 +449,9 @@ $('#patchCv').addEventListener('contextmenu', e => e.preventDefault());
 $('#colPick').addEventListener('input', e => setPaint(e.target.value));
 $('#patchClear').addEventListener('click', () => { CUSTOM.patch = new Array(PATCH_N * PATCH_N).fill(null); patchUnsaved = true; CUSTOM.rev++; drawPatchEditor(); renderPatchDir(); rebuildTitleRobot(); });
 $('#custDone').addEventListener('click', () => {
-  if (patchUnsaved) commitPatch(); $('#custPanel').hidden = true; $('.tmain').hidden = false; S.mode = 'title'; TITLE.life = 0; focusFirst(); });
+  if (patchUnsaved) commitPatch();
+  asciiWipe(() => { $('#custPanel').hidden = true; $('.tmain').hidden = false; S.mode = 'title'; TITLE.life = 0; focusFirst(); });
+});
 $('#tCustom').addEventListener('click', openCustomize);
 
 /* ---------- cosmetics in Customize: drag them out of the shelf onto the frame, slide them around, drop them back to remove ---------- */

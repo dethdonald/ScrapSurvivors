@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.7 · BUILD NOV 6|
+| **Version** | 0.43.8 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -209,6 +209,12 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - Sniper Rifle: removed the camera jolt on firing and the zoom punch on kills
 
 - Title screen: the robot stands closer to the centre (about 65% across the screen instead of ~82%)
+
+- New terminal/ASCII UI skin across every menu: a bundled pixel terminal font (Silkscreen, SIL OFL licensed), dashed ASCII-rule borders on panels/buttons/cards, and a "> " prompt prefix on button hover
+- Every slider (Options, Scrap Ink tuning, sticker bomb amount) now renders as a block-segmented ASCII progress bar, like a terminal loading bar
+- Health, shield, XP, boss, berserk, kill-streak and death-screen stat bars all draw with the same ASCII block-segment texture
+- Added an ASCII "glyph wipe" transition between menus (Options and its Graphics/Developer Tools submenus, Customize, Catalog) -- gameplay pause/resume stays instant, unaffected
+- Tightened row spacing in the Options menu and its submenus so everything still fits on screen with the new, slightly taller font
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.

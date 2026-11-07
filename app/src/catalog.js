@@ -170,13 +170,12 @@ function catComboIcon(k, known) {
 function openCatalog() {
   ensureAudio();
   S.prevMode = S.mode; S.mode = 'catalog';
-  $('.tmain').hidden = true; $('#catalog').hidden = false;
   TITLE.tipPart = null; hideTitleTip();
-  renderCatalog(); focusFirst();
+  asciiWipe(() => { $('.tmain').hidden = true; $('#catalog').hidden = false; renderCatalog(); focusFirst(); });
 }
 function closeCatalog() {
-  $('#catalog').hidden = true; $('.tmain').hidden = false;
-  S.mode = 'title'; sfx('tick'); focusFirst();
+  sfx('tick');
+  asciiWipe(() => { $('#catalog').hidden = true; $('.tmain').hidden = false; S.mode = 'title'; focusFirst(); });
 }
 function renderCatalog() {
   const all = catEntries(), seen = all.filter(e => catKnown(e.key)).length;

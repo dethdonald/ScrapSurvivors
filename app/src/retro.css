@@ -3,17 +3,20 @@
    Charcoal and black, sharp rectangles, mono technical type, thin outlines, restrained hazard stripes, a faint CRT.
    Loaded after style.css and overrides it. --accent is the player's SECONDARY colour, made contrast-safe in config.js.
    ============================================================ */
+@font-face{font-family:'Silkscreen';src:url('fonts/Silkscreen-Regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:swap}
 :root{
   --ink:#08090a; --panel:rgba(12,13,14,.95); --panel2:#131517; --line:#3a4046; --frame:#c9cfd2; --frame-dim:#3a4046; --fill:rgba(9,10,11,.9);
   --text:#dde1de; --dim:#8c959a; --hostile:#e2465c;
-  --f-display:'Cascadia Mono','Consolas','DejaVu Sans Mono',ui-monospace,monospace;
+  --f-display:'Silkscreen','Cascadia Mono','Consolas','DejaVu Sans Mono',ui-monospace,monospace;
   --accent:var(--orange); --on-accent:#05070a;
 }
 html,body{background:#050607}
 #game,#game *{border-radius:0!important}
 #game button,#game input,#game select{font-family:var(--f-display)}
-h1,h2,h3,.eyebrow,.btn,.card .tag,.card .nm{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.14em}
-.menu h2,.overcard h2{letter-spacing:.3em;font-size:22px}
+h1,h2,h3,.eyebrow,.btn,.card .tag,.card .nm{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.08em}
+.menu h2,.overcard h2{letter-spacing:.18em;font-size:22px}
+.tbtn{font-size:clamp(22px,3.3vw,40px)}      /* Silkscreen runs taller than the old condensed font at the same size */
+.tlogo{font-size:clamp(34px,6.2vw,66px)}
 
 /* ---- panels: thin outlines, corner ticks, no soft shadows ---- */
 .hbox,.bstats,.abilities,.parts,.menu,.readycheck,.card,#prompt,#banner,.toast,.slotdlg,.tip{background:var(--fill);border:1px solid var(--frame-dim)!important;box-shadow:none}
@@ -24,11 +27,16 @@ h1,h2,h3,.eyebrow,.btn,.card .tag,.card .nm{font-family:var(--f-display);text-tr
 .card.rar{border-width:1px!important;box-shadow:none}
 .card.rar.r5{box-shadow:inset 0 0 0 1px var(--accent)}
 :focus-visible{outline:1px solid var(--accent)!important;outline-offset:2px}
-.btn{background:transparent;color:var(--accent);border:1px solid var(--accent);box-shadow:none;letter-spacing:.2em;font-size:13px;padding:10px 20px;position:relative}
+.btn{background:transparent;color:var(--accent);border:1px solid var(--accent);box-shadow:none;letter-spacing:.14em;font-size:13px;padding:10px 20px;position:relative}
 .btn:hover,.btn:focus-visible{background:var(--accent);color:var(--on-accent)}
 .btn.ghost{color:var(--text);border:1px solid var(--frame-dim)}
 .btn.ghost:hover,.btn.ghost:focus-visible{border-color:var(--accent);background:transparent;color:var(--accent)}
 .btn:disabled{opacity:.35}
+/* a terminal "> " prompt prefix that lights up on hover/focus, like an ASCII menu cursor */
+.btn::before{content:"> ";opacity:0;transition:opacity .08s}
+.btn:hover::before,.btn:focus-visible::before{opacity:1}
+.btn:hover,.btn:focus-visible{color:var(--on-accent)}
+.btn.ghost:hover::before,.btn.ghost:focus-visible::before{color:var(--accent)}
 /* hazard stripe: restrained, a thin muted rule along panel tops and at the title; never a heavy band */
 :root{--hazard:repeating-linear-gradient(-45deg,var(--accent) 0 5px,#08090a 5px 10px)}
 .menu::before,.parts::before,.tmenu::before,.custpanel::before,.dpanel::before,.bstats::before{height:3px!important;opacity:.55!important}
@@ -37,6 +45,32 @@ h1,h2,h3,.eyebrow,.btn,.card .tag,.card .nm{font-family:var(--f-display);text-tr
 .catpanel::before{height:6px;opacity:.7}
 kbd{border:1px solid var(--frame-dim);background:transparent;color:var(--accent)}
 .bar,.bbar{background:#050607;border:1px solid var(--frame-dim)}
+
+/* ---- ASCII terminal skin: dashed rules instead of solid lines, and progress bars/sliders drawn as block segments ---- */
+.hbox,.bstats,.abilities,.parts,.menu,.readycheck,.card,#prompt,#banner,.toast,.slotdlg,.tip,
+.btn,.btn.ghost,.prow,.setting,kbd,.bar,.bbar,#xpline{border-style:dashed!important}
+/* the filled part of every bar gets a repeating block/gap texture layered over its existing colour, like [####....] */
+.bar i,.bbar i,.xpbar>i,#xpline>i,.obar em,.kmBar>i{background-image:repeating-linear-gradient(90deg,rgba(0,0,0,.6) 0 2px,transparent 2px 4px)}
+#bzBar>i>i{background-image:repeating-linear-gradient(90deg,rgba(0,0,0,.6) 0 2px,transparent 2px 4px),linear-gradient(90deg,#c8101a,#ff9a7a)}
+/* sliders: the track is drawn as a block-segment bar split at the handle (--pct is kept in sync by asciiwipe.js) */
+input[type=range].nav{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;margin:6px 0;cursor:pointer}
+input[type=range].nav::-webkit-slider-runnable-track{height:14px;border:1px dashed var(--frame-dim);
+  background:linear-gradient(90deg,var(--accent) 0 var(--pct,50%),transparent var(--pct,50%) 100%),
+    repeating-linear-gradient(90deg,rgba(0,0,0,.6) 0 2px,transparent 2px 4px),#05080a}
+input[type=range].nav::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:20px;margin-top:-3px;background:var(--accent);border:1px solid var(--on-accent);box-shadow:0 0 0 1px var(--accent)}
+input[type=range].nav::-moz-range-track{height:14px;border:1px dashed var(--frame-dim);background:repeating-linear-gradient(90deg,rgba(0,0,0,.6) 0 2px,transparent 2px 4px),#05080a}
+input[type=range].nav::-moz-range-progress{height:14px;background:var(--accent)}
+input[type=range].nav::-moz-range-thumb{width:9px;height:20px;background:var(--accent);border:1px solid var(--on-accent);border-radius:0}
+/* Silkscreen runs a bit taller than the old condensed font at the same size, and the block-segment sliders need
+   a little more height than a plain native range did -- tighten row padding so Options still fits without scrolling. */
+.optmenu{max-height:92vh}
+.setting{padding:8px 12px}
+.btn.orow{padding-top:8px;padding-bottom:8px}
+input[type=range].nav{height:15px;margin:4px 0}
+input[type=range].nav::-webkit-slider-runnable-track{height:12px}
+input[type=range].nav::-moz-range-track{height:12px}
+input[type=range].nav::-webkit-slider-thumb{height:17px;margin-top:-2.5px}
+input[type=range].nav::-moz-range-thumb{height:17px}
 
 /* ---- HUD layout (exact): top-left health/shield/bolts, top-centre stage/timer/next event, top-right minimap, bottom XP ---- */
 #hud .tl.hbox{top:14px;left:16px;width:min(250px,42vw);padding:12px 12px 8px;gap:5px;background:rgba(8,9,10,.6)}
