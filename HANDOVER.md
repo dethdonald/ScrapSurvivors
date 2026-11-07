@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.33.0 · BUILD NOV 6|
+| **Version** | 0.34.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -81,6 +81,16 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ---
 
 ## Change log
+
+### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
+- Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
+- **Arm Lifesteal**: heals 1/1.5/2/2.5/3 % of the damage a shot really dealt (`HIT_DEALT`, overkill excluded), shared cap 1/1.5/2/2.5/3 HP per second **per arm** (`arm.ls` one-second window), never overheals. Poison ticks and burn bypass `damage()`, so they never heal; no recursion.
+- **Arm Poison**: each direct hit adds a stack worth 2/3/4/5/6 % of the hit's original damage per second. Normal max stacks 3/4/5/6/7, bosses 2/2/3/3/4 (a full pile replaces its weakest stack only with a stronger one). 4 s duration, every hit refreshes it, 4 ticks per second as direct HP loss (`poisonTick`), ticks never apply poison.
+- **Lower-half Lifesteal**: heals 1/1.5/2/2.5/3 HP per 20 m of travel with an enemy within 12 m, at least 2 s between heals, stored distance capped at 40 m. Travel is credited only when you move 5 m away from an anchor point, so wobbling in place earns nothing; a jump of more than 40 m (teleport) is ignored; the game clock does not run while paused.
+- **Lower-half Poison**: a patch every 3 m of travel (same anchor rule, grounded only), 3 s life, max 12, shared geometry, no physics; contact is checked 3 times a second and a patch poisons one enemy at most once per second.
+- Small fixes: shots now remember their arm (`s.arm`, `CUR_ARM`); gem tier text uses `GEM_MAX`.
+- Tests: t65 (definitions, pct/cap per level, overkill, no overheal, stack caps incl. bosses, tick damage, expiry, refresh, poison does not heal, shot path, lower lifesteal slow/fast/wobble/teleport/stored cap/no-enemy, lower poison patch count/expiry/wobble/contact cadence, 0.024 ms per tick with 12 patches and 500 enemies).
+- Save notes: gems are run state; nothing persisted changes. New discovery keys (`gem:lifesteal`, `gem:poison`) are added on first sight.
 
 ### 2026-11-06: 0.33.0 — Chunk 08/16, Five bosses (src/bosses.js)
 - **Rotation**: `BOSS_POOL` (combat.js) picks one boss at 8:30 on any stage, weighted: Warden, Magnetron, Smelter, Hive Mother 1 each, Golden Pig 0.12 (about 3%). All scale with `spawnBoss` (`ETYPES hp x (1 + 0.9 x (stage-1)) x clock factor`; damage via scalingBase). Overtime ignores the Pig (it is an optional bonus boss).

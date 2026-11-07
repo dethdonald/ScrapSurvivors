@@ -450,6 +450,7 @@ function updateEnemies(dtAll) {
     if (e.leap) { pigLeapTick(e, dt); continue; }
     e.hitCd -= dt; e.flash = Math.max(0, e.flash - dt); e.sawCd -= dt; e.stun -= dt; e.chillT = (e.chillT || 0) - dt; e.freezeT = (e.freezeT || 0) - dt;
     if (e.chillT > 0 && Math.random() < dt * 6) spark(ecenter(e).clone().add(new THREE.Vector3(rand(-.4, .4), rand(0, .6), rand(-.4, .4))), 0xbfe9ff);
+    if (e.pois) { poisonTick(e, dt); if (e.dead) continue; }
     if (e.burnT > 0) {
       e.burnT -= dt; e.hp -= e.burnDps * dt;
       if (Math.random() < dt * 14) spark(ecenter(e).clone().add(new THREE.Vector3(rand(-.4, .4), rand(0, .6), rand(-.4, .4))), Math.random() < 0.5 ? 0xff5a2a : 0xffc04a);
@@ -843,6 +844,9 @@ function bomberBlast(e) {
 function shotAttrHit(s, e) {
   const A = s.attrs, c = aimPt(e);
   const T = k => A.get ? A.get(k) || 0 : (A.has(k) ? 1 : 0), cb = A.combo;
+  const dealt = HIT_E === e ? HIT_DEALT : 0; HIT_E = null;
+  if (A.has('lifesteal') && dealt > 0) lifestealHit(s, dealt, T('lifesteal'));
+  if (A.has('poison')) poisonHit(e, s.dmg, T('poison'));
   // Thermal Shock: ice on a burning enemy, or fire on a frozen one, shatters it
   if (cb === 'fire+ice' && (e.burnT > 0 || e.chillT > 0) && (e.shockCd || 0) < S.t) {
     e.shockCd = S.t + 0.6; damage(e, s.dmg * 3, s.manual); e.burnT = 0; e.chillT = 0;
@@ -1022,6 +1026,7 @@ function legGemLanding(impact, fall) {
 const legTrail = [];
 const geoTrail = new THREE.CircleGeometry(0.55, 10); geoTrail.rotateX(-Math.PI / 2);
 function legGemTick(dt) {
+  lowerGemTick(dt);
   const P = player, hs = Math.hypot(P.vel.x, P.vel.z);
   if (legHas('lightning')) {
     const need = 30 - 4 * legT('lightning');
@@ -1051,7 +1056,7 @@ function legGemTick(dt) {
   }
   for (let i = legTrail.length - 1; i >= 0; i--) if (legTrail[i].life <= 0) { scene.remove(legTrail[i].m); legTrail[i].m.material.dispose(); legTrail.splice(i, 1); }
 }
-function clearLegTrail() { legTrail.forEach(t => { scene.remove(t.m); t.m.material.dispose(); }); legTrail.length = 0; }
+function clearLegTrail() { clearGemFx(); legTrail.forEach(t => { scene.remove(t.m); t.m.material.dispose(); }); legTrail.length = 0; }
 function homingSplit(s) {
   const tier = (s.attrs && s.attrs.get && s.attrs.get('homing')) || 1, n = s.pod ? 2 : 2 + tier + (s.combo === 'homing+split' ? 2 : 0);
   // the original target first, then the enemies nearest to it
@@ -1170,6 +1175,7 @@ function damage(e, amt, manual) {
   runStatDamage(DMG_SRC, Math.min(amt, Math.max(0, e.hp)), amt);
   if (!ENV_DMG) { dmgNumber(aimPt(e), amt, crit); sfx('squeak', 0.22); }      // no numbers for damage you didn't do
   if (Math.random() < 0.25 && e.pos.y - groundAt(e.pos.x, e.pos.z) < 3) splatter(e, 1, e.r * 1.2);
+  HIT_E = e; HIT_DEALT = Math.min(amt, Math.max(0, e.hp));       // what really lands: overkill is not counted
   e.hp -= amt; e.flash = 0.08;
   if (manual) { hitMarker(); sfx('hit', 0.3); }
   if (e.hp <= 0) killEnemy(e);
@@ -1403,6 +1409,8 @@ function ejectCasing(o, dir, kind) {
   });
 }
 let CUR_ATTRS = new Map();
+let CUR_ARM = null;      // the arm whose shot is being made (Lifesteal needs to know which arm to cap)
+let HIT_E = null, HIT_DEALT = 0;     // the last enemy damage() hit and how much really landed (no overkill)
 let CUR_RANGE = 1;       // weapon range multiplier while a shot is being made (arm range x the Long Barrel stat)
 function fireW(W, c) {
   CUR_RANGE = Math.max(0.5, ((c.m && c.m.range) || 1) * ((stats && stats.range) || 1));
@@ -1413,7 +1421,7 @@ function fireW(W, c) {
     c = { ...c, tp: c.tp.clone().addScaledVector(side, Math.cos(a) * r).addScaledVector(up, Math.sin(a) * r), te: null };
   }
   // attributes live on arms and change whatever gun the arm holds
-  CUR_ATTRS = gemMap(armGems(c.arm)); CUR_ATTRS.combo = armCombo(c.arm);
+  CUR_ATTRS = gemMap(armGems(c.arm)); CUR_ATTRS.combo = armCombo(c.arm); CUR_ARM = c.arm || null;
   DMG_SRC = c.w; CUR_KICK = W.kick || 0.6; CUR_WTYPE = c.w.type;
   if (c.manual) XH.bloom = Math.min(1, XH.bloom + 0.16 + (W.kick || 0) * 0.07);     // the reticle flares (looks only: aim is unchanged)
   W.fire(c);
@@ -1656,7 +1664,7 @@ function bullet(o, tgt, speed, dmg, opt = {}) {
   const m = rocket ? bx(0.25, 0.25, 0.6, COL.red, 0, 0, 0, 0x701020) : new THREE.Mesh(geoBullet, B(0xffd9a8));
   m.position.copy(o); scene.add(m);
   const s = { mesh: m, pos: o.clone(), last: o.clone(), vel: dir.multiplyScalar(speed), life: (opt.life || 1.4) * CUR_RANGE, r: rocket ? 0.45 : 0.25, dmg,
-    pierce: opt.pierce || 0, hit: new Set(), explode: (opt.explode || 0) * CUR_RANGE, src: DMG_SRC, target: opt.target, rocket, speed, manual: opt.manual, knock: opt.knock ?? 1.5,
+    pierce: opt.pierce || 0, hit: new Set(), explode: (opt.explode || 0) * CUR_RANGE, src: DMG_SRC, arm: CUR_ARM, target: opt.target, rocket, speed, manual: opt.manual, knock: opt.knock ?? 1.5,
     selfHurt: !!opt.selfHurt, attrs: CUR_ATTRS };
   // homing rockets loft up first, then dive onto their target
   if (rocket && opt.target && !opt.noArc) { s.vel.y += speed * 0.55; s.climb = 0.16; }

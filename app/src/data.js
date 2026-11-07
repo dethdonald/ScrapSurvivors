@@ -630,6 +630,8 @@ const ATTRS = {
   split:     { name: 'Split',     color: '#ffe26a', desc: 'Doubles the number of shots.' },
   fire:      { name: 'Fire',      color: '#ff5a2a', desc: 'Sets enemies on fire.' },
   ice:       { name: 'Ice',       color: '#bfe9ff', desc: 'Chills enemies it hits: they move at half speed for a few seconds.' },
+  lifesteal: { name: 'Lifesteal', color: '#d6204a', desc: 'Heals you for 1% (up to 3% at level V) of the damage its shots really deal, capped at 1-3 HP per second per arm.' },
+  poison:    { name: 'Poison',    color: '#58d62a', desc: 'Each hit adds a poison stack worth 2-6% of its damage per second (max 3-7 stacks, fewer on bosses) for 4 seconds.' },
 };
 const ATTR_KEYS = Object.keys(ATTRS);
 /* Two gems in one arm make a combo with its own effect (key: the two gem types, sorted, joined by '+') */
@@ -684,13 +686,15 @@ const LEG_GEM = {
   split:     'One extra air jump.',
   fire:      'Burning footprints: you leave a trail of fire that burns whatever follows you.',
   ice:       'Skates: a frost trail that slows enemies, and you glide faster with less grip.',
+  lifesteal: 'Blood miles: every 20 m you run with an enemy within 12 m heals 1-3 HP (once per 2 s at most).',
+  poison:    'Toxic wake: you leave a poison patch every 3 m (3 s, 12 at most) that poisons enemies standing in it.',
 };
 const ATTR_CHANCE = 0.06;    // per dropped arm
 /* Gems: each attribute is now a gem you socket into an arm (every arm has two gem slots).
    They change whatever gun the arm holds. Rare drops from enemies, sometimes from crates, targets and locked cases. */
 const GEMS = {};
 for (const k of ATTR_KEYS) GEMS[k] = {
-  name: ATTRS[k].name + ' Gem', color: ATTRS[k].color, desc: `In an arm: ${ATTRS[k].desc} In a leg: ${LEG_GEM[k]}`, mass: 0.02,
+  name: ATTRS[k].name + ' Gem', color: ATTRS[k].color, desc: `In an arm: ${ATTRS[k].desc} In a lower half: ${LEG_GEM[k]}`, mass: 0.02,
   model(g, { out, lvl }) {
     const col = new THREE.Color(ATTRS[k].color), t = lvl || 1;
     const c = new THREE.Mesh(geoGem, new THREE.MeshStandardMaterial({ color: col, emissive: col.clone().multiplyScalar(0.4 + 0.15 * t), roughness: 0.15, metalness: 0.1 }));
@@ -1131,7 +1135,7 @@ function partInfoBase(it) {
   ];
   if (it.kind === 'module' && it.type === 'jetpack') return [['Thrust', `${d.thrust(it.lvl).toFixed(0)} kN`], ['Fuel', `${d.fuel(it.lvl).toFixed(1)} s`], ['Weight', `${partMass(it).toFixed(2)} t`]];
   if (it.kind === 'module') return [['Effect', d.desc]];
-  if (it.kind === 'gem') return [['Tier', `${ROMAN[it.lvl || 1]}/IV`], ['Arm', ATTRS[it.type].desc], ['Leg', LEG_GEM[it.type]]];
+  if (it.kind === 'gem') return [['Tier', `${ROMAN[it.lvl || 1]}/${ROMAN[GEM_MAX]}`], ['Arm', ATTRS[it.type].desc], ['Leg', LEG_GEM[it.type]]];
   if (it.kind === 'block') {
     const holes = d.faces === 'all' ? 5 : 1;
     return [['Health', d.hp || 0], ['Shield', d.shield || 0], ['Sockets', holes], ['Weight', `${partMass(it).toFixed(2)} t`], ['Upgradable', 'no']];
