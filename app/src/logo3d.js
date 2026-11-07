@@ -42,9 +42,21 @@ function logoBuild() {
     g.computeBoundingSphere(); g.computeBoundingBox();
     const mesh = new THREE.Mesh(g, mats[r.d.m].clone()); mesh.position.set(mx, my, mz); mesh.castShadow = false; mesh.receiveShadow = false;
     mesh.userData.logoPart = true; sway.add(mesh);
-    LOGO.parts.push({ name: r.d.n, mesh, home: mesh.position.clone(), clicks: 0, state: 'home', wob: 0, flash: 0, hullPts: pos, size: new THREE.Vector3(a1 - a0, b1 - b0, c1 - c0), base: mats[r.d.m].emissiveIntensity, body: null });
+    LOGO.parts.push({ name: r.d.n, mat: r.d.m, mesh, home: mesh.position.clone(), clicks: 0, state: 'home', wob: 0, flash: 0, hullPts: pos, size: new THREE.Vector3(a1 - a0, b1 - b0, c1 - c0), base: mats[r.d.m].emissiveIntensity, body: null });
   }
   LOGO.root = root; LOGO.sway = sway; LOGO.ready = true;
+  logoApplySecondary();
+}
+
+/* ---------- hazard-stripe colour follows the player's secondary (accent) colour, same as the robot's own accents ---------- */
+function logoApplySecondary() {
+  if (!LOGO.ready) return;
+  const c = new THREE.Color(CUSTOM.color2 || '#ff7a1a');
+  for (const p of LOGO.parts) {
+    if (p.mat !== 1) continue;                                          // only the orange hazard-stripe pieces (LOGO_COL[1])
+    p.mesh.material.color.copy(c);
+    p.mesh.material.emissive.copy(c).multiplyScalar(0.35);
+  }
 }
 
 /* ---------- screen placement: sit where the old text logo was ---------- */

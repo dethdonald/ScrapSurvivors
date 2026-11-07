@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.2 · BUILD NOV 6|
+| **Version** | 0.43.3 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -189,6 +189,11 @@ This file tracks every change, with dates, plus what anyone picking the project 
 
 - The modeled 3D title logo had its R and A swapped, spelling "SCARP SURVIVOR" instead of "SCRAP SURVIVOR". Moved
   those two letter pieces to their correct slots (same shapes, same clickable/physics behavior, just the right order).
+
+### 2026-11-07: 0.43.3 logo hazard stripe follows your secondary color
+
+- The dashed hazard stripe in the 3D title logo now matches your chosen secondary (accent) color, the same color
+  applied to the robot's sockets/trim — change it in Customize and the logo updates right away.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
