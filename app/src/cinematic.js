@@ -430,7 +430,10 @@ function cineEnd() {
   document.body.classList.remove('cine'); const el = CINE.el; if (el) el.hidden = true;
   const sc = CINE.scene; if (sc) {
     CINE.streaks.forEach(s => sc.remove(s.mesh)); CINE.flashes.forEach(f => { sc.remove(f.sp); f.m && f.m.dispose && f.m.dispose(); f.g && f.g.dispose && f.g.dispose(); });
-    sc.traverse(o => { if (o.geometry && o.geometry.dispose) o.geometry.dispose(); });      // (a shared geometry just re-uploads the next time it is drawn)
+    // only dispose what CINE itself made new (own()/CINE.disp): the weapon preview and the full robot (CINE.robot/CINE.float) are
+    // built with buildPart/buildRobot's shared geometry caches, so disposing them here broke those shapes everywhere else they're
+    // used (reported: a robot's body turned invisible after an MK III reveal). Leaving them alone and just removing from the scene
+    // is correct — nothing unique leaks, since the caches own those geometries for the life of the game.
     CINE.disp.forEach(d => { try { d.dispose(); } catch (e) {} });
     while (sc.children.length) sc.remove(sc.children[0]);
   }
