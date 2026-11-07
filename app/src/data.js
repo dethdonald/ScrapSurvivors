@@ -1148,6 +1148,10 @@ function armTurn(a) { const A = ARMS[a.type]; return (A.turn || 20) * (1 + 0.08 
    Sentry Arm: how far off-target its barrel may be and still fire, and the same tolerance spreads its shots a little (never perfect). */
 const TWIN_SPREAD_DEG = [0, 9, 8, 7, 6, 5];
 const SENTRY_TOL_DEG = [0, 22, 18, 15, 12, 9];
+/* Level-up XP: stages are 10 minutes now (was 15), so each level costs 1.6x to keep level-ups near 75% of the old count */
+const XP_K = 1.6;
+const xpNeed = lvl => Math.floor((5 + lvl * 3.2 + lvl * lvl * 0.35) * XP_K);
+
 /* Lower halves: hull and shield grow with level (L5 = x1.7 hull, x2.8 shield); wheels get faster, spiders climb longer */
 const LOWER_HP = [0, 1, 1.16, 1.32, 1.5, 1.7], LOWER_SH = [0, 1, 1.4, 1.8, 2.2, 2.8];
 const lowerHp = it => (LOWERS[it.type].hp || 0) * LOWER_HP[markFor('lower', it.lvl)];

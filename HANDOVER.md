@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.30.0 · BUILD NOV 6|
+| **Version** | 0.31.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -81,6 +81,16 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ---
 
 ## Change log
+
+### 2026-11-06: 0.31.0 — Chunk 06/16, Ten-minute stages
+- **Clock**: `STAGE_LEN=600`, `BOSS_AT=510`, `TIME_K=1.5` (combat.js). `S.t` only advances in `play` (verified for inventory, level-up, case, shop, roulette, pause, dev panel, perk: 0 drift), so build time is unlimited.
+- **Boss**: one boss at 8:30 via `pickBoss()` from `BOSS_POOL` (only the Warden for now; Chunk 08 adds the Golden Pig). The gate appears with the boss (sealed) and becomes the exit when it dies. **The gate-breach early Warden summon and the 5:00 gate are removed.**
+- **Overtime** (`overtime()`): only from 10:00 while the boss lives; no failure, no despawn, no second boss. It ends when the boss dies. The clock fire follows `overtime()`.
+- **Enemy progression** runs on `oldT() = S.t*1.5` (scaling, unlock times, horde size, Warden hp), so the order is preserved but compressed. Hordes at ~1:40/4:40/7:20 then every ~100-133 s; brute minis at 3:20 and 6:40 (none after 8:10).
+- **Density**: `densityMul()` = 1.12 mean x slow start (50% to 100% over 90 s) x +/-20% wave (70 s period).
+- **Rewards** (model from rew.py, kill-everything upper bound, vs old 15:00): kills 75%, cases 74%, level-ups 75% (41.0 vs 54.4). Level-up XP curve is x1.6 (`XP_K`, `xpNeed()` in data.js); XP per kill unchanged. Hordes are 75% size. Calibrate from real runs (`S.level`, `S.caseCount`).
+- Tests: t61 (exact timing: boss at 510, none at 509; overtime at 600 with boss alive, none after kill; one boss only; pause in 8 modes), t58-t60, t57 regression.
+- Open: `CFG.unlimitedParts` still on.
 
 ### 2026-11-06: 0.30.0 — Chunk 05/16, Combat and player stats
 - **Twin Arm** fires both guns at the same time. Each gun keeps its own ammo, reload and cooldown (melee guns have their own swing timer). Firing both adds a spread cone (`TWIN_SPREAD_DEG`, 9 degrees at L1 down to 5 at L5, never zero).

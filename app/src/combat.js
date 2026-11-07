@@ -179,12 +179,22 @@ function spawnPoint(minD, maxD) {
   return { x: cellX(k), z: cellZ(k), y: H[k] };
 }
 // each stage: much more health, harder hits, a bit faster
-/* OVERTIME: past 15:00 every new enemy is much tougher, and more so every minute you stay */
-const OVERTIME_T = 900;
-const overtime = () => S.test ? 0 : Math.max(0, S.t - OVERTIME_T);
+/* STAGE CLOCK: 10 minutes of ACTIVE combat (the clock only runs in 'play', so inventory, level-ups, cases, shop and menus stop it).
+   One boss arrives at BOSS_AT. At STAGE_LEN, if the boss still lives, OVERTIME starts and lasts until it is defeated:
+   no failure, no despawn, no second boss. Enemy progression used to run on a 15:00 clock; oldT() maps the new clock onto it. */
+const STAGE_LEN = 600, BOSS_AT = 510, TIME_K = 900 / STAGE_LEN;
+const OVERTIME_T = STAGE_LEN;
+const oldT = () => S.test ? 0 : S.t * TIME_K;
+const overtime = () => (S.test || !S.boss) ? 0 : Math.max(0, S.t - OVERTIME_T);
+/* ordinary spawn density: a slow start, then a gentle wave (about 70 s) around a mean tuned so the stage pays ~75% of the old 15:00 rewards */
+const DENSITY_MEAN = 1.12;
+function densityMul() { const t = S.t; return DENSITY_MEAN * Math.min(1, 0.5 + t / 90 * 0.5) * (1 + 0.2 * Math.sin(t * 2 * Math.PI / 70 + 1)); }
+/* bosses that can be chosen at BOSS_AT (more are added by later chunks); minStage keeps harder ones out of early stages */
+const BOSS_POOL = [{ type: 'warden', minStage: 1 }];
+function pickBoss() { const ok = BOSS_POOL.filter(b => S.stage >= b.minStage); return pick(ok.length ? ok : BOSS_POOL).type; }
 function overtimeMul() { const o = overtime(); return o <= 0 ? null : { hp: 2 + o / 30, dmg: 1.5 + o / 90, spd: Math.min(1.35, 1.1 + o / 600), rate: 1.8 + o / 25 }; }
 function scaling() { const s = scalingBase(), ot = overtimeMul(); if (ot) { s.hp *= ot.hp; s.dmg *= ot.dmg; s.spd *= ot.spd; } return s; }
-function scalingBase() { const k = S.stage - 1, T = S.test ? 0 : S.t; return { hp: (1 + T / 130) * (1 + k * 1.1) * Math.pow(1.12, k), dmg: (1 + T / 600) * (1 + k * 0.45), spd: 1 + Math.min(0.35, T / 1800) + k * 0.07 }; }
+function scalingBase() { const k = S.stage - 1, T = oldT(); return { hp: (1 + T / 130) * (1 + k * 1.1) * Math.pow(1.12, k), dmg: (1 + T / 600) * (1 + k * 0.45), spd: 1 + Math.min(0.35, T / 1800) + k * 0.07 }; }
 // each stage repaints the swarm: stage 1 keeps the original colours, later stages rotate the hue (and stay clear of the ground colour)
 function stageHueShift() {
   const k = S.stage - 1; if (k <= 0) return 0;
@@ -225,7 +235,7 @@ function spawnEnemy(type, p, extra) {
 /* Basic crawlers arrive in small packs that share a shape. */
 function spawnPack(p, n, extra) {
   const shape = pick(CRAWLER_SHAPES);
-  const eliteAt = Math.random() < ELITE.chance * (1 + (stats.luck || 0) * 0.01) && S.t > 20 ? 0 : -1;
+  const eliteAt = Math.random() < ELITE.chance * (1 + (stats.luck || 0) * 0.01) && oldT() > 20 ? 0 : -1;
   for (let i = 0; i < n; i++) {
     const x = p.x + rand(-2.2, 2.2), z = p.z + rand(-2.2, 2.2), k = idxOf(x, z);
     if (k < 0 || !inner(k)) continue;
@@ -235,57 +245,59 @@ function spawnPack(p, n, extra) {
 function spawnTick(dt) {
   if (S.test || enemies.length >= 640) return;      // the test range only spawns what you ask for
   // twice the swarm of the original tuning (each enemy just as tough)
-  let rate = 2 * 2.2 * (0.75 + S.t / 60 * 0.33 + (S.stage - 1) * 0.5) * (1 + 0.35 * (S.stage - 1));
+  let rate = 2 * 2.2 * (0.75 + oldT() / 60 * 0.33 + (S.stage - 1) * 0.5) * (1 + 0.35 * (S.stage - 1)) * densityMul();
   const ot = overtimeMul();
   if (ot) rate *= ot.rate;                 // overtime: faster and faster
   else if (S.boss) rate *= 0.55;
   S.spawnAcc += rate * dt;
+  const oT = oldT();
   while (S.spawnAcc >= 1) {
     if (enemies.length >= 640) { S.spawnAcc = 0; break; }      // at the cap: don't bank spawns for a burst later
     const r = Math.random();
-    if (S.t > 40 && r < 0.035) { S.spawnAcc -= 1; spawnEnemy('bomber', spawnPoint(28, 55)); }
-    else if (S.t > 75 && r < 0.085) { S.spawnAcc -= 1; spawnEnemy('splitter', spawnPoint(28, 55)); }
-    else if (S.t > 60 && r < 0.22) { S.spawnAcc -= 1; spawnEnemy('drone', spawnPoint(28, 55)); }
-    else if (S.t > 150 && r < 0.36) { S.spawnAcc -= 1; spawnEnemy('spitter', spawnPoint(28, 55)); }
+    if (oT > 40 && r < 0.035) { S.spawnAcc -= 1; spawnEnemy('bomber', spawnPoint(28, 55)); }
+    else if (oT > 75 && r < 0.085) { S.spawnAcc -= 1; spawnEnemy('splitter', spawnPoint(28, 55)); }
+    else if (oT > 60 && r < 0.22) { S.spawnAcc -= 1; spawnEnemy('drone', spawnPoint(28, 55)); }
+    else if (oT > 150 && r < 0.36) { S.spawnAcc -= 1; spawnEnemy('spitter', spawnPoint(28, 55)); }
     else { const n = 3 + Math.floor(Math.random() * 4); S.spawnAcc -= n * 0.8; spawnPack(spawnPoint(28, 55), n); }
   }
 }
 const DIRS = ['NORTH', 'NORTH-EAST', 'EAST', 'SOUTH-EAST', 'SOUTH', 'SOUTH-WEST', 'WEST', 'NORTH-WEST'];
 function dirName(a) { const deg = (Math.atan2(Math.cos(a), -Math.sin(a)) * 180 / Math.PI + 360) % 360; return DIRS[Math.round(deg / 45) % 8]; }
 function spawnHorde(h) {
-  const n = Math.round(2 * 1.8 * (36 + S.stage * 8 + Math.floor(S.t / 60) * 2) * (1 + 0.25 * (S.stage - 1)));
+  const n = Math.round(2 * 1.8 * (36 + S.stage * 8 + Math.floor(oldT() / 60) * 2) * (1 + 0.25 * (S.stage - 1)) * 0.75);
   for (let i = 0; i < n; i++) {
     const a = h.ang + rand(-0.5, 0.5), d = rand(32, 46);
     const x = clamp(player.pos.x + Math.cos(a) * d, -HALF + 4, HALF - 4), z = clamp(player.pos.z + Math.sin(a) * d, -HALF + 4, HALF - 4), k = idxOf(x, z);
     if (k < 0 || !inner(k)) continue;
-    if (Math.random() < 0.18 && S.t > 60) { spawnEnemy('drone', { x, z, y: H[k] }, { hpMul: 0.8 }); continue; }
+    if (Math.random() < 0.18 && oldT() > 60) { spawnEnemy('drone', { x, z, y: H[k] }, { hpMul: 0.8 }); continue; }
     if (Math.random() < 0.05) { spawnEnemy('bomber', { x, z, y: H[k] }); continue; }
     const pack = 4 + Math.floor(Math.random() * 4);
     spawnPack({ x, z }, pack, { hpMul: 0.8 }); i += pack - 1;
   }
 }
 function spawnMini() {
-  const e = spawnEnemy('brute', spawnPoint(25, 40), { hpMul: 1 + (S.nextMini / 300 - 1) * 0.6 });
+  const e = spawnEnemy('brute', spawnPoint(25, 40), { hpMul: 1 + (S.nextMini / 200 - 1) * 0.6 });
   e.mini = true; S.mini = e;
   banner('BRUTE', '', 'var(--hostile)', 2.5);
   discoverEnemy('brute');
 }
-function spawnBoss() {
+function spawnBoss(type = pickBoss()) {
   if (S.bossSpawned) return;
   S.bossSpawned = true;
-  discoverEnemy('warden');
+  discoverEnemy(type);
   let p;
   if (S.gate) {
     const a = Math.random() * Math.PI * 2, x = S.gate.x + Math.cos(a) * 10, z = S.gate.z + Math.sin(a) * 10, k = idxOf(x, z);
     p = (k >= 0 && inner(k)) ? { x, z, y: H[k] } : spawnPoint(20, 30);
   } else p = spawnPoint(20, 32);
-  const e = spawnEnemy('warden', p);
+  const e = spawnEnemy(type, p);
   e.pos.y += 45; e.boss = true; e.state = { volley: 4, slam: 8, summon: 12, slamming: true };
-  e.maxHp = e.hp = ETYPES.warden.hp * (1 + (S.stage - 1) * 0.9) * (1 + Math.max(0, S.t - 300) / 1200);
+  e.maxHp = e.hp = ETYPES[type].hp * (1 + (S.stage - 1) * 0.9) * (1 + Math.max(0, oldT() - 300) / 1200);
   S.boss = e;
   $('#bossbar').hidden = false;
-  $('#bossName').textContent = `THE WARDEN · STAGE ${S.stage}`;
-  banner('THE WARDEN', 'Kill it · exit opens', 'var(--hostile)', 3.5);
+  const bn = ((typeof ENEMY_NAMES !== 'undefined' && ENEMY_NAMES[type]) || type).toUpperCase();
+  $('#bossName').textContent = `${bn} · STAGE ${S.stage}`;
+  banner(bn, 'Kill it · exit opens', 'var(--hostile)', 3.5);
 }
 
 /* ============================================================
@@ -1918,7 +1930,7 @@ function pickUpLoot(it) {
 }
 function gainXp(v) {
   S.xp += v * stats.xpMult;
-  while (S.xp >= S.need) { S.xp -= S.need; S.level++; S.need = Math.floor(5 + S.level * 3.2 + S.level * S.level * 0.35); S.pendingLv++; }
+  while (S.xp >= S.need) { S.xp -= S.need; S.level++; S.need = xpNeed(S.level); S.pendingLv++; }
 }
 
 /* ---------- effects ---------- */

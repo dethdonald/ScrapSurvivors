@@ -233,9 +233,8 @@ function updateHUD(dt) {
   let obj;
   if (S.mode === 'drop') obj = 'Drop';
   else if (S.bossDead) obj = 'Exit open';
-  else if (S.boss) obj = 'Kill the Warden';
-  else if (S.gateOpen) obj = `Warden ${fmt(900 - S.t)}`;
-  else obj = `Gate ${fmt(300 - S.t)}`;
+  else if (S.boss) obj = overtime() > 0 ? 'OVERTIME · kill the boss' : 'Kill the boss';
+  else obj = `Boss ${fmt(BOSS_AT - S.t)}`;
   if (S.test && !S.boss && !S.bossDead) obj = `Test · ${enemies.filter(e => !e.dead).length} enemies`;
   $('#objective').textContent = obj;
   hitT -= dt;
@@ -538,7 +537,7 @@ function rewardPop(rows, title) {
   clearTimeout(el._t); el._t = setTimeout(() => { el.classList.add('out'); el._t = setTimeout(() => { el.hidden = true; }, 350); }, 2600 + rows.length * 300);
 }
 
-/* ---------- the run clock heats up: white to angry red over 15 minutes, then it catches fire (OVERTIME) ---------- */
+/* ---------- the run clock heats up: white to angry red over 10 minutes, then it catches fire (OVERTIME) ---------- */
 const CLOCK = { lit: false, built: false };
 function clockHeat(dt) {
   const box = $('.tc .tbox'); if (!box) return;
@@ -550,7 +549,7 @@ function clockHeat(dt) {
     box.appendChild(f);
   }
   const inRun = S.inRun && !S.test;
-  const k = inRun ? clamp(S.t / OVERTIME_T, 0, 1) : 0, lit = inRun && S.t >= OVERTIME_T;
+  const k = inRun ? clamp(S.t / OVERTIME_T, 0, 1) : 0, lit = inRun && overtime() > 0;
   // heat curve: barely there early, building hard in the last few minutes
   const h = Math.pow(k, 1.6);
   box.style.setProperty('--heat', h.toFixed(3));

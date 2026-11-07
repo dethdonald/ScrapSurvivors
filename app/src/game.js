@@ -1,7 +1,7 @@
 'use strict';
 /* Run flow, fixed-timestep simulation and the frame loop. */
 const S = {
-  mode: 'hangar', inRun: false, stage: 1, t: 0, total: 0, kills: 0, level: 1, xp: 0, need: 5, pendingLv: 0,
+  mode: 'hangar', inRun: false, stage: 1, t: 0, total: 0, kills: 0, level: 1, xp: 0, need: xpNeed(0), pendingLv: 0,
   spawnAcc: 0, flowT: 0, gate: null, gateOpen: false, bossSpawned: false, bossDead: false, boss: null,
   nextMini: 300, hordes: [], hordeIdx: 0, bannerT: 0, prevMode: 'play',
 };
@@ -30,7 +30,7 @@ function freshHangarLoadout() {
 function newRun() {
   // an incomplete build can never enter combat (lower half, torso and an arm are all required)
   { const need = typeof buildProblems === 'function' ? buildProblems() : []; if (need.length) { if (typeof say === 'function') say(`Needs: ${need.join(', ')}`, true); return false; } }
-  Object.assign(S, { inRun: true, test: false, stage: 1, shopBuys: 0, total: 0, kills: 0, level: 1, xp: 0, need: 5, pendingLv: 0, bolts: 0, caseCount: 0 });
+  Object.assign(S, { inRun: true, test: false, stage: 1, shopBuys: 0, total: 0, kills: 0, level: 1, xp: 0, need: xpNeed(0), pendingLv: 0, bolts: 0, caseCount: 0 });
   S.st = newRunStats();
   stats = null; refreshLoadout();
   player.hp = stats.maxHp; player.shield = stats.maxShield;
@@ -58,8 +58,8 @@ function startStage() {
   buildTerrainMesh();
   physResetWorld();
   Object.assign(S, {
-    t: 0, spawnAcc: 0, flowT: 0, rerolls: 3, shopAwayT: 0, berserkT: 0, berserkLast: -999, vacSeeded: false, vacT: 0, gateOpen: false, bossSpawned: false, bossDead: false, boss: null, mini: null, nextMini: 300, hordeIdx: 0,
-    hordes: [{ t: rand(140, 170) }, { t: rand(400, 440) }, { t: rand(640, 690) }],
+    t: 0, spawnAcc: 0, flowT: 0, rerolls: 3, shopAwayT: 0, berserkT: 0, berserkLast: -999, vacSeeded: false, vacT: 0, gateOpen: false, bossSpawned: false, bossDead: false, boss: null, mini: null, nextMini: 200, hordeIdx: 0,
+    hordes: [{ t: rand(140, 170) / TIME_K }, { t: rand(400, 440) / TIME_K }, { t: rand(640, 690) / TIME_K }],
   });
   const P = player;
   P.pos.set(rand(-25, 25), DROP_HEIGHT, rand(-25, 25)); P.prev.copy(P.pos); P.vel.set(0, -18, 0);
@@ -103,7 +103,7 @@ function land() {
   computeFlow(P.pos.x, P.pos.z);
   $('#hint').innerHTML = `${keyHint('LMB', 'RT')}fire ${stats.canSprint ? keyHint('Shift', 'LB') + 'boost ' : ''}${keyHint('C', 'B')}slide ${keyHint('Enter', 'View')}inventory`;
   setTimeout(() => { if (S.mode === 'play') $('#hint').innerHTML = ''; }, 9000);
-  banner('TOUCHDOWN', S.t < 1 ? 'Gate opens 5:00' : '', 'var(--orange)', 2.2);
+  banner('TOUCHDOWN', S.t < 1 ? 'Boss at 8:30' : '', 'var(--orange)', 2.2);
 }
 function toHangar() {
   ['#over', '#pause', '#levelup', '#perk'].forEach(s => { $(s).hidden = true; });
@@ -118,14 +118,13 @@ function toHangar() {
 
 function updateTimeline() {
   if (S.test) return;      // no hordes, brutes, gate or Warden timer on the test range
-  if (!S.gateOpen && S.t >= 300) { S.gateOpen = true; placeGate(); banner('GATE OPEN', 'Breach it · summon the Warden', 'var(--xp)', 3); }
-  if (S.t >= S.nextMini) { spawnMini(); S.nextMini += 300; }
+  if (S.t >= S.nextMini && S.t < BOSS_AT - 20) { spawnMini(); S.nextMini += 200; } else if (S.t >= S.nextMini) S.nextMini += 200;
   const h = S.hordes[S.hordeIdx];
   if (h) {
     if (!h.warned && S.t >= h.t - 6) { h.warned = true; h.ang = Math.random() * Math.PI * 2; banner('HORDE', `${dirName(h.ang).toUpperCase()} · 6s`, 'var(--hostile)', 3); }
-    if (S.t >= h.t) { spawnHorde(h); S.hordeIdx++; if (S.hordeIdx >= S.hordes.length) S.hordes.push({ t: S.t + rand(150, 200) }); }
+    if (S.t >= h.t) { spawnHorde(h); S.hordeIdx++; if (S.hordeIdx >= S.hordes.length) S.hordes.push({ t: S.t + rand(150, 200) / TIME_K }); }
   }
-  if (!S.bossSpawned && S.t >= 900) { spawnBoss(); setGateState('sealed'); }
+  if (!S.bossSpawned && S.t >= BOSS_AT) { if (!S.gate) placeGate(); spawnBoss(); setGateState('sealed'); }
 }
 function updateInteract() {
   let prompt = shopPrompt() || casePrompt();
@@ -135,8 +134,7 @@ function updateInteract() {
     const d = Math.hypot(S.gate.x - P.pos.x, S.gate.z - P.pos.z), dy = Math.abs(S.gate.y - P.pos.y);
     if (d < 4.5 && dy < 4) {
       const k = keyHint('E', 'X');
-      if (S.gate.state === 'open') { prompt = `${k}Breach ${sym('warn', '')} Warden`; if (IN.interactP) { spawnBoss(); setGateState('sealed'); } }
-      else if (S.gate.state === 'exit') { prompt = `${k}Exit`; if (IN.interactP) { IN.interactP = false; $('#prompt').hidden = true; nextStage(); return; } }
+      if (S.gate.state === 'exit') { prompt = `${k}Exit`; if (IN.interactP) { IN.interactP = false; $('#prompt').hidden = true; nextStage(); return; } }
       else prompt = `${sym('warn', '')} Sealed`;
     }
   }
