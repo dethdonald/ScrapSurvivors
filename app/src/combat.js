@@ -528,8 +528,8 @@ function updateEnemies(dtAll) {
         if (!e.onGround) { e.landed = true; e.sqV = (e.sqV || 0) - Math.min(2.4, 0.4 - e.vel.y * 0.08); }
         e.pos.y = g;
         const impact = -e.vel.y;
-        // a hard landing hurts (thrown, knocked off a ledge...)
-        if (impact > 12 && !d.fly && !e.boss && !d.npc) { envDmg(() => damage(e, e.maxHp * Math.min(0.6, (impact - 12) * 0.035))); dust(e.pos, 3); if (e.dead) continue; }
+        // a hard landing hurts (thrown, knocked off a ledge...) -- not explosive enemies, a hard landing shouldn't set them off
+        if (impact > 12 && !d.fly && !e.boss && !d.npc && !d.bomb) { envDmg(() => damage(e, e.maxHp * Math.min(0.6, (impact - 12) * 0.035))); dust(e.pos, 3); if (e.dead) continue; }
         const bounce = (e.roll || e.bouncy) && e.stun > 0 && impact > 2.5;      // balls (and fresh splitlings) bounce while they're knocked about
         if (bounce) { e.vel.y = impact * 0.62; e.sqV = (e.sqV || 0) - 1.2; }
         else if (impact > 7) { e.vel.y *= -0.3; e.spin.multiplyScalar(0.6); } else e.vel.y = Math.max(0, e.vel.y);

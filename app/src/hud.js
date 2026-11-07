@@ -87,4 +87,3 @@ function deathEnd() { DEATH.on = false; const el = $('#youDied'); if (el) { el.h
 addEventListener('keydown', e => { if (DEATH.on && !e.repeat) deathSkip(); });
 addEventListener('mousedown', () => { if (DEATH.on) deathSkip(); });
 addEventListener('gamepadbuttondown', () => { if (DEATH.on) deathSkip(); });
-{ const c = document.getElementById('crt'); if (c) c.hidden = SETTINGS.crt === false; }

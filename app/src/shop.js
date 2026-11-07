@@ -43,7 +43,8 @@ function rollShopOffers() { return [3, 4, Math.random() < 0.3 ? 5 : 4].map(rollS
 function rollShopOffer(tier) {
   let it;
   for (let i = 0; i < 20; i++) { it = rollLoot((stats && stats.luck || 0) + 40); if (it.kind !== 'block') break; }
-  if (!isLimb(it.kind)) it.lvl = TIER_START[tier];          // limbs always come at level 1
+  if (it.kind === 'weapon') it.lvl = 1;                      // store weapons always come at level 1
+  else if (!isLimb(it.kind)) it.lvl = TIER_START[tier];      // limbs always come at level 1
   return { item: it, price: Math.round(30 + TIER_START[tier] * 0.9) };
 }
 function clearShop() { if (S.shop) { scene.remove(S.shop.group); S.shop = null; } }

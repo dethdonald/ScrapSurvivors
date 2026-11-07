@@ -436,8 +436,8 @@ em.attr{font-style:normal;font-size:11px;font-weight:600;margin-left:2px}
 #bossbar.hbox{bottom:80px}
 /* damage numbers */
 #dmgLayer{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.dmg{position:absolute;left:0;top:0;font-family:var(--f-mono);font-size:11px;font-weight:700;color:#f2f0e8;text-shadow:0 1px 2px #000,0 0 3px #000;white-space:nowrap}
-.dmg.crit{color:#ffd23a;font-size:14px}
+.dmg{position:absolute;left:0;top:0;font-family:var(--f-mono);font-size:16px;font-weight:700;color:#f2f0e8;text-shadow:0 1px 2px #000,0 0 3px #000;white-space:nowrap}
+.dmg.crit{color:#ffd23a;font-size:21px}
 .dmg.crit::after{content:"!"}
 /* nuke flash */
 #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:50}
@@ -865,6 +865,10 @@ body.win-sizing,body.win-sizing *{cursor:nwse-resize!important;user-select:none}
 #over .otile{justify-items:center;padding:14px 10px}
 #over .otile b{font-size:30px;line-height:1.1}
 #over .otile .sym svg{width:22px;height:22px}
+#over .olabel{font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.6;margin-top:1px}
+#over .okv .olabel{font-size:11px;letter-spacing:.02em;text-transform:none;opacity:.75;margin-top:0}
+#over .obuild{padding-bottom:4px}
+#over .obuild .olabel{font-size:8px;max-width:48px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
 #over .odetails{display:grid;gap:12px}
 #over .odetails>summary{list-style:none;cursor:pointer;justify-self:center;padding-left:22px;padding-right:22px}
 #over .odetails>summary::-webkit-details-marker{display:none}

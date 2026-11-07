@@ -369,7 +369,6 @@ function syncSettingsUI() {
   optRow('#gfxBtn', 'Graphics', SETTINGS.gfx);
   optRow('#devBtn', 'Developer mode', !!SETTINGS.dev);
   { const b = $('#cineBtn'); if (b) b.textContent = 'MK III reveal: ' + ({ full: 'full', short: 'short', off: 'off' }[SETTINGS.cine] || 'full'); }
-  optRow('#crtBtn', 'CRT effect', SETTINGS.crt !== false); { const c = $('#crt'); if (c) c.hidden = SETTINGS.crt === false; }
   optRow('#autoModBtn', 'Auto-upgrade new modules', SETTINGS.autoUpMods !== false);
   $('#skipBtn').hidden = !SETTINGS.dev || !!S.test;
   $('#devPanelBtn').hidden = !S.test;
@@ -384,14 +383,30 @@ function openPause() {
   S.prevMode = S.mode; S.mode = 'pause'; unlockPointer();
   showOptions(false); syncSettingsUI(); $('#pause').hidden = false; focusFirst();
 }
-/* the pause screen has two pages: the short pause menu, and Options (opened from it or from the title screen) */
+/* the pause screen has four pages: the short pause menu, Options (opened from it or from the title screen), and
+   Options' own Graphics / Developer Tools sub-pages */
 function showOptions(on) {
   $('#pauseMain').hidden = on; $('#optMenu').hidden = !on;
+  if (!on) { $('#optGfxMenu').hidden = true; $('#optDevMenu').hidden = true; }
   if (on) { syncSettingsUI(); $('#optMenu .optbody').scrollTop = 0; }
   if (!$('#pause').hidden) focusFirst();
 }
 const optionsOpen = () => !$('#optMenu').hidden;
+function showGfxMenu(on) {
+  $('#optMenu').hidden = on; $('#optGfxMenu').hidden = !on;
+  if (on) { syncSettingsUI(); $('#optGfxMenu .optbody').scrollTop = 0; }
+  if (!$('#pause').hidden) focusFirst();
+}
+function showDevMenu(on) {
+  $('#optMenu').hidden = on; $('#optDevMenu').hidden = !on;
+  if (on) { syncSettingsUI(); $('#optDevMenu .optbody').scrollTop = 0; }
+  if (!$('#pause').hidden) focusFirst();
+}
+const gfxMenuOpen = () => !$('#optGfxMenu').hidden;
+const devMenuOpen = () => !$('#optDevMenu').hidden;
 function pauseBack() {
+  if (gfxMenuOpen()) { showGfxMenu(false); sfx('tick'); return; }
+  if (devMenuOpen()) { showDevMenu(false); sfx('tick'); return; }
   if (optionsOpen() && !TITLE.fromOptions) { showOptions(false); sfx('tick'); return; }
   resume();
 }
@@ -403,6 +418,10 @@ function resume() {
 $('#resumeBtn').addEventListener('click', resume);
 $('#optBtn').addEventListener('click', () => { showOptions(true); sfx('tick'); });
 $('#optBackBtn').addEventListener('click', pauseBack);
+$('#gfxMenuBtn').addEventListener('click', () => { showGfxMenu(true); sfx('tick'); });
+$('#devMenuBtn').addEventListener('click', () => { showDevMenu(true); sfx('tick'); });
+$('#gfxBackBtn').addEventListener('click', pauseBack);
+$('#devBackBtn').addEventListener('click', pauseBack);
 $('#invBtn').addEventListener('click', () => { if (S.prevMode !== 'play') { sfx('deny'); denyFx($('#invBtn')); return; } $('#pause').hidden = true; S.mode = 'play'; openInventory(false); });
 $('#uiScale').addEventListener('input', e => { SETTINGS.uiScale = +e.target.value; saveSettings(); detectUI(); });
 $('#musicVol').addEventListener('input', e => { SETTINGS.music = +e.target.value; saveSettings(); syncSettingsUI(); });
@@ -427,7 +446,6 @@ $('#xhColorBtn').addEventListener('click', () => { SETTINGS.xhColor = cycle(Obje
 $('#xhSizeBtn').addEventListener('click', () => { SETTINGS.xhSize = cycle(XH_SIZES.map(s => s[1]), SETTINGS.xhSize); saveSettings(); syncSettingsUI(); });
 $('#autoModBtn').addEventListener('click', () => { SETTINGS.autoUpMods = !(SETTINGS.autoUpMods !== false); saveSettings(); syncSettingsUI(); });
 $('#cineBtn').addEventListener('click', () => { SETTINGS.cine = ({ full: 'short', short: 'off', off: 'full' })[SETTINGS.cine || 'full']; saveSettings(); syncSettingsUI(); });
-$('#crtBtn').addEventListener('click', () => { SETTINGS.crt = SETTINGS.crt === false; saveSettings(); syncSettingsUI(); });
 $('#devBtn').addEventListener('click', () => {
   SETTINGS.dev = !SETTINGS.dev; saveSettings(); syncSettingsUI();
   if (typeof INV !== 'undefined' && INV.hangar && !$('#inv').hidden) renderBench();
@@ -482,7 +500,7 @@ function showGameOver() {
   $('#overSub').textContent = S.test ? 'Test range' : 'Stage ' + S.stage; $('#overDetails').open = false;
   // headline tiles (the numbers count up)
   const tiles = [['time', S.total, fmt], ['stage', S.stage], ['level', S.level], ['kills', S.kills], ['bolts', st.bolts]];
-  $('#recap').innerHTML = tiles.map(([a], i) => `<div class="otile" data-tip="${symName(a)}">${sym(a, '')}<b data-i="${i}">0</b></div>`).join('');
+  $('#recap').innerHTML = tiles.map(([a], i) => `<div class="otile" data-tip="${symName(a)}">${sym(a, '')}<b data-i="${i}">0</b><span class="olabel">${symName(a)}</span></div>`).join('');
   const t0 = performance.now(), tick = () => {
     const k = Math.min(1, (performance.now() - t0) / 1100), e = 1 - Math.pow(1 - k, 3);
     tiles.forEach(([, v, f], i) => { const el = $(`#recap [data-i="${i}"]`); if (el) el.textContent = (f || big)(v * e); });
@@ -492,7 +510,7 @@ function showGameOver() {
   // combat numbers
   const kv = [['dmg', 'Damage dealt', big(st.dealt)], ['biggest', '', big(st.biggest)], ['taken', '', big(st.taken)], ['blocked', '', big(st.shielded)],
     ['peak', '', st.peak], ['kills', 'Best kill streak', '×' + (st.bestStreak || 0)], ['circuits', 'Circuits earned', st.circuits || 0], ['dist', '', `${big(st.dist)} m`], ['parts', '', st.partsFound], ['gems', '', st.gemsFound]];
-  $('#overCombat').innerHTML = kv.map(([k, n, b]) => `<div class="okv" data-tip="${n || symName(k)}">${sym(k, '')}<b class="mono">${b}</b></div>`).join('');
+  $('#overCombat').innerHTML = kv.map(([k, n, b]) => `<div class="okv" data-tip="${n || symName(k)}">${sym(k, '')}<span class="olabel">${n || symName(k)}</span><b class="mono">${b}</b></div>`).join('');
   // kills by type
   const kills = Object.entries(st.kills).sort((a, b) => b[1] - a[1]), kmax = kills.length ? kills[0][1] : 1;
   $('#overKills').innerHTML = kills.length ? kills.map(([k, n]) => `<div class="obar"><span>${KILL_NAMES[k] || k}</span><i><em style="width:${(n / kmax * 100).toFixed(1)}%"></em></i><b class="mono">${n}</b></div>`).join('')
@@ -503,7 +521,7 @@ function showGameOver() {
     : '<div class="onone">—</div>';
   // the frame you died in
   const parts = L && L.body ? mountedItems() : [];
-  $('#overBuild').innerHTML = parts.map(it => `<div class="obuild" title="${itemName(it)}">${partIcon(it, 'picon')}<small>${it.kind === "gem" ? "" : lvTag(it)}</small></div>`).join('');
+  $('#overBuild').innerHTML = parts.map(it => `<div class="obuild" title="${itemName(it)}">${partIcon(it, 'picon')}<small>${it.kind === "gem" ? "" : lvTag(it)}</small><span class="olabel">${itemName(it)}</span></div>`).join('');
   $('#over').hidden = false; focusFirst();
 }
 

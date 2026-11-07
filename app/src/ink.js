@@ -10,10 +10,11 @@
    capped (hordes don't turn into black soup). True depth/normal outlines would need a second scene render: documented upgrade path.
    Protected: bright effects/glow (highlight bypass), saturated pixels get a lighter touch (player accent colour, enemy tints),
    the MK III cinematic is never inked, and the part-viewer canvases are separate and untouched.
-   Developer Mode first: the controls live in Options -> Developer and the effect only runs while Developer mode is on
-   (INK_PUBLIC = true would let anyone use it). Defaults to OFF; preferences are saved in SETTINGS.ink.
+   Public by default: Scrap Ink: Light is the default look for every player, with a simple on/off switch in
+   Options -> Graphics. The full preset/slider panel (Options -> Developer Tools) is still Developer-mode-only, for
+   fine-tuning. Preferences are saved in SETTINGS.ink ({ preset, on, custom }).
    ============================================================ */
-const INK_PUBLIC = false;
+const INK_PUBLIC = true;
 const INK_PRESETS = {
   off:   { bands: 4, outline: 0,    dither: 0,    contrast: 0,    pixel: 0,    scan: 0,    intensity: 1 },
   scrap: { bands: 4, outline: 0.35, dither: 0.15, contrast: 0.12, pixel: 0,    scan: 0.05, intensity: 1 },
@@ -23,11 +24,12 @@ const INK_PRESETS = {
 const INK_NAMES = { off: 'Off', scrap: 'SCRAP INK', light: 'Light', heavy: 'Heavy', custom: 'Custom' };
 const INK_KEYS = [['bands', 'Posterize bands', 2, 8, 1, v => v + ' bands'], ['outline', 'Outline strength', 0, 1, 0.01, v => Math.round(v * 100) + '%'], ['dither', 'Shadow dithering', 0, 0.5, 0.01, v => Math.round(v * 100) + '%'],
   ['contrast', 'Contrast', 0, 0.4, 0.01, v => '+' + Math.round(v * 100) + '%'], ['pixel', 'Pixelation', 0, 1, 0.01, v => Math.round(v * 100) + '%'], ['scan', 'CRT scanlines', 0, 0.3, 0.01, v => Math.round(v * 100) + '%'], ['intensity', 'Master intensity', 0, 1, 0.01, v => Math.round(v * 100) + '%']];
-if (!SETTINGS.ink || typeof SETTINGS.ink !== 'object' || !INK_NAMES[SETTINGS.ink.preset]) SETTINGS.ink = { preset: 'off', custom: { ...INK_PRESETS.scrap } };
+if (!SETTINGS.ink || typeof SETTINGS.ink !== 'object' || !INK_NAMES[SETTINGS.ink.preset]) SETTINGS.ink = { preset: 'light', on: true, custom: { ...INK_PRESETS.scrap } };
 if (!SETTINGS.ink.custom) SETTINGS.ink.custom = { ...INK_PRESETS.scrap };
+if (SETTINGS.ink.on === undefined) SETTINGS.ink.on = true;                   // the simple Options -> Graphics switch
 const inkVals = () => SETTINGS.ink.preset === 'custom' ? SETTINGS.ink.custom : (INK_PRESETS[SETTINGS.ink.preset] || INK_PRESETS.off);
 function inkActive() {
-  if (!(SETTINGS.dev || INK_PUBLIC) || SETTINGS.ink.preset === 'off') return false;
+  if (!SETTINGS.ink.on || SETTINGS.ink.preset === 'off') return false;
   if (typeof S !== 'undefined' && S.mode === 'cine') return false;            // the golden reveal stays untouched
   const v = inkVals(); return v.intensity > 0.001;
 }
@@ -84,10 +86,14 @@ function inkFinish() {
     SETTINGS.ink.custom[inp.dataset.ink] = +inp.value; saveSettings(); inkSyncUI();
   }));
 })();
+$('#inkOnBtn').addEventListener('click', () => { SETTINGS.ink.on = !SETTINGS.ink.on; saveSettings(); inkSyncUI(); });
 function inkSet(p) { if (p === 'custom' && SETTINGS.ink.preset !== 'custom') SETTINGS.ink.custom = { ...inkVals(), ...(SETTINGS.ink.custom && SETTINGS.ink.preset === 'custom' ? SETTINGS.ink.custom : {}) }; SETTINGS.ink.preset = p; if (p !== 'off' && p !== 'custom') SETTINGS.ink.custom = { ...INK_PRESETS[p] }; saveSettings(); inkSyncUI(); }
 function inkSyncUI() {
-  const box = $('#inkBox'); if (!box) return; box.hidden = !(SETTINGS.dev || INK_PUBLIC);
-  $('#inkBtn').textContent = 'Scrap Ink: ' + INK_NAMES[SETTINGS.ink.preset]; const v = inkVals();
-  INK_KEYS.forEach(k => { const inp = box.querySelector(`[data-ink="${k[0]}"]`); if (document.activeElement !== inp) inp.value = v[k[0]]; $('#inkV_' + k[0]).textContent = k[5](v[k[0]]); });
-  $('#inkSliders').style.opacity = SETTINGS.ink.preset === 'off' ? 0.5 : 1;
+  const box = $('#inkBox'); if (box) {
+    box.hidden = !SETTINGS.dev;
+    $('#inkBtn').textContent = 'Scrap Ink: ' + INK_NAMES[SETTINGS.ink.preset]; const v = inkVals();
+    INK_KEYS.forEach(k => { const inp = box.querySelector(`[data-ink="${k[0]}"]`); if (document.activeElement !== inp) inp.value = v[k[0]]; $('#inkV_' + k[0]).textContent = k[5](v[k[0]]); });
+    $('#inkSliders').style.opacity = SETTINGS.ink.preset === 'off' ? 0.5 : 1;
+  }
+  optRow('#inkOnBtn', 'Scrap Ink', !!SETTINGS.ink.on);                        // simple Options -> Graphics switch
 }

@@ -14,6 +14,8 @@ const SYM = {
   crit:    ['Critical hits (double damage)', '<path d="M12 1l2.6 6.6L21 5l-3 6.2L23 13l-6.4 1.6L18 21l-6-3.6L6 21l1.4-6.4L1 13l5-1.8L3 5l6.4 2.6z"/>'],
   slot:    ['Storage slots', '<path d="M3 7l9-5 9 5v10l-9 5-9-5z" fill-opacity=".35"/><path d="M3 7l9 5 9-5M12 12v10" stroke="currentColor" stroke-width="2" fill="none"/>'],
   multi:   ['Extra projectile chance', '<circle cx="5" cy="12" r="3"/><path d="M8 11h4l7-6v3l-5 4 5 4v3l-7-6H8z"/>'],
+  pspeed:  ['Projectile speed', '<path d="M2 11h6l-2.5-3.5h3L17 11l-8.5 3.5h-3L8 11H2z"/><rect x="18" y="10" width="3" height="2"/><rect x="22" y="10" width="2" height="2" opacity=".5"/>'],
+  range:   ['Weapon range',  '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 4" opacity=".6"/>'],
   luck:    ['Luck',          '<circle cx="8.5" cy="8.5" r="4"/><circle cx="15.5" cy="8.5" r="4"/><circle cx="8.5" cy="15.5" r="4"/><circle cx="15.5" cy="15.5" r="4"/><rect x="11" y="15" width="2" height="8"/>'],
   dmg:     ['Damage',        '<path d="M12 2l2 6 6-3-3 6 6 2-6 2 3 6-6-3-2 6-2-6-6 3 3-6-6-2 6-2-3-6 6 3z"/>'],
   xp:      ['Experience',    '<path d="M12 2l7 10-7 10-7-10z"/>'],
@@ -59,7 +61,7 @@ const SYM = {
   refit:   ['Full Refit: start repaired', '<path d="M21 6.5a5 5 0 0 1-6.6 4.7L6 19.6 4.4 18l8.4-8.4A5 5 0 0 1 17.5 3l-3 3 1 2.5 2.5 1z"/>'],
 };
 // what each level-up stat is called in SYM
-const STAT_SYM = { hp: 'hp', shield: 'shield', jump: 'jump', speed: 'speed', reload: 'reload', rate: 'rate', crit: 'crit', slot: 'slot', multi: 'multi', luck: 'luck' };
+const STAT_SYM = { hp: 'hp', shield: 'shield', jump: 'jump', speed: 'speed', reload: 'reload', rate: 'rate', crit: 'crit', slot: 'slot', multi: 'multi', pspeed: 'pspeed', range: 'range', luck: 'luck' };
 
 /* <i class="sym" data-tip="Name">svg</i> */
 function sym(key, tip, cls = '') {
@@ -98,7 +100,7 @@ for (const el of document.querySelectorAll('[data-sym]')) el.innerHTML = sym(el.
 const statShort = k => { const u = STAT_UPGRADES[k].unit; return u.trim().startsWith('%') ? '%' : / m /.test(u + ' ') && k === 'jump' ? ' m' : ''; };
 /* a level-up / case reward card: the stat's symbol, how much, and the rarity colour (the name is on hover) */
 /* plain words for what each level-up upgrade does, shown on its card */
-const STAT_PLAIN = { hp: 'Health', shield: 'Shield', jump: 'Jump height', speed: 'Move speed', reload: 'Reload speed', rate: 'Fire rate', crit: 'Crit chance', slot: 'Storage slot', multi: 'Extra shot chance', luck: 'Luck' };
+const STAT_PLAIN = { hp: 'Health', shield: 'Shield', jump: 'Jump height', speed: 'Move speed', reload: 'Reload speed', rate: 'Fire rate', crit: 'Crit chance', slot: 'Storage slot', multi: 'Extra shot chance', pspeed: 'Projectile speed', range: 'Weapon range', luck: 'Luck' };
 function upgradeCardHTML(c) {
   const U = STAT_UPGRADES[c.key], R = RARITY[c.rarity], now = L.bonus[c.key] || 0;
   return `<div class="tag"><b style="color:${R.css}">${R.name}</b></div>

@@ -225,14 +225,6 @@
           <label class="setting"><span>Music volume <b class="mono" id="musicVal">60%</b></span><input class="nav" id="musicVol" type="range" min="0" max="1" step="0.05"></label>
         </div>
         <div class="optsec">
-          <h3>Display</h3>
-          <label class="setting"><span>UI scale <b class="mono" id="uiScaleVal">100%</b></span><input class="nav" id="uiScale" type="range" min="0.7" max="1.6" step="0.05"></label>
-          <button class="btn ghost nav" id="gfxBtn">Graphics: high</button>
-          <button class="btn ghost nav" id="detailBtn">World detail: on</button>
-          <button class="btn ghost nav" id="physBtn">Physics body: on</button>
-          <button class="btn ghost nav orow" id="fsBtn"><span>Fullscreen</span><kbd>F11</kbd></button>
-        </div>
-        <div class="optsec">
           <h3>Crosshair &amp; HUD</h3>
           <div class="xhopts">
             <button class="btn ghost nav" id="xhStyleBtn">Crosshair: diamond</button>
@@ -240,22 +232,44 @@
             <button class="btn ghost nav" id="xhSizeBtn">Size: medium</button>
             <div class="xhprev" aria-hidden="true"><div id="xhPreview" class="xh"><i></i><b></b></div></div>
           </div>
-          <button class="btn ghost nav" id="crtBtn">CRT effect: on</button>
-          <button class="btn ghost nav" id="cineBtn">MK III reveal: full</button>
           <button class="btn ghost nav" id="autoModBtn">Auto-upgrade new modules: on</button>
         </div>
         <div class="optsec">
-          <h3>Developer</h3>
-          <button class="btn ghost nav" id="devBtn">Developer mode: off</button>
-          <button class="btn ghost nav" id="skipBtn">Skip +1:00</button>
+          <h3>More</h3>
+          <button class="btn ghost nav orow" id="gfxMenuBtn"><span>Graphics</span><span>&#9656;</span></button>
+          <button class="btn ghost nav orow" id="devMenuBtn"><span>Developer Tools</span><span>&#9656;</span></button>
         </div>
       </div>
       <button class="btn nav" id="optBackBtn">Back</button>
     </div>
+    <div class="menu optmenu" id="optGfxMenu" hidden>
+      <h2>GRAPHICS</h2>
+      <div class="optbody">
+        <div class="optsec">
+          <label class="setting"><span>UI scale <b class="mono" id="uiScaleVal">100%</b></span><input class="nav" id="uiScale" type="range" min="0.7" max="1.6" step="0.05"></label>
+          <button class="btn ghost nav" id="gfxBtn">Graphics: high</button>
+          <button class="btn ghost nav" id="detailBtn">World detail: on</button>
+          <button class="btn ghost nav" id="physBtn">Physics body: on</button>
+          <button class="btn ghost nav orow" id="fsBtn"><span>Fullscreen</span><kbd>F11</kbd></button>
+          <button class="btn ghost nav" id="cineBtn">MK III reveal: full</button>
+          <button class="btn ghost nav" id="inkOnBtn">Scrap Ink: on</button>
+        </div>
+      </div>
+      <button class="btn nav" id="gfxBackBtn">Back</button>
+    </div>
+    <div class="menu optmenu" id="optDevMenu" hidden>
+      <h2>DEVELOPER TOOLS</h2>
+      <div class="optbody">
+        <div class="optsec">
+          <button class="btn ghost nav" id="devBtn">Developer mode: off</button>
+          <button class="btn ghost nav" id="skipBtn">Skip +1:00</button>
+        </div>
+      </div>
+      <button class="btn nav" id="devBackBtn">Back</button>
+    </div>
   </section>
 
   <div id="cine" hidden aria-live="polite"><i class="cBar t"></i><i class="cBar b"></i><div class="cTitle"></div><div class="cApex"><b></b><em></em></div><div class="cHero"><h3></h3><div class="cRows"></div><strong>MAXIMUM UPGRADE ACHIEVED</strong></div><i class="cFlash"></i><i class="cDip"></i><div class="cSkip">press any key · click · button to skip</div></div>
-  <div id="crt" aria-hidden="true"></div>
   <div id="youDied" hidden><b>YOU DIED</b><small>press any key to skip</small></div>
   <section id="over" class="overlay" hidden>
     <div class="menu overcard">

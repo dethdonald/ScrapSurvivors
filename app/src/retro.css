@@ -72,10 +72,6 @@ kbd{border:1px solid var(--frame-dim);background:transparent;color:var(--accent)
 .xh i{background:var(--text)}.xh b{border-width:1px;transform:rotate(0) scale(.6)}
 .xh[data-style=diamond] b{transform:rotate(45deg) scale(.6)}
 
-/* ---- CRT: a very faint scanline sheet and a corner shade over everything; off in Options ---- */
-#crt{position:fixed;inset:0;pointer-events:none;z-index:50;
-  background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 62%,rgba(0,0,0,.34) 100%);mix-blend-mode:multiply;opacity:.55}
-
 /* ---- the death sequence ---- */
 #youDied{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;pointer-events:none;background:rgba(2,3,4,0);animation:dieFade 3.2s ease-in forwards}
 #youDied b{font-family:var(--f-display);font-size:clamp(34px,8vw,92px);letter-spacing:.35em;color:#c8232f;font-weight:700;opacity:0;animation:dieText 2.6s ease-out .9s forwards;padding-left:.35em;text-shadow:0 0 18px rgba(200,35,47,.45)}
@@ -92,7 +88,7 @@ kbd{border:1px solid var(--frame-dim);background:transparent;color:var(--accent)
   #hud .tl.hbox{width:min(210px,40vw)}
   #timer{font-size:20px}
 }
-@media (prefers-reduced-motion:reduce){#youDied,#youDied b,#youDied small{animation-duration:.01s;animation-delay:0s}#crt{display:none}}
+@media (prefers-reduced-motion:reduce){#youDied,#youDied b,#youDied small{animation-duration:.01s;animation-delay:0s}}
 
 /* ---- icon registry sizes ---- */
 .ic{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;color:var(--text);flex:none}
@@ -109,7 +105,7 @@ kbd{border:1px solid var(--frame-dim);background:transparent;color:var(--accent)
 .tagS.auto{color:var(--on-accent);background:var(--accent)}
 
 /* ===== MK III reveal (chunk 15) ===== */
-body.cine #game > *:not(canvas):not(#crt):not(#cine){visibility:hidden!important}
+body.cine #game > *:not(canvas):not(#cine){visibility:hidden!important}
 #cine{position:fixed;inset:0;z-index:70;pointer-events:none;font-family:var(--f-mono,monospace);color:#ffe9b0;overflow:hidden}
 #cine .cBar{position:absolute;left:0;right:0;height:9vh;background:#000;transform-origin:top;transition:none}
 #cine .cBar.t{top:0}#cine .cBar.b{bottom:0;transform-origin:bottom}

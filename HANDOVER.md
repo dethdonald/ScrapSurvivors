@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.3 · BUILD NOV 6|
+| **Version** | 0.43.4 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -194,6 +194,14 @@ This file tracks every change, with dates, plus what anyone picking the project 
 
 - The dashed hazard stripe in the 3D title logo now matches your chosen secondary (accent) color, the same color
   applied to the robot's sockets/trim — change it in Customize and the logo updates right away.
+
+- Store weapons always offer at Level 1
+- Removed the CRT filter; Scrap Ink: Light is now the default look for every player, with a simple on/off switch in Options → Graphics (the full tuning panel moved to Options → Developer Tools)
+- Reorganized the Options menu into Graphics and Developer Tools submenus
+- Fixed missing icons for the Muzzle Velocity and Long Barrel level-up stats
+- Bigger, more readable damage numbers
+- Explosive (bomber) enemies no longer take fall damage from hard landings
+- The You Died screen's stat tiles, combat breakdown, and loadout icons now show text labels
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
