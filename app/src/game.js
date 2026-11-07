@@ -28,6 +28,8 @@ function freshHangarLoadout() {
 }
 
 function newRun() {
+  // an incomplete build can never enter combat (lower half, torso and an arm are all required)
+  { const need = typeof buildProblems === 'function' ? buildProblems() : []; if (need.length) { if (typeof say === 'function') say(`Needs: ${need.join(', ')}`, true); return false; } }
   Object.assign(S, { inRun: true, test: false, stage: 1, shopBuys: 0, total: 0, kills: 0, level: 1, xp: 0, need: 5, pendingLv: 0, bolts: 0, caseCount: 0 });
   S.st = newRunStats();
   stats = null; refreshLoadout();

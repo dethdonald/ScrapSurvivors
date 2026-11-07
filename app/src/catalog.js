@@ -34,6 +34,7 @@ function catEntries() {
   else for (const t of Object.keys(LEGS)) out.push({ key: 'leg:' + t, tab: 'limbs', kind: 'leg', type: t, name: LEGS[t].name });
   for (const t of Object.keys(WEAPONS)) out.push({ key: 'weapon:' + t, tab: 'weapons', kind: 'weapon', type: t, name: WEAPONS[t].name });
   for (const t of Object.keys(BLOCKS)) if (!BUILD_V2 || BLOCKS[t].upper) out.push({ key: 'block:' + t, tab: 'parts', kind: 'block', type: t, name: BLOCKS[t].name });
+  if (BUILD_V2) for (const t of Object.keys(ADAPTERS)) out.push({ key: 'adapter:' + t, tab: 'parts', kind: 'adapter', type: t, name: ADAPTERS[t].name });
   for (const t of Object.keys(MODULES)) out.push({ key: 'module:' + t, tab: 'parts', kind: 'module', type: t, name: MODULES[t].name });
   for (const t of ATTR_KEYS) out.push({ key: 'gem:' + t, tab: 'gems', kind: 'gem', type: t, name: GEMS[t].name });
   for (const k of Object.keys(COMBOS)) out.push({ key: 'combo:' + k, tab: 'combos', kind: 'combo', type: k, name: COMBOS[k][0] });

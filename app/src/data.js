@@ -69,13 +69,14 @@ function rollLoot(luck = 0) {
   for (const t of Object.keys(ARMS)) pool.push(['arm', t, 1.5]);
   if (!BUILD_V2) for (const t of Object.keys(LEGS)) pool.push(['leg', t, 1]);       // V2: the lower half never drops
   for (const t of Object.keys(MODULES)) pool.push(['module', t, 1.2]);
+  if (BUILD_V2) for (const t of Object.keys(ADAPTERS)) pool.push(['adapter', t, 0.5]);
   if (!BUILD_V2) for (const t of Object.keys(BLOCKS)) if (!BLOCKS[t].body) pool.push(['block', t, 0.8]);    // V2: no free sockets for bricks
   let x = Math.random() * pool.reduce((a, p) => a + p[2], 0), pickd = pool[0];
   for (const p of pool) { x -= p[2]; if (x <= 0) { pickd = p; break; } }
   // a rolled rarity gives exactly the first level of that rarity
   const tier = rollRarity(luck);
   // limbs (arms and legs) always drop at level 1 and are raised by merging identical ones
-  const it = mkItem(pickd[0], pickd[1], (pickd[0] === 'block' && !BLOCKS[pickd[1]].upgradable) || isLimb(pickd[0]) ? 1 : TIER_START[tier]);
+  const it = mkItem(pickd[0], pickd[1], (pickd[0] === 'block' && !BLOCKS[pickd[1]].upgradable) || isLimb(pickd[0]) || pickd[0] === 'adapter' ? 1 : TIER_START[tier]);
   return it;
 }
 
@@ -727,6 +728,16 @@ const LOWERS = {
   wheels:   { name: 'Wheel Base', legType: 'wheel', mass: 1.9, hp: 45, shield: 10, mounts: [['left', -0.32, 0], ['left', 0.32, 0], ['right', -0.32, 0], ['right', 0.32, 0]],
     desc: 'Four wheels at the corners. Fast and slidey, can boost.' },
 };
+/* ---------- adapters (Build V2) ----------
+   An adapter plugs into a torso socket and changes what that socket takes. 'from' = the socket type it plugs into,
+   'to' = what its own sockets hold. Level 1 has one socket, Level 2 has two (independent parts, same original socket).
+   Adapters never hold adapters, and they top out at Level 2. */
+const ADAPTERS = {
+  arm2mod: { name: 'Arm-to-Module Adapter', from: 'arm', to: 'module', mass: 0.2, maxLvl: 2,
+    desc: 'Plugs into an ARM socket (sphere) and turns it into a MODULE socket (cube). Level 2 holds two modules.' },
+  mod2arm: { name: 'Module-to-Arm Adapter', from: 'module', to: 'arm', mass: 0.2, maxLvl: 2,
+    desc: 'Plugs into a MODULE socket (cube) and turns it into an ARM socket (sphere). Level 2 holds two arms.' },
+};
 const lowerLegItems = it => {
   // the built-in legs, made once per lower-half item (they aren't parts of their own: you can't take them off)
   if (!it._legs || it._legs.length !== LOWERS[it.type].mounts.length) Object.defineProperty(it, '_legs', { value: LOWERS[it.type].mounts.map(() => mkItem('leg', LOWERS[it.type].legType, 1)), enumerable: false, configurable: true, writable: true });
@@ -788,7 +799,10 @@ Object.assign(MODULES, {
         const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 8), M(COL.dark)); tube.position.set(x, c[1] + 0.26, z); g.add(tube);
         g.add(bx(0.06, 0.03, 0.06, 0xe2465c, x, c[1] + 0.37, z, 0x601020));        // warhead tips
       }
-      return { muzzle: [c[0], c[1] + 0.45, c[2]] };
+      // the gem socket sits on the rear face of the launcher box (clear of the missile tubes); a pod mounted on the back faces its socket sideways instead
+      const rear = out.z < -0.5 ? 'right' : 'back';
+      const gemSock = rear === 'back' ? { face: 'back', pos: [c[0], c[1], c[2] - 0.21 - 0.03] } : { face: 'right', pos: [c[0] + 0.25 + 0.03, c[1], c[2]] };
+      return { muzzle: [c[0], c[1] + 0.45, c[2]], gemSock };
     },
   },
   magnet: {
@@ -916,8 +930,8 @@ const FACE_ORDER = ['right', 'left', 'front', 'back', 'top', 'bottom'];
 const OPPOSITE = { right: 'left', left: 'right', front: 'back', back: 'front', top: 'bottom', bottom: 'top' };
 let nextItemId = 1;
 /* Everything upgradeable (weapons, arms, modules, lower halves, legacy legs, upgradable blocks, gems) tops out at Level 5. */
-const maxLvlOf = it => it.kind === 'gem' ? GEM_MAX : MAX_LVL;
-const markFor = (kind, lvl) => Math.max(1, Math.min(MAX_LVL, Math.round(lvl) || 1));
+const maxLvlOf = it => it.kind === 'gem' ? GEM_MAX : it.kind === 'adapter' ? 2 : MAX_LVL;
+const markFor = (kind, lvl) => Math.max(1, Math.min(kind === 'adapter' ? 2 : MAX_LVL, Math.round(lvl) || 1));
 /* arms, legs and lowers scale on the same five levels (their own stats are set in armRate/armTurn/lowerMul below) */
 const effLvl = it => sLv(it.lvl);
 /* gem slots follow one schedule for arms, lower halves and legs: none at L1, one at L2-L3, two at L4-L5 */
@@ -929,6 +943,7 @@ function gemSlotsFor(it) {
   return 0;
 }
 function syncGemSlots(it) {
+  if (it.kind === 'adapter') { it.slots = it.slots || []; let n = 0; while (it.slots.length < it.lvl) { it.slots.push(null); n++; } return 0; }     // an adapter's sockets: one per level
   const n = gemSlotsFor(it); if (!n && !it.gems) return 0;
   it.gems = it.gems || []; let added = 0;
   while (it.gems.length < n) { it.gems.push(null); added++; }
@@ -938,7 +953,8 @@ function mkItem(kind, type, lvl = 1) {
   const it = { id: nextItemId++, kind, type, lvl: markFor(kind, lvl) };
   if (kind === 'arm') { it.weapon = null; if (ARMS[type] && ARMS[type].wrists === 2) it.weapon2 = null; }
   if (kind === 'block') { it.slots = new Array(BLOCKS[type] && BLOCKS[type].sockets ? BLOCKS[type].sockets.length : 6).fill(null); it.plug = 'bottom'; }
-  if (kind === 'lower') { it.slots = new Array(6).fill(null); it.plug = 'bottom'; }      // only the top slot is used: the upper half
+  if (kind === 'lower') { it.slots = new Array(6).fill(null); it.plug = 'bottom'; }
+  if (kind === 'adapter') { it.maxLvl = 2; it.slots = new Array(it.lvl).fill(null); }      // only the top slot is used: the upper half
   syncGemSlots(it);
   return it;
 }
@@ -989,6 +1005,8 @@ const PART_ICONS = {
   'module:blades': '<circle cx="12" cy="12" r="2.6"/><path d="M12 .5l2.6 9.3-2.6.9zM23.5 12l-9.3 2.6-.9-2.6zM12 23.5l-2.6-9.3 2.6-.9zM.5 12l9.3-2.6.9 2.6z"/>',
   'module:pods': '<path d="M2 14h20v8H2z"/><path d="M4.5 6L7 2l2.5 4v7h-5zM9.5 6L12 2l2.5 4v7h-5zM14.5 6L17 2l2.5 4v7h-5z"/>',
   'module:pogo': '<path d="M5 1h14v3H5z"/><path d="M6 6h12v1.8H6zM6 9.4h12v1.8H6zM6 12.8h12v1.8H6z"/><path d="M10.8 15h2.4v4h-2.4z"/><path d="M4 19h16a2 2 0 0 1 0 4H4a2 2 0 0 1 0-4z"/>',
+  'adapter:arm2mod': '<circle cx="5" cy="12" r="3.2"/><path d="M8 10.5h5v3H8z"/><path d="M14 6h8v12h-8z"/>',
+  'adapter:mod2arm': '<path d="M2 6h8v12H2z"/><path d="M11 10.5h5v3h-5z"/><circle cx="19" cy="12" r="3.2"/>',
   'gem': '<path d="M6 2.5h12l4.5 6.5L12 22 1.5 9z"/><path d="M1.5 9h21M8.5 2.5L12 9l3.5-6.5M12 9v13" stroke="rgba(0,0,0,.35)" stroke-width="1" fill="none"/>',
 };
 function partIcon(it, cls = 'picon') {
@@ -1021,11 +1039,12 @@ function upgradeItem(it, by = 1) {
 }
 /* Same kind, same type, same level, below the cap: the rule for merging two parts. */
 const sameLevelPair = (a, b) => !!a && !!b && a !== b && a.kind === b.kind && a.type === b.type && (a.lvl || 1) === (b.lvl || 1);
-const DEFS = { lower: () => LOWERS, leg: () => LEGS, arm: () => ARMS, weapon: () => WEAPONS, module: () => MODULES, block: () => BLOCKS, gem: () => GEMS };
+const DEFS = { adapter: () => ADAPTERS, lower: () => LOWERS, leg: () => LEGS, arm: () => ARMS, weapon: () => WEAPONS, module: () => MODULES, block: () => BLOCKS, gem: () => GEMS };
 function itemDef(it) { return DEFS[it.kind]()[it.type]; }
 function itemName(it) { return itemDef(it).name + (it.kind === 'gem' ? ' ' + ROMAN[it.lvl || 1] : ''); }
-const KIND_LABEL = { lower: 'Lower half', leg: 'Leg', arm: 'Arm', weapon: 'Weapon', module: 'Module', block: 'Block', gem: 'Gem' };
+const KIND_LABEL = { adapter: 'Adapter', lower: 'Lower half', leg: 'Leg', arm: 'Arm', weapon: 'Weapon', module: 'Module', block: 'Block', gem: 'Gem' };
 function itemSub(it) {
+  if (it.kind === 'adapter') return 'Adapter';
   if (it.kind === 'gem') return 'Gem';
   if (it.kind === 'lower') return 'Lower half';
   if (it.kind === 'block' && BLOCKS[it.type].upper) return 'Upper half';
@@ -1058,6 +1077,7 @@ function partInfo(it) {
 }
 function partInfoBase(it) {
   const d = itemDef(it), L1 = it.lvl - 1;
+  if (it.kind === 'adapter') return [['Plugs into', `${d.from} socket`], ['Holds', `${d.to}s`], ['Sockets', `${it.lvl}/2`], ['Weight', `${partMass(it).toFixed(2)} t`]];
   if (it.kind === 'lower') {
     const lg = mkItem('leg', d.legType, 1), Ld = LEGS[d.legType], n = d.mounts.length;
     return [['Legs', `${n} × ${Ld.name.replace(/ Legs?$/, '')}`], ['Health', `+${d.hp}`], ['Run speed', `${(legSpeed(lg) * 2).toFixed(1)} m/s`], ['Jump', `${legJump(lg).toFixed(1)} m`], ['Carries', `${(legCarry(lg) * n).toFixed(1)} t`],

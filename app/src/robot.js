@@ -342,6 +342,7 @@ function buildPart(item, out, reg) {
   if (item.kind === 'lower') buildLower(g, item, out, reg);
   else if (item.kind === 'block' && BLOCKS[item.type].upper) buildUpper(g, item, out, reg);
   else if (item.kind === 'block') buildBlock(g, item, out, reg);
+  else if (item.kind === 'adapter') buildAdapter(g, item, out, reg);
   else {
     const res = (def.model ? def.model(g, { lvl: item.lvl, out, item }) : null) || {};
     if (res.ik) { g.userData.ik = res.ik; res.ik.restV = new THREE.Vector3().fromArray(res.ik.rest); if (res.ik.hint) res.ik.hintV = new THREE.Vector3().fromArray(res.ik.hint).normalize(); legPose(res.ik, res.ik.restV); }
@@ -361,8 +362,11 @@ function buildPart(item, out, reg) {
       // modules with gem slots carry them on top
       g.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(g), cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2;
       item.gems.forEach((gm, i) => {
-        const gb = makeBlock(0.17, 0.08, 0.17, COL.dark, [{ face: 'top', r: 0.06 }]);
-        gb.group.position.set(cx + (i - (item.gems.length - 1) / 2) * 0.22, bb.max.y + 0.03, cz); g.add(gb.group);
+        const gs = res.gemSock;       // a module can name its own socket spot (the Missile Pod: its rear face)
+        const side = gs && gs.face === 'right';
+        const gb = gs ? makeBlock(side ? 0.08 : 0.17, 0.17, side ? 0.17 : 0.08, COL.dark, [{ face: gs.face, r: 0.06 }]) : makeBlock(0.17, 0.08, 0.17, COL.dark, [{ face: 'top', r: 0.06 }]);
+        if (gs) gb.group.position.set(gs.pos[0], gs.pos[1] + i * 0.2, gs.pos[2]); else gb.group.position.set(cx + (i - (item.gems.length - 1) / 2) * 0.22, bb.max.y + 0.03, cz);
+        g.add(gb.group);
         const ga = gb.anchors[0], gref = { owner: item, key: 'gems', i };
         if (reg) reg.sockets.push({ ref: gref, anchor: ga });
         if (gm) mount(ga, gm, gref, reg);
@@ -640,6 +644,30 @@ function buildLower(g, item, out, reg) {
   const ti = FACE_ORDER.indexOf('top'), tref = { owner: item, key: 'slots', i: ti };
   if (reg) reg.sockets.push({ ref: tref, anchor: T.a });
   if (item.slots[ti]) mount(T.a, item.slots[ti], tref, reg);
+}
+/* An adapter: a small housing that plugs into a torso socket and carries 1 (L1) or 2 (L2) sockets of the converted type
+   on its outer face. It is built in the robot's frame like every part, so its own sockets point the way the torso socket does. */
+function buildAdapter(g, item, out, reg) {
+  const A = ADAPTERS[item.type], n = Math.max(1, Math.min(2, item.lvl || 1)), toArm = A.to === 'arm';
+  const o = out.clone().normalize();
+  const lat = Math.abs(o.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+  const xa = lat.clone().cross(o).normalize();
+  const hg = new THREE.Group(); hg.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xa, lat, o)); g.add(hg);
+  const gap = 0.5, H = 0.3, W = 0.42, Hh = W + (n - 1) * gap;
+  hg.add(bx(W, Hh, H, V2_STEEL, 0, 0, H / 2));
+  hg.add(bx(W + 0.04, Hh + 0.04, 0.05, toArm ? 0x3a6ea8 : 0xa8763a, 0, 0, 0.03));       // blue collar for arm sockets it makes, copper for module sockets
+  const fq = hg.quaternion.clone();
+  for (let i = 0; i < n; i++) {
+    const fg = new THREE.Group(); fg.position.set(0, (i - (n - 1) / 2) * gap, H - 0.01); hg.add(fg);
+    fg.add(toArm ? femaleArm() : femaleModule());
+    const len = toArm ? ARM_LEN : MOD_LEN, a = new THREE.Object3D(); a.position.z = len; fg.add(a);
+    const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ color: ORANGE, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+    halo.scale.setScalar(toArm ? 0.16 : 0.17); halo.position.z = (toArm ? RING.T : BOXC.T) + 0.01; halo.visible = false; fg.add(halo);
+    a.userData = { fq: fq.clone(), out: o.clone(), halo, r: 0.2, accepts: A.to };
+    const ref = { owner: item, key: 'slots', i };
+    if (reg) reg.sockets.push({ ref, anchor: a });
+    if (item.slots[i]) mount(a, item.slots[i], ref, reg);
+  }
 }
 /* The torso: Luke's hull with the socket inserts removed, and his ring / square-recess connectors on its sockets. */
 function buildUpper(g, item, out, reg) {

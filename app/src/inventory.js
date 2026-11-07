@@ -34,7 +34,8 @@ function refAccepts(r, it) {
     if (r.key === 'slots') {
       const o = r.owner;
       if (o.kind === 'lower') return it.kind === 'block' && !!BLOCKS[it.type].upper && r.i === FACE_ORDER.indexOf('top');
-      if (o.kind === 'block' && BLOCKS[o.type].upper) return it.kind === BLOCKS[o.type].sockets[r.i].accepts;
+      if (o.kind === 'block' && BLOCKS[o.type].upper) { const want = BLOCKS[o.type].sockets[r.i].accepts; return it.kind === want || (it.kind === 'adapter' && ADAPTERS[it.type].from === want); }
+      if (o.kind === 'adapter') return it.kind === ADAPTERS[o.type].to;           // adapters hold only their own kind of part, never another adapter
       return it.kind !== 'lower' && !(it.kind === 'block' && BLOCKS[it.type].upper);     // an old brick from a save still works
     }
     return false;
@@ -47,13 +48,18 @@ function refAccepts(r, it) {
   if (r.key === 'slots') return true;          // block holes take anything: legs, arms, weapons, modules, more blocks
   return false;
 }
-const COMBINABLE = ['leg', 'arm', 'weapon', 'module', 'lower'];
+const COMBINABLE = ['leg', 'arm', 'weapon', 'module', 'lower', 'adapter'];
 /* Two parts merge when they are the same kind and type AND the same level, below the cap (L1+L1 -> L2 ... L4+L4 -> L5). */
 const canCombine = (a, b) => sameLevelPair(a, b) && (COMBINABLE.includes(a.kind) || a.kind === 'gem' || (a.kind === 'block' && BLOCKS[a.type].upgradable)) && upgradeCheck(a).ok;
 function combineInto(t, h) {
   if (!canCombine(t, h)) return h;              // refused: nothing changes and the duplicate is handed back
   const r = upgradeItem(t, 1); if (!r.ok) return h;
   if (t.kind === 'gem') return null;
+  if (h.kind === 'adapter') {                      // the duplicate's contents move into the new free sockets (both adapters hold at most one each)
+    let left = null;
+    for (const c of (h.slots || [])) if (c) { const k = t.slots.indexOf(null); if (k >= 0) t.slots[k] = c; else left = c; }
+    return left;
+  }
   // the duplicate's gems fill empty gem slots; the rest go to storage
   for (const gm of armGems(h)) { const k = (t.gems || []).indexOf(null); if (k >= 0) t.gems[k] = gm; else storePut(gm); }
   if (h.kind === 'arm') {
@@ -218,6 +224,7 @@ const ICONS = {
 /* Hangar stock with developer mode off: what you can pick and how many of each kind */
 const HANGAR_RULES = BUILD_V2 ? {
   lower:  { max: 1 },
+  adapter: { max: 0 },
   block:  { max: 1, types: ['upper_scout', 'upper_brawler', 'upper_carrier'] },
   leg:    { max: 0 },
   arm:    { max: 2, types: ['basic', 'sentry'] },
@@ -225,6 +232,7 @@ const HANGAR_RULES = BUILD_V2 ? {
   module: { max: 0 },
   gem:    { max: 0 },
 } : {
+  adapter: { max: 0 },
   block:  { max: 2, types: ['body'] },
   leg:    { max: 2, types: ['basic'] },
   arm:    { max: 2, types: ['basic', 'sentry'] },
@@ -238,11 +246,11 @@ function hangarCount(kind) {
 }
 const hangarAllows = (k, t) => SETTINGS.dev || ((HANGAR_RULES[k].max > 0) && (!HANGAR_RULES[k].types || HANGAR_RULES[k].types.includes(t)));
 function hangarLeft(k) { return SETTINGS.dev ? Infinity : HANGAR_RULES[k].max - hangarCount(k); }
-const CAT_LABEL = { lower: 'Lower half', block: BUILD_V2 ? 'Torso' : 'Body parts', leg: 'Legs', arm: 'Arms', weapon: 'Weapons', module: 'Modules', gem: 'Gems' };
+const CAT_LABEL = { adapter: 'Adapters', lower: 'Lower half', block: BUILD_V2 ? 'Torso' : 'Body parts', leg: 'Legs', arm: 'Arms', weapon: 'Weapons', module: 'Modules', gem: 'Gems' };
 function catalog() {
   const rows = [];
   if (BUILD_V2) {
-    for (const [kind, table] of [['lower', LOWERS], ['block', BLOCKS], ['arm', ARMS], ['weapon', WEAPONS], ['module', MODULES], ['gem', GEMS]])
+    for (const [kind, table] of [['lower', LOWERS], ['block', BLOCKS], ['arm', ARMS], ['adapter', ADAPTERS], ['weapon', WEAPONS], ['module', MODULES], ['gem', GEMS]])
       for (const t of Object.keys(table)) if (kind !== 'block' || table[t].upper || SETTINGS.dev) rows.push([kind, t]);
     return rows;
   }
@@ -631,6 +639,15 @@ function pullOff(part, x, y) {
     const it = refGet(ref);
     const wp = new THREE.Vector3(); part.getWorldPosition(wp);
     refSet(ref, null);
+    // the lower half comes off on its own: the torso (and everything on it) is set down beside it, nothing is lost
+    if (ref.key === 'body' && it.kind === 'lower') {
+      const ti = FACE_ORDER.indexOf('top'), torso = it.slots[ti];
+      if (torso) {
+        it.slots[ti] = null;
+        const tb = spawnBody(torso, wp.clone().add(new THREE.Vector3(1.6, 1.2, 0.4)), new THREE.Vector3(2.5, 3, 0));
+        tb.state = 'loose';
+      }
+    }
     changed();
     const b = spawnBody(it, new THREE.Vector3(), null, out);
     b.pos.copy(wp).add(b.center).addScaledVector(out, 0.15);

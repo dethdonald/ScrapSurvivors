@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.27.0 · BUILD NOV 6|
+| **Version** | 0.28.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -81,6 +81,17 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ---
 
 ## Change log
+
+### 2026-11-06: 0.28.0 — Chunk 03/16, robot construction and adapters
+- **Adapters** (new item kind `adapter`, table `ADAPTERS` in data.js): `arm2mod` plugs into a torso ARM socket (sphere) and turns it into a MODULE socket; `mod2arm` plugs into a MODULE socket (cube) and turns it into an ARM socket. L1 = 1 socket, L2 = 2 independent sockets in the same original torso socket. `maxLvl = 2`, so `levelCap`/`upgradeItem` refuse above it. Two identical L1 adapters merge into an L2 (contents of both move into the new sockets, nothing lost). Adapters hold only their `to` kind: never another adapter, a gem, a weapon, or the wrong socket type (`refAccepts`). Torso sockets accept the matching adapter as well as their normal kind.
+- Adapter sockets are plain `slots` on the adapter item, so `childrenOf`, `mountedItems`, `allItems`, store, scrap value and stats all see parts inside adapters. Model: `buildAdapter` in robot.js (blue collar = makes arm sockets, copper = makes module sockets); arms on a top-mounted adapter point up (cosmetic).
+- Adapters drop from loot at L1 (weight 0.5, V2 only), appear in the catalog Parts tab, and are hangar-limited to 0 unless dev mode is on (`HANGAR_RULES.adapter`). Discovery key `adapter:<type>` persists in META.disc.
+- **Independent removal:** pulling the lower half off the stand in the workbench (`pullOff`) now sets the torso, with everything attached, down beside it instead of dragging it along; either can be re-mounted. `buildProblems` (lower half, torso, an arm) gates `launchRun`, `closeInventory`, dev test range, and now `newRun()` itself (returns early with a "Needs:" message).
+- **Missile Pod rear gem socket:** pods now name their own gem socket (`gemSock` from the model): rear face of the launcher box (side face when the pod itself is mounted on the back), clear of the missile tubes. Mounting, accepting only gems, and gem effects on the missiles verified.
+- **Spider legs:** `stepLegs` scamper branch: for `spider` legs each claw is staggered up the wall and probes along the wall direction with `groundAt` to plant just short of the surface, with a small grit spark. Other legs unchanged.
+- Save/reload: nothing but settings/meta/custom/layout is persisted. Tested JSON round trip of a torso with adapters, and that `adapter:*` discovery keys survive a page reload.
+- Tests: /tmp t52 (socket rules matrix, construction, merge L1->L2, max cap, no-loss, JSON round trip), t53 (hangar render + lower removal keeps 14/14 items, launch refused while incomplete, re-mount), t54 (pod socket + firing), t55 (spider claw contact), t56 (reload). Regression t50/t51 still pass; no duplicate globals.
+- Not done here (belongs to later chunks): Universal Upgrade Orb for adapters (Chunk 04), Twin spread/Sentry tracking (05). `CFG.unlimitedParts` still on at the user's request.
 
 ### 2026-11-06: 0.27.0 — Chunk 02/16, unified component levelling (user approved AUDIT_01 tables and answers 1-5)
 - Every upgradeable part (weapon, arm, module, lower half, legacy leg, upgradable block, gem) is now **Level 1..5**; level = rarity (L1 Common ... L5 Legendary). `MAX_LVL=5`, `TIER_START=[0,1,2,3,4,5]`, `GEM_MAX=5`.

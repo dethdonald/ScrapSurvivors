@@ -674,6 +674,20 @@ function stepLegs(ud, dt, hs, sliding) {
       const wl = Math.hypot(P.wallX || 0, P.wallZ || 0) || 1, inX = -(P.wallX || 0) / wl, inZ = -(P.wallZ || 0) / wl;
       const ph = S.t * 16 + idx * Math.PI;
       const tgt = rest.clone().add(new THREE.Vector3(inX * 0.45, 0.35 + 0.35 * Math.sin(ph), inZ * 0.45));
+      // spider legs: lightweight procedural wall contact. Each claw is staggered up the wall (3 heights) and probes along the
+      // wall direction to find the real surface, then plants its tip just short of it; planted claws kick a puff of grit.
+      const it = lg.userData.item;
+      if (it && it.type === 'spider') {
+        const y = rest.y + 0.15 + (idx % 3) * 0.28 + 0.22 * Math.sin(ph + idx);
+        let hit = -1;
+        for (let d = 0.15; d <= 1.3; d += 0.08) if (groundAt(rest.x + inX * d, rest.z + inZ * d) >= y - 0.05) { hit = d; break; }
+        if (hit > 0) {
+          tgt.set(rest.x + inX * (hit - 0.04), y, rest.z + inZ * (hit - 0.04));
+          const planted = Math.sin(ph + idx) < -0.6;
+          if (planted && !st.clawHold) { st.clawHold = true; if (Math.random() < 0.5) spark(tgt.clone(), 0xb9b0a0); }
+          else if (!planted) st.clawHold = false;
+        }
+      }
       st.foot.lerp(tgt, 1 - Math.exp(-dt * 25)); st.t = 1;
     } else if (!P.onGround || sliding || S.mode === 'drop' || lg.userData.dangle) {
       // airborne: legs hang under the body and swing a little
