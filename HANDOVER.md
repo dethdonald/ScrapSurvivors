@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.42.0 · BUILD NOV 6|
+| **Version** | 0.42.1 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -154,6 +154,9 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ### 2026-11-07: 0.42.0 3D title logo + hangar merge fix
 - **3D title logo (logo3d.js, logodata.js).** The new logo model replaces the text logo on the title screen (the old h1 stays invisible only to hold the layout). It turns very slowly. Click a piece 5 times and it drops off with physics (private Rapier world, ballistic fallback), lies for 10 s, then flies back. 15 clicks in total drop every piece still on. The count restarts once everything is home. Source model in art/, packed by tools/logo_pack.py (regenerate logodata.js with it).
 - **Hangar merge fix.** The hangar stock limit (2 weapons/arms) counted merged parts, so after one merge you were stuck at L2. Only Lv 1 parts now use up stock, so merges can continue up the levels. `hangarCount` in inventory.js; tighten there if you want a hangar level cap.
+
+### 2026-11-07: 0.42.1 merge rule: any level
+- **Merging is no longer same-level only** (user decision). Two parts of the same kind and type merge at any levels into one level above the higher of the two (L2 + L1 -> L3, L4 + L1 -> L5), never past the cap. `canCombine` / `combineInto` in inventory.js (`sameTypePair`, `higherOf`). Applies everywhere: hangar, storage, auto-upgrade, gems. `sameLevelPair` in data.js is no longer used by merging. The hangar stock limit still counts only Lv 1 parts, so a hangar part can be pushed to L5.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.

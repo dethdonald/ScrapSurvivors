@@ -49,10 +49,14 @@ function refAccepts(r, it) {
   return false;
 }
 const COMBINABLE = ['leg', 'arm', 'weapon', 'module', 'lower', 'adapter'];
-/* Two parts merge when they are the same kind and type AND the same level, below the cap (L1+L1 -> L2 ... L4+L4 -> L5). */
-const canCombine = (a, b) => sameLevelPair(a, b) && (COMBINABLE.includes(a.kind) || a.kind === 'gem' || (a.kind === 'block' && BLOCKS[a.type].upgradable)) && upgradeCheck(a).ok;
+/* Two parts merge when they are the same kind and type, at ANY levels: the result is one level above the higher of the two
+   (L2 + L1 -> L3, L1 + L1 -> L2), never past the cap. (0.42.1: was same-level only.) */
+const sameTypePair = (a, b) => !!a && !!b && a !== b && a.kind === b.kind && a.type === b.type;
+const higherOf = (a, b) => ((b.lvl || 1) > (a.lvl || 1) ? b : a);
+const canCombine = (a, b) => sameTypePair(a, b) && (COMBINABLE.includes(a.kind) || a.kind === 'gem' || (a.kind === 'block' && BLOCKS[a.type].upgradable)) && upgradeCheck(higherOf(a, b)).ok;
 function combineInto(t, h) {
   if (!canCombine(t, h)) return h;              // refused: nothing changes and the duplicate is handed back
+  if ((h.lvl || 1) > (t.lvl || 1)) t.lvl = h.lvl;   // the target takes the higher level first, then goes up one
   const r = upgradeItem(t, 1); if (!r.ok) return h;
   if (t.kind === 'gem') return null;
   if (h.kind === 'adapter') {                      // the duplicate's contents move into the new free sockets (both adapters hold at most one each)

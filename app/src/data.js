@@ -27,7 +27,7 @@ function rollRarity(luck = 0) {
 }
 /* Every upgradeable part runs Level 1..5, and the level IS the rarity:
    L1 Common, L2 Uncommon, L3 Rare, L4 Epic, L5 Legendary.
-   A dropped part arrives at its rolled rarity's level. Two identical parts of the same level merge into one of the next level
+   A dropped part arrives at its rolled rarity's level. Two identical parts (any levels) merge into one a level above the higher of the two
    (L1+L1 -> L2 ... L4+L4 -> L5). There is no usage experience on parts; only the player earns XP.
    The balance tables were tuned on the old 1..100 scale, so stat formulas are still written for that scale: LEGACY_LV maps a
    level 1..5 onto the formula level it is evaluated at (see wrapLevelStats). */
