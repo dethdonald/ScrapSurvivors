@@ -63,10 +63,26 @@ addEventListener('mousemove', e => {
 });
 
 let ownUnlock = false;
-function lockPointer() { try { const p = canvas.requestPointerLock && canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
-function unlockPointer() { if (document.pointerLockElement) { ownUnlock = true; document.exitPointerLock(); } mouseFire = false; }
+/* Pointer lock is asynchronous: a request made just before a menu opens (e.g. the last card of one level-up, then the
+   next level-up opens at once) could be granted AFTER the menu was up, which hid the cursor and swallowed the clicks.
+   LOCK_WANT tracks whether the game wants the mouse captured right now; a lock that arrives when it doesn't is let go at once. */
+let LOCK_WANT = false;
+const NO_CAPTURE = new Set(['levelup', 'perk', 'pause', 'over', 'shop', 'terminal', 'roulette', 'wcase', 'devpanel', 'catalog']);
+function lockPointer() {
+  if (NO_CAPTURE.has(S.mode)) return;                              // a menu is up: never grab the mouse
+  if (S.mode === 'play' && S.pendingLv > 0) return;                  // a queued level-up opens on the very next step: don't grab the mouse just to let go of it
+  LOCK_WANT = true;
+  try { const p = canvas.requestPointerLock && canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+}
+function unlockPointer() {
+  LOCK_WANT = false; mouseFire = false; mouseLook = false; mouseZoom = false;
+  if (document.pointerLockElement) { ownUnlock = true; document.exitPointerLock(); }
+  const a = document.activeElement; if (a && a !== document.body && a.blur && !a.classList.contains('nav')) a.blur();
+}
 document.addEventListener('pointerlockchange', () => {
-  if (!document.pointerLockElement) { if (!ownUnlock && playing()) openPause(); ownUnlock = false; }
+  if (!document.pointerLockElement) { if (!ownUnlock && playing()) openPause(); ownUnlock = false; return; }
+  // locked: is that still wanted? (a menu may have opened while the request was in flight)
+  if (!LOCK_WANT || NO_CAPTURE.has(S.mode)) { ownUnlock = true; document.exitPointerLock(); }
 });
 
 /* Gamepad */

@@ -430,6 +430,7 @@ function enemySteer(e, dx, dz, hd) {
 /* far-off enemies (past LOD_FAR, not bosses) think every other step with twice the time step: nobody can tell at that range */
 let LOD_FAR = 50;
 function updateEnemies(dtAll) {
+  cullTick();
   const pp = player.pos, hold = S.test && DEV.hold ? 0 : 1;     // test range: enemies can be told to stand still
   for (const e of enemies) {
     let dt = dtAll;
@@ -595,11 +596,15 @@ function collidePair(a, b, pass) {
 function collideEnemies(dt) {
   const list = CG.list; list.length = 0; const big = CG.big; big.length = 0;
   for (const e of enemies) if (!e.dead) { e.shoved = false; list.push(e); if (e.r > 1.2) big.push(e); }
-  for (let pass = 0; pass < 2; pass++) {
+  /* A crowd of hundreds is where this gets expensive (it was ~40% of a step with 600 enemies), so: a thick crowd gets one
+     relaxation pass instead of two, and enemies far from you only collide every other step (nobody can tell at that range). */
+  const passes = list.length > 300 ? 1 : 2, skipFar = list.length > 150 && ((CG.tick = (CG.tick | 0) ^ 1) === 1), pp0 = player.pos;
+  for (let pass = 0; pass < passes; pass++) {
     cgBuild(list);
     const n = CG.n, head = CG.head, next = CG.next;
     for (let i = 0; i < list.length; i++) {
       const a = list[i]; if (a.r > 1.2) continue;
+      if (skipFar && (a.pos.x - pp0.x) ** 2 + (a.pos.z - pp0.z) ** 2 > LOD_FAR * LOD_FAR) continue;
       const ci = clamp(Math.floor((a.pos.x + HALF) / CG.cell) + 1, 0, n - 1), cj = clamp(Math.floor((a.pos.z + HALF) / CG.cell) + 1, 0, n - 1);
       for (let dj = -1; dj <= 1; dj++) {
         const jj = cj + dj; if (jj < 0 || jj >= n) continue;
@@ -961,7 +966,7 @@ function comboBoom(s, p, r) {
   const cb = s.attrs && s.attrs.combo; if (!cb) return;
   if (cb === 'explode+split') {
     const keep = CUR_ATTRS, src = DMG_SRC; CUR_ATTRS = new Map(); DMG_SRC = s.src;
-    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; bullet(p.clone(), p.clone().add(new THREE.Vector3(Math.cos(a), 0.15, Math.sin(a))), 34, s.dmg * 0.25, { life: 0.35, child: true, manual: s.manual }); shots[shots.length - 1].mesh.scale.setScalar(0.6); }
+    for (let i = 0, nn = shotRoom(6); i < nn; i++) { const a = i / nn * Math.PI * 2; bullet(p.clone(), p.clone().add(new THREE.Vector3(Math.cos(a), 0.15, Math.sin(a))), 34, s.dmg * 0.25, { life: 0.35, child: true, manual: s.manual }); shots[shots.length - 1].mesh.scale.setScalar(0.6); }
     CUR_ATTRS = keep; DMG_SRC = src;
   }
   if (cb === 'explode+fire') for (let i = 0; i < 4; i++) groundPatch(p.clone().add(new THREE.Vector3(rand(-r, r), 0, rand(-r, r))), 'fire', 3, 1, s.src);
@@ -1064,8 +1069,13 @@ function legGemTick(dt) {
   for (let i = legTrail.length - 1; i >= 0; i--) if (legTrail[i].life <= 0) { scene.remove(legTrail[i].m); legTrail[i].m.material.dispose(); legTrail.splice(i, 1); }
 }
 function clearLegTrail() { clearGemFx(); legTrail.forEach(t => { scene.remove(t.m); t.m.material.dispose(); }); legTrail.length = 0; }
+/* Projectile budget: split and burst shots multiply, and a fast gun with Split + Homing put 1,500 shots in the air (57 ms a step).
+   Past SHOT_SOFT the bursts get smaller, past SHOT_HARD they stop (the parent just keeps flying as one shot). The damage stays shared out among what actually spawns. */
+const SHOT_SOFT = 160, SHOT_HARD = 280;
+const shotRoom = n => shots.length >= SHOT_HARD ? 0 : shots.length >= SHOT_SOFT ? Math.max(1, Math.ceil(n / 3)) : n;
 function homingSplit(s) {
-  const tier = (s.attrs && s.attrs.get && s.attrs.get('homing')) || 1, n = s.pod ? 2 : 2 + tier + (s.combo === 'homing+split' ? 2 : 0);
+  const tier = (s.attrs && s.attrs.get && s.attrs.get('homing')) || 1, want = s.pod ? 2 : 2 + tier + (s.combo === 'homing+split' ? 2 : 0), n = shotRoom(want);
+  if (n < 2) { s.child = true; return; }                          // no room: carry on as a single homing shot
   // the original target first, then the enemies nearest to it
   const tg = [s.target], seen = new Set(tg);
   while (tg.length < n) { const e = nearestEnemy(aimPt(s.target), 12, seen); if (!e) break; tg.push(e); seen.add(e); }
@@ -1187,7 +1197,19 @@ function damage(e, amt, manual) {
   if (manual) { hitMarker(); sfx('hit', 0.3); }
   if (e.hp <= 0) killEnemy(e);
 }
+/* Pickup budget: shards and bolts nobody collected used to pile up without limit (600+ separate meshes after a few minutes). Past GEM_CAP a new
+   one is folded into the nearest loose one of its kind (the value is kept, it just grows) instead of becoming another mesh. */
+const GEM_CAP = 220, GEM_N = { xp: 0, bolt: 0 };
+function foldGem(kind, p, val) {
+  let best = null, bd = 1e9;
+  for (const g of gems) if (g.kind === kind && !g.pull && !g.float && !g.sky && !g.done) { const d = (g.pos.x - p.x) ** 2 + (g.pos.z - p.z) ** 2; if (d < bd) { bd = d; best = g; } }
+  if (!best) return false;
+  best.val += val; best.mesh.scale.setScalar(Math.min(2.2, 1 + Math.log2(1 + best.val / (kind === 'xp' ? 2 : 4)) * 0.25));
+  if (kind === 'xp') best.mesh.material = B(COL.amber);
+  return true;
+}
 function dropGem(p, val) {
+  if (GEM_N.xp >= GEM_CAP && foldGem('xp', p, val)) return;
   const big = val >= 3;
   const m = new THREE.Mesh(geoGem, B(big ? COL.amber : COL.cyan)); if (big) m.scale.setScalar(1.4);
   const pos = new THREE.Vector3(p.x + rand(-.6, .6), p.y + 1, p.z + rand(-.6, .6)); m.position.copy(pos); scene.add(m);
@@ -1306,6 +1328,7 @@ function nukeTick(dt) {
 }
 /* Bolts: the currency. Gold hex nuts, rarer than experience. */
 function dropBolt(p, val) {
+  if (GEM_N.bolt >= GEM_CAP && foldGem('bolt', p, val)) return;
   const m = new THREE.Mesh(geoBolt, M(0xe8c35a, 0x6a4a10));
   const pos = new THREE.Vector3(p.x + rand(-.6, .6), p.y + 1, p.z + rand(-.6, .6)); m.position.copy(pos); scene.add(m);
   gems.push({ kind: 'bolt', mesh: m, pos, vel: new THREE.Vector3(rand(-3, 3), rand(6, 9), rand(-3, 3)), val, pull: false });
@@ -1333,9 +1356,13 @@ function makeHealthBar() {
   g.renderOrder = 10; scene.add(g);
   return g;
 }
+const CULL = { q: [] }, CULL_PER_STEP = 12;
+function cullTick() { const q = CULL.q; if (!q.length) return; for (let n = 0; n < CULL_PER_STEP && q.length; n++) { const o = q.pop(); if (!o.dead) killEnemy(o); } }
 function onBossDown(e) {
   S.bossDead = true; S.boss = null; $('#bossbar').hidden = true; cam.shake = 1;
-  enemies.forEach(o => { if (o !== e && !o.dead) killEnemy(o); });
+  // the swarm falls with its boss, but not all in one call: 600 kills at once (particles, drops, sounds, gem effects) froze the game for seconds.
+  // They go down in a quick wave, CULL_PER_STEP a step, harmless meanwhile.
+  CULL.q = enemies.filter(o => o !== e && !o.dead); CULL.q.forEach(o => { o.dmg = 0; o.noSpawn = true; });
   for (let i = 0; i < 10; i++) dropGem(e.pos, 3);
   if (!S.gate) placeGate(e.pos.x, e.pos.z);
   setGateState('exit');
@@ -1818,9 +1845,12 @@ function updateShots_(dt) {
     }
     if (hitTargets(s)) continue;
     if (props.length && propsHitShot(s)) { if (s.pierce > 0) s.pierce--; else { s.life = 0; continue; } }
+    const reach = Math.hypot(s.pos.x - s.last.x, s.pos.y - s.last.y, s.pos.z - s.last.z);
     for (const e of enemies) {
       if (e.dead || s.hit.has(e)) continue;
-      const rr = s.r + e.r + (e.boss ? 1.6 : 0);
+      const rr = s.r + e.r + (e.boss ? 1.6 : 0), lim = rr + reach;
+      if (Math.abs(e.pos.x - s.pos.x) > lim && Math.abs(e.pos.x - s.last.x) > lim) continue;        // cheap reject: far from the shot's path (x/z only; the aim point shares the enemy's x/z)
+      if (Math.abs(e.pos.z - s.pos.z) > lim && Math.abs(e.pos.z - s.last.z) > lim) continue;
       if (segDist2(s.last, s.pos, aimPtT(e)) < rr * rr) {
         if (s.explode) { if (s.rocket && !s.pod) wfxRocketBoom(s.pos, s.explode); const k0 = S.kills, pl = s.attrs && s.attrs.combo === 'explode+poison' ? poisonedNear(s.pos, s.explode) : null; explode(s.pos, s.explode, s.dmg, s.manual, s.selfHurt); blastAttrs(s); if (s.attrs && s.attrs.combo) comboBoomGem(s, s.pos, s.explode, k0, pl); s.life = 0; break; }
         const wasAlive = !e.dead;
@@ -1962,15 +1992,16 @@ function updatePickRing(on, dt) {
   pickRing.rotation.y += dt * 0.8;
   pickRing.userData.ring.material.opacity = 0.16 + 0.06 * Math.sin(performance.now() / 260);
 }
+const _gv = new THREE.Vector3(), _gc = new THREE.Vector3();
 function updateGems(dt) {
-  const c = new THREE.Vector3(player.pos.x, player.pos.y + 1.3, player.pos.z);
+  const c = _gc.set(player.pos.x, player.pos.y + 1.3, player.pos.z);
   for (const g of gems) {
     const d = g.pos.distanceTo(c);
     if (g.float) {
       // magnet: rise and hang, then glide in from above
       const F = g.float; F.t += dt;
       if (F.t < F.delay) { g.pos.y += (F.y0 + F.lift - g.pos.y) * Math.min(1, dt * 2.2); g.pos.x += Math.sin(F.t * 3 + F.ph) * dt * 0.3; g.mesh.position.copy(g.pos); g.mesh.rotation.y += dt * 2; continue; }
-      const above = c.clone().add(new THREE.Vector3(0, Math.max(0, 6 - (F.t - F.delay) * 5), 0)), v = above.sub(g.pos), L = v.length();
+      const v = _gv.copy(c); v.y += Math.max(0, 6 - (F.t - F.delay) * 5); v.sub(g.pos); const L = v.length();
       const sp = Math.min(30, 6 + (F.t - F.delay) * 14);
       g.pos.addScaledVector(v.divideScalar(L || 1), Math.min(L, sp * dt));
       if (d < 1.4) { g.float = null; g.pull = true; }
@@ -1981,11 +2012,11 @@ function updateGems(dt) {
       // falling: the bolt eases in (faster the closer it gets), shrinking, with a thin stream of motes ahead of it
       g.pullT = (g.pullT || 0) + dt;
       const sp = (g.ringPull ? 26 : 14) + g.pullT * 40 + Math.max(0, 10 - d) * 3;
-      g.pos.addScaledVector(c.clone().sub(g.pos).normalize(), Math.min(d, sp * dt));
+      g.pos.addScaledVector(_gv.copy(c).sub(g.pos).normalize(), Math.min(d, sp * dt));
       if (!g.s0) g.s0 = g.mesh.scale.x;
       g.mesh.scale.setScalar(g.s0 * clamp(d / 4, 0.35, 1));
       if (Math.random() < dt * 22) suckMote(g.pos, c);
-    } else if (g.pull) g.pos.addScaledVector(c.clone().sub(g.pos).normalize(), Math.min(d, Math.max(g.vac ? 30 + d * 0.8 : 16, 34 - d) * dt));
+    } else if (g.pull) g.pos.addScaledVector(_gv.copy(c).sub(g.pos).normalize(), Math.min(d, Math.max(g.vac ? 30 + d * 0.8 : 16, 34 - d) * dt));
     else if (g.sky) g.pos.y += Math.sin(performance.now() / 300 + g.pos.x) * 0.01;
     else {
       g.vel.y -= 30 * dt; g.pos.addScaledVector(g.vel, dt);
@@ -2011,7 +2042,8 @@ function updateGems(dt) {
       else pickUpLoot(g.item);
     }
   }
-  gems = gems.filter(g => { if (g.done) { scene.remove(g.mesh); return false; } return true; });
+  GEM_N.xp = GEM_N.bolt = 0;
+  gems = gems.filter(g => { if (g.done) { scene.remove(g.mesh); return false; } if (g.kind === 'xp') GEM_N.xp++; else if (g.kind === 'bolt') GEM_N.bolt++; return true; });
 }
 function pickUpLoot(it) {
   const stored = receiveItem(it);
@@ -2025,8 +2057,12 @@ function gainXp(v) {
 }
 
 /* ---------- effects ---------- */
+/* decoration budget: sparks, dust and lightning arcs are skipped once this many effects are alive (orbit + lightning put 20,000 on screen) */
+const FX_MAX = 2500;
+const fxRoom = () => fx.length < FX_MAX;
 function addFx(obj, life, upd) { scene.add(obj); fx.push({ obj, life, max: life, upd, own: obj.material && !isSharedMat(obj.material) }); }
 function spark(p, color) {
+  if (!fxRoom()) return;
   const m = new THREE.Mesh(geoBox, B(color)); m.scale.setScalar(0.22); m.position.copy(p);
   const v = new THREE.Vector3(rand(-4, 4), rand(2, 6), rand(-4, 4));
   addFx(m, 0.25, (f, dt) => { f.obj.position.addScaledVector(v, dt); f.obj.scale.setScalar(0.22 * f.life / f.max); });
@@ -2053,6 +2089,7 @@ function burst(p, color, n) {
   }
 }
 function dust(p, n) {
+  if (!fxRoom()) return;
   for (let i = 0; i < n; i++) {
     const m = new THREE.Mesh(geoBox, M(0x8a8270)), s = rand(0.15, 0.3); m.scale.setScalar(s); m.position.set(p.x + rand(-.5, .5), p.y + 0.1, p.z + rand(-.5, .5));
     const v = new THREE.Vector3(rand(-3, 3), rand(1, 3), rand(-3, 3));
@@ -2088,6 +2125,7 @@ function arcMats() {
 }
 const _au = new THREE.Vector3(0, 0, 1);
 function arcSeg(a, b, w, mat, life) {
+  if (!fxRoom()) return;
   const d = b.clone().sub(a), L = d.length(); if (L < 1e-3) return;
   const m = new THREE.Mesh(geoBox, mat);
   m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(_au, d.divideScalar(L)); m.scale.set(w, w, L);

@@ -918,18 +918,44 @@ const sfxGap = { tink: 0.04, squeak: 0.035, hurt: 0.09,  flame: 0.07, roar: 0.1,
 const sfxLast = {};
 const GUN_LAYERS = { pistol: { crack: 0.8, thump: 0.5 }, autogun: { crack: 0.6, thump: 0.35 }, shotgun: { crack: 1, thump: 1.1 }, sniper: { crack: 1.2, thump: 1.2 }, rocket: { crack: 0.5, thump: 0.9 }, zap: { crack: 0.5, thump: 0.25 } };
 const TAILS = { boom: 1, shotgun: 0.45, sniper: 0.6, rocket: 0.5, nukefall: 0.4 };
+/* Voice budget: every sound is a handful of audio nodes, and a big fight asks for hundreds a second, which made the
+   mixer stutter and cut out. Each sound now has a priority and a rough length; when too many are alive the cheap,
+   frequent ones (ticks, hits, pickups, footsteps) are dropped first, the important ones (damage, big bangs, level-ups)
+   last, and the three-echo "tail" is only added when the mixer is quiet. */
+const SFX_LOW = new Set(['hit', 'hitL', 'tick', 'xp', 'coin', 'step', 'land', 'squeak', 'tink', 'grab', 'pop', 'chirp', 'autogun', 'snapZ', 'bonk', 'slash', 'swish', 'jet', 'flame', 'slot', 'kill']);
+const SFX_HIGH = new Set(['hurt', 'thoom', 'boom', 'levelup', 'loot', 'jackpot', 'deny', 'nukefall', 'launch', 'whoops', 'roar', 'fwoomp', 'vacuum', 'reloaded']);
+const SFX_CAP = { low: 14, mid: 26, high: 40 }, SFX_LEN = { thoom: 1, boom: 0.9, nukefall: 2.3, whistle: 0.7, hiss: 0.45, vacuum: 1.1, roar: 0.8, jackpot: 0.9 };
+const SFXV = { ends: [], dropped: 0, played: 0, byKind: {} };
 function sfx(kind, vol = 1) {
   if (!actx) return;
   const now = actx.currentTime;
   if (sfxGap[kind] && now - (sfxLast[kind] || 0) < sfxGap[kind]) return;
-  sfxLast[kind] = now;
+  const ends = SFXV.ends; let w = 0; for (let i = 0; i < ends.length; i++) if (ends[i] > now) ends[w++] = ends[i]; ends.length = w;      // forget the finished ones
+  const live = w, cap = SFX_HIGH.has(kind) ? SFX_CAP.high : SFX_LOW.has(kind) ? SFX_CAP.low : SFX_CAP.mid;
+  if (live >= cap) { SFXV.dropped++; return; }
+  sfxLast[kind] = now; ends.push(now + (SFX_LEN[kind] || (TAILS[kind] ? 0.9 : 0.3))); SFXV.played++; SFXV.byKind[kind] = (SFXV.byKind[kind] || 0) + 1;
+  sfxPlay(kind, vol, live);
+}
+/* noise bursts: a few pre-made buffers per length instead of filling a new random one every call */
+const NOISE_BUFS = new Map();
+function sfxNoiseBuf(dur) {
+  const key = Math.round(dur * 1000); let a = NOISE_BUFS.get(key);
+  if (!a) {
+    a = [];
+    for (let v = 0; v < 3; v++) { const buf = actx.createBuffer(1, Math.ceil(actx.sampleRate * dur), actx.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3); a.push(buf); }
+    NOISE_BUFS.set(key, a);
+  }
+  return a[(Math.random() * a.length) | 0];
+}
+function sfxPlay(kind, vol, live) {
+  const now = actx.currentTime;
   try {
     const t = actx.currentTime, out = actx.createGain(); out.gain.value = 0.35 * vol; out.connect(actx.destination);
     // guns: every shot is pitched a touch differently so automatic fire doesn't sound like one sample on repeat
     const gun = GUN_LAYERS[kind], pv = (gun ? 1 + (Math.random() - 0.5) * 0.12 : 1) * (typeof SFX_PITCH === 'number' ? SFX_PITCH : 1);
     // big bangs ring off the arena walls: a couple of darker, later echoes
     const tail = TAILS[kind];
-    if (tail) {
+    if (tail && live < 10) {
       for (const [dl, g] of [[0.16, 0.34 * tail], [0.29, 0.22 * tail], [0.47, 0.12 * tail]]) {
         const d = actx.createDelay(1), lp = actx.createBiquadFilter(), eg = actx.createGain();
         d.delayTime.value = dl * (0.9 + Math.random() * 0.2); lp.type = 'lowpass'; lp.frequency.value = 1100 - dl * 1200; eg.gain.value = g;
@@ -944,8 +970,7 @@ function sfx(kind, vol = 1) {
       o.connect(e); e.connect(out); o.start(t + at); o.stop(t + at + dur + 0.02);
     };
     const noise = (dur, g, hp, at = 0) => {
-      const buf = actx.createBuffer(1, Math.ceil(actx.sampleRate * dur), actx.sampleRate), d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
+      const buf = sfxNoiseBuf(dur);
       const s = actx.createBufferSource(), f = actx.createBiquadFilter(), e = actx.createGain();
       s.buffer = buf; f.type = 'highpass'; f.frequency.value = hp; e.gain.value = g;
       s.connect(f); f.connect(e); e.connect(out); s.start(t + at);

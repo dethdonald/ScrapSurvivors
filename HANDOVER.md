@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.36.0 · BUILD NOV 6|
+| **Version** | 0.37.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -95,6 +95,18 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - **Overtime fire:** clock flames 11→17 with 14 embers, a pulsing glow on the clock box, plus an `#ovfire` layer at the bottom of the screen (14 blurred flame blobs and a red edge glow), all CSS compositor animation, hidden outside overtime.
 - **Movement weight:** non-heavy frames now get a soft `land` thump on hard landings (heavy frames keep `thud`); footsteps already existed.
 - Tested: booth counts on all four walls, no scene leak over repeated stages, head turn, celebration caps (12 hoppers, 5 chirps/s), overtime flags, 55 combos unaffected.
+
+### 0.37.0 — Chunk 12: Stability and performance
+- **Level-up cursor/focus bug (fixed):** pointer lock is asynchronous, so a lock requested just before a queued level-up opened could be granted after the menu was up, hiding the cursor and swallowing clicks. `input.js` now tracks `LOCK_WANT`; a lock that arrives while a menu mode is up (`NO_CAPTURE`) is released at once, `lockPointer()` refuses to grab the mouse in menu modes or with a level-up queued, `unlockPointer()` clears mouse-look/fire/zoom flags and stale focus, and a level-up card ignores a second click (double click / held Enter) and re-arms its lock for the next chained level-up. Tested with three chained level-ups and double-clicks.
+- **Audio slowdown/cutouts:** `sfx()` is now a gate in front of `sfxPlay()`: every sound has a priority (low: hits, ticks, pickups, steps, chirps; mid; high: damage, big bangs, level-ups) and a rough length; when too many are alive low-priority ones are dropped first (caps 14 / 26 / 40 live), and the 3-echo tail is only added when fewer than 10 are alive. Noise bursts use 3 cached buffers per length instead of filling a new random buffer per call. `SFXV` reports played/dropped.
+- **Hordes:** enemy-vs-enemy collision (was ~41% of a step at 600 enemies) now uses one relaxation pass above 300 enemies and collides far enemies (past `LOD_FAR`) every other step: ~30% faster. Shots skip enemies outside their path with a cheap x/z reject before the segment test.
+- **Projectile budget:** Split + Homing (and Explode + Split) could put 1,500 shots in the air (57 ms/step). `shotRoom()`: bursts shrink past 160 live shots and stop past 280 (the parent keeps flying as one shot).
+- **Effect budget:** sparks, dust and lightning arcs are skipped past `FX_MAX` = 2,500 live effects (Orbit + Lightning had 20,000).
+- **Pickup budget:** XP shards and bolts are capped at 220 loose each; extras fold into the nearest loose one (value kept). Gem pulling no longer allocates vectors every frame.
+- **Save migration checked:** old `scrapfall.*` keys, garbage JSON, unknown extra fields, Pogo Spring discovery key removal, `migrateLvl` (75→5, 35→4, 12→3, 6→2), items with out-of-range levels, all 10 gem types create. No errors.
+- **Boss-down mass kill:** killing a boss killed every enemy in one call (300+ enemies = a 3 s freeze here, 11 s in the long run). Survivors now go down in a quick wave, 12 per step (`CULL`/`cullTick`), harmless meanwhile: worst step 3,086 ms → 99 ms.
+- **Measurements** (headless Chromium, SwiftShader, so absolute numbers are pessimistic; compare before→after): 500–600 enemies, plain: 11.0 → 7.1 ms/step; Twin Arm 6.1 → 4.0; Lightning+Lightning 6.2 → 4.0; Poison+Poison 6.8 → 3.3; Lifesteal+Poison 5.3 → 5.8 (noise); Explode+Bounce 9.3 → 7.3; Split+Homing 57 → 20 (shots 1,525 → 420); Fire+Ice 7.7 → 6.3; Orbit+Poison 10.0 → 5.2; boss + 500 horde 6.2 → 4.8. Staged late game (jumps to 0/150/300/450 s, boss at 510 s, overtime from 620 s, then a boss kill): avg 1.6 → 3.4 → 4.4 → 8.2 → 8.0 → 12.5 ms/step with up to 644 enemies; heap flat at 29 MB, scene children stay bounded (390–1,445), no errors. 55 combos still fire cleanly; spectators 0.06 ms.
+- **Remaining issues:** occasional 40–80 ms `updateShots` steps with Lightning + Poison and fast guns (chain arcs); an overtime horde of 640 enemies costs ~12 ms/step here (fine on a real GPU/CPU, still worth a check on your PC); the dupcheck script only catches duplicate functions, so a duplicate top-level `const` slipped in once (caught by the page test). Not touched (visual redesign later): full sound mixing/ducking rework.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.

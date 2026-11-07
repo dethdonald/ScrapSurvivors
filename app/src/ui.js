@@ -310,13 +310,15 @@ function openLevelUp(chained) {
     b.dataset.tip = `${U.name}: +${c.value}${U.unit}`;
     b.innerHTML = upgradeCardHTML(c);
     b.addEventListener('click', () => {
+      if (S.mode !== 'levelup') return;                                   // a double click or a held Enter must not pick twice
       if (performance.now() < S.luLock) { sfx('deny', 0.4); return; }
+      S.luLock = Infinity;                                                // this level-up is decided; the next one re-arms the lock
       $('#levelup').hidden = true;
       L.bonus[c.key] = (L.bonus[c.key] || 0) + c.value;
       const shBefore = stats.maxShield;
       refreshLoadout();
       if (c.key === 'shield') player.shield += stats.maxShield - shBefore;
-      if (S.pendingLv > 0) openLevelUp(true); else { S.mode = 'play'; lockPointer(); }
+      if (S.pendingLv > 0) openLevelUp(true); else { S.mode = 'play'; if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); lockPointer(); }
     });
     wrap.appendChild(b);
   }
