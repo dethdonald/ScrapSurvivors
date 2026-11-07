@@ -1479,7 +1479,7 @@ function fireW(W, c) {
     const P = player, fs = Math.sin(P.legYaw), fc = Math.cos(P.legYaw);
     const fwd = dir.x * fs + dir.z * fc, side = dir.x * fc - dir.z * fs, k = kick * (c.arm ? 0.12 : 0.55);
     P.swayV.x -= fwd * k; P.swayV.y += side * k;
-    if (c.manual) { cam.shake = Math.max(cam.shake, Math.min(0.28, kick * 0.09)); camKick(dir.clone().negate(), Math.min(0.12, kick * 0.03)); }
+    if (c.manual && c.w.type !== 'sniper') { cam.shake = Math.max(cam.shake, Math.min(0.28, kick * 0.09)); camKick(dir.clone().negate(), Math.min(0.12, kick * 0.03)); }
   }
   if (W.casing) ejectCasing(c.o, dir, W.casing);
   if (kick) physRecoil(c.w, dir, kick);

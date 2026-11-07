@@ -107,7 +107,7 @@ function wfxHitEnemy(s, e, wasAlive) {
     if (!e.dead) { knock(e, s.vel.clone().normalize(), 6, 6); e.onGround = false; }
     for (let i = 0; i < 3; i++) spark(c, 0xffe0a0);
   }
-  if (t === 'sniper') { burst(c, 0xfff0d0, 8); impactLight(c, 0.8, 0xfff0d0); if (wasAlive && e.dead) { S.slowT = 0.25; cam.fovPunch = -7; } }
+  if (t === 'sniper') { burst(c, 0xfff0d0, 8); impactLight(c, 0.8, 0xfff0d0); if (wasAlive && e.dead) S.slowT = 0.25; }
   if (t === 'pistol' && wasAlive && e.dead) { for (let i = 0; i < 6; i++) mote(c, WM.pistol, new THREE.Vector3(rand(-2, 2), rand(5, 9), rand(-2, 2)), 0.5, 0.12, 22); }
 }
 function wfxHitGround(s) {

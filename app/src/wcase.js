@@ -14,6 +14,15 @@ const WC = { items: [], spin: [], lock: 0, orbRolled: false };
 const CASE_KIND_ODDS = [['module', 0.14], ['gem', 0.18], ['weapon', 0.50], ['arm', 0.12], ['adapter', 0.06]];
 const CASE_DUP_BIAS = 0.35;           // chance a weapon/arm slot picks one you already have equipped (when you have any)
 const ORB_CHANCE = 0.05;              // evaluated once per case, replaces one of its three choices
+/* a case's weapon level: much stingier than field loot, and scaled by your luck stat.
+   Each step up needs its own roll: the first is 8% at 0 luck (+0.4% per luck, up to 50%), every further one 25% (+0.3% per luck, up to 50%).
+   At 0 luck: ~92% Lv1, ~6% Lv2, ~1.5% Lv3, under 0.5% Lv4-5. Arms always come at Lv1 (they level by merging). */
+function rollCaseLevel() {
+  const luck = Math.max(0, (stats && stats.luck) || 0);
+  const first = Math.min(0.5, 0.08 + luck * 0.004), next = Math.min(0.5, 0.25 + luck * 0.003);
+  let lvl = 1; if (Math.random() < first) { lvl = 2; while (lvl < MAX_LVL && Math.random() < next) lvl++; }
+  return lvl;
+}
 function ownedTypes(kind) { return [...new Set(allItems().filter(o => o.kind === kind).map(o => o.type))]; }
 function rollCasePart() {
   const luck = (stats && stats.luck || 0) + 6;
@@ -24,9 +33,10 @@ function rollCasePart() {
   if (kind === 'adapter') return BUILD_V2 ? rollLootOf(['adapter'], luck) : rollLootOf(['weapon'], luck);
   if ((kind === 'weapon' || kind === 'arm') && Math.random() < CASE_DUP_BIAS) {
     const own = kind === 'weapon' ? mountedWeapons().map(w => w.type) : mountedArms().map(a => a.type);
-    if (own.length) { const t = pick(own), it = mkItem(kind, t, kind === 'arm' ? 1 : TIER_START[rollRarity(luck)]); return it; }
+    if (own.length) return mkItem(kind, pick(own), kind === 'arm' ? 1 : rollCaseLevel());
   }
-  return rollLootOf([kind === 'arm' ? 'arm' : 'weapon'], luck);
+  const it = rollLootOf([kind === 'arm' ? 'arm' : 'weapon'], luck);
+  return kind === 'arm' ? mkItem('arm', it.type, 1) : mkItem('weapon', it.type, rollCaseLevel());
 }
 /* one that isn't already showing in another slot */
 function rollCaseOffer(except = []) {
