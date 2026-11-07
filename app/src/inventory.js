@@ -267,7 +267,7 @@ function partRow(it, attrs, tag) {
   const xp = '';
   void sub;
   const wpn = it.kind === 'weapon', armGunIcons = it.kind === 'arm' ? armGuns(it).map(g => weaponIcon(g.type)).join('') : '';
-  return `<div class="prow${wpn ? ' wrow' : ''}" ${attrs}><i>${icon}</i><span><b>${itemName(it)} ${it.kind === 'gem' || it.kind === 'orb' ? '' : mkTag(it.lvl)} ${attrTag(it)}${armGunIcons ? `<em class="rowguns">${armGunIcons}</em>` : ''}${extra && it.kind !== 'arm' ? `<em class="rowx">+${extra}</em>` : ''}</b>${xp}</span>${it.autoUp ? '<span class="tagS auto">AUTO</span>' : ''}${partTags(it)}${tag ? `<span class="tagS">${tag}</span>` : ''}</div>`;
+  return `<div class="prow${wpn ? ' wrow' : ''}" ${attrs}><i>${icon}</i><span><b>${itemName(it)} ${it.kind === 'gem' || it.kind === 'orb' ? '' : mkTag(it.lvl)} ${attrTag(it)}${armGunIcons ? `<em class="rowguns">${armGunIcons}</em>` : ''}${extra && it.kind !== 'arm' ? `<em class="rowx">+${extra}</em>` : ''}</b>${xp}</span>${it.autoUp ? '<span class="tagS auto">AUTO</span>' : ''}${partTags(it)}${(it.lvl || 1) >= 5 && (it.kind === 'weapon' || (it.kind === 'module' && it.type === 'pods')) && /data-(store|shelf)/.test(attrs) ? '<span class="tagS replay" data-tip="Replay the MK III reveal">MK III ▶</span>' : ''}${tag ? `<span class="tagS">${tag}</span>` : ''}</div>`;
 }
 /* sockets on the frame: how many arm (sphere) and module (cube) sockets the torso has, how many are filled, and any adapters that change a socket's kind */
 function socketSummary() {

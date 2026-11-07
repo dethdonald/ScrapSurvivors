@@ -107,3 +107,23 @@ kbd{border:1px solid var(--frame-dim);background:transparent;color:var(--accent)
 .tagS.own{color:var(--text);border:1px solid var(--frame-dim);background:transparent}
 .tagS.orb{color:#05070a;background:#b45cff}
 .tagS.auto{color:var(--on-accent);background:var(--accent)}
+
+/* ===== MK III reveal (chunk 15) ===== */
+body.cine #game > *:not(canvas):not(#crt):not(#cine){visibility:hidden!important}
+#cine{position:fixed;inset:0;z-index:70;pointer-events:none;font-family:var(--f-mono,monospace);color:#ffe9b0;overflow:hidden}
+#cine .cBar{position:absolute;left:0;right:0;height:9vh;background:#000;transform-origin:top;transition:none}
+#cine .cBar.t{top:0}#cine .cBar.b{bottom:0;transform-origin:bottom}
+#cine .cTitle{position:absolute;left:0;right:0;top:19vh;text-align:center;letter-spacing:.42em;font-size:clamp(12px,1.9vw,26px);color:#ffc24a;text-shadow:0 0 14px #ff9a1a;opacity:0}
+#cine .cApex{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;opacity:0}
+#cine .cApex b{display:block;font-size:clamp(34px,7.4vw,108px);letter-spacing:.14em;color:#fff3cf;text-shadow:0 0 26px #ffb020,0 0 70px #ff8a10,0 4px 0 #8a4a00}
+#cine .cApex em{display:block;margin-top:.6em;font-style:normal;letter-spacing:.5em;font-size:clamp(14px,2.4vw,34px);color:#ffc24a;text-shadow:0 0 8px #000,0 0 18px #000,0 2px 0 #000}
+#cine .cHero{position:absolute;left:4vw;bottom:13vh;min-width:min(440px,86vw);padding:14px 22px 16px;background:rgba(6,8,10,.82);border:1px solid #ffc24a;box-shadow:0 0 30px rgba(255,170,30,.35);opacity:0;text-align:center}
+#cine .cHero h3{margin:0 0 8px;letter-spacing:.3em;font-size:clamp(13px,1.7vw,22px);color:#fff3cf}
+#cine .cRows{display:grid;grid-template-columns:1fr auto;gap:3px 22px;font-size:clamp(11px,1.15vw,15px);text-align:left;margin-bottom:10px}
+#cine .cRows span{color:#9aa4ad;letter-spacing:.12em;text-transform:uppercase}#cine .cRows b{color:#ffe9b0}
+#cine .cHero strong{display:block;letter-spacing:.34em;font-size:clamp(12px,1.5vw,19px);color:#ffc24a;text-shadow:0 0 12px #ff9a1a}
+#cine .cFlash{position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,#fff8e0 0%,#ffd27a 38%,#ff9a1a 100%);opacity:0}
+#cine .cDip{position:absolute;inset:0;background:#000;opacity:1}
+#cine .cSkip{position:absolute;right:3vw;bottom:2.4vh;font-size:11px;letter-spacing:.2em;color:#cdbf94;text-transform:uppercase;opacity:0}
+.tagS.replay{cursor:pointer;color:#ffc24a;border-color:#ffc24a;pointer-events:auto}.tagS.replay:hover{background:#ffc24a;color:#000}
+@media (prefers-reduced-motion:reduce){#cine .cTitle{text-shadow:none}}

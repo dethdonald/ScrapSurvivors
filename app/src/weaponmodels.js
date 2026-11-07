@@ -374,7 +374,7 @@ function weaponModelTick(dt) {
   const up = upgradeItem;
   upgradeItem = function (it, by) {
     const before = it.lvl || 1, c = up.apply(this, arguments);
-    if (c && c.ok && it.kind === 'weapon') {
+    if (c && c.ok && (it.kind === 'weapon' || (it.kind === 'module' && it.type === 'pods'))) {
       const a = wmTier(before), b = wmTier(it.lvl || 1);
       if (b > a) {
         WMOD.pending.set(it, { from: a, to: b, t: performance.now() });

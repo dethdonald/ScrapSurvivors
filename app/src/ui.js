@@ -367,6 +367,7 @@ function syncSettingsUI() {
   optRow('#physBtn', 'Physics body', !!SETTINGS.physics, PHYS.ready ? '' : 'Loading…');
   optRow('#gfxBtn', 'Graphics', SETTINGS.gfx);
   optRow('#devBtn', 'Developer mode', !!SETTINGS.dev);
+  { const b = $('#cineBtn'); if (b) b.textContent = 'MK III reveal: ' + ({ full: 'full', short: 'short', off: 'off' }[SETTINGS.cine] || 'full'); }
   optRow('#crtBtn', 'CRT effect', SETTINGS.crt !== false); { const c = $('#crt'); if (c) c.hidden = SETTINGS.crt === false; }
   optRow('#autoModBtn', 'Auto-upgrade new modules', SETTINGS.autoUpMods !== false);
   $('#skipBtn').hidden = !SETTINGS.dev || !!S.test;
@@ -424,6 +425,7 @@ $('#xhStyleBtn').addEventListener('click', () => { SETTINGS.xhStyle = cycle(XH_S
 $('#xhColorBtn').addEventListener('click', () => { SETTINGS.xhColor = cycle(Object.keys(XH_COLORS), SETTINGS.xhColor); saveSettings(); syncSettingsUI(); });
 $('#xhSizeBtn').addEventListener('click', () => { SETTINGS.xhSize = cycle(XH_SIZES.map(s => s[1]), SETTINGS.xhSize); saveSettings(); syncSettingsUI(); });
 $('#autoModBtn').addEventListener('click', () => { SETTINGS.autoUpMods = !(SETTINGS.autoUpMods !== false); saveSettings(); syncSettingsUI(); });
+$('#cineBtn').addEventListener('click', () => { SETTINGS.cine = ({ full: 'short', short: 'off', off: 'full' })[SETTINGS.cine || 'full']; saveSettings(); syncSettingsUI(); });
 $('#crtBtn').addEventListener('click', () => { SETTINGS.crt = SETTINGS.crt === false; saveSettings(); syncSettingsUI(); });
 $('#devBtn').addEventListener('click', () => {
   SETTINGS.dev = !SETTINGS.dev; saveSettings(); syncSettingsUI();

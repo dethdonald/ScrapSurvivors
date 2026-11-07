@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.39.0 · BUILD NOV 6|
+| **Version** | 0.40.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -68,6 +68,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | `player.js` | stats, movement (coyote time, jump buffer, wall kick, scamper, slide, dash), visuals, camera |
 | `combat.js` | enemies, spawning, damage, shots, explosions, drops, gems, frenzy, kill streak, instancing, effects |
 | `weaponfx.js` | per-weapon looks, sounds and impacts |
+| `cinematic.js` | MK III reveal cinematic (own scene, `S.mode='cine'`), queue, skip, replay |
 | `weaponmodels.js` | MK I/II/III weapon models by level, tier-up unfold, MK III hook |
 | `inventory.js` | workbench / hangar, parts list, tooltips, `sfx()`, twirl and spark helpers |
 | `ui.js` | HUD, level-up, perks, game over and stats, options, UI scale |
@@ -125,6 +126,17 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - **L2 -> L3 unfold** (`wmMaybeUnfold`, `weaponModelTick(dt)` called from the frame loop): MK II armor panels (`userData.panels`) slide/scale into place over `WMOD.UNFOLD = 1.0` s with sparks and the new `'unfold'` sound (motor whir and clanks, `tink` per panel). It is triggered by a wrapped `upgradeItem` that records a one-shot `WMOD.pending` entry (a WeakMap, so nothing reaches the save file).
 - **L5 hook only (no cinematic yet):** reaching MK III calls every function in `WMOD.hooks.mk3` with the item (chunk 15 pushes its reveal here).
 - Tests: every weapon x level builds with valid muzzle/base/spin/saw; pods tubes 3/6/12 and one gem slot at every level; unfold ramps 0.04 -> 1.0 and finishes; no unfold for L1->L2 or L4->L5; hook fires with L5; all 13 weapons fired at L1 and L5 in a run with no errors; hangar screenshot with L5 Gatling and Shotgun.
+
+### 0.40.0 — Chunk 15: MK III cinematic reveal
+- New `src/cinematic.js` (loaded after `hud.js`; DOM `#cine` in index.html, styles at the end of retro.css). Plugs into `WMOD.hooks.mk3` (weaponmodels.js), which fires from the wrapped `upgradeItem` when a weapon (or the Missile Pod module) reaches L5 through ANY route (merge, orb, auto-upgrade). Loading a save, equipping or shop/case rolls never trigger it.
+- **Queue:** the upgrade only queues `{item,type,first}`; `cineTick(dt)` (called at the top of the frame loop in game.js) starts it ~0.45 s later, only in `play`, `inv` or `hangar`, and not while a drag or the gem-slot dialog is up. Starting sets `S.mode = 'cine'`, so `simStep` never runs: gameplay, enemies, the stage clock, XP and bolts all stand still. On exit the previous mode is restored and the pointer re-locked when returning to play.
+- **Full reveal (first L5 of each weapon TYPE, ~9 s):** 0-1.5 isolated weapon on a gold-ringed platform, dim, slow zoom, drone + soft ticking, APEX CONFIGURATION DETECTED · 1.5-3.5 rising pad and soft percussion, golden emissive seams (cloned materials, shared caches untouched), rays, parts fly apart and lock back one by one with sparks and clicks · 3.5-5 gold flash, impact, `MK III — APEX` + the weapon name · 5-7.5 cut to the REAL current robot (`buildRobot(L,{stand:true})`: frame, colours, patches, stickers, other weapons), low three-quarter camera, the weapon's arm raises it toward the camera and a ~1 s cosmetic demo plays (pistol shots, autogun burst, shotgun blast, sniper beam, rocket, arc discharge, flame stream, gatling spin + burst, katana slashes, chainsaw rev + sparks, knife slashes, gravity pulse ring, forcefield shell pulse, missile-pod salvo) · 7.5-9 hero shot with rays, resolution chord, the REAL L5 stats (`partInfo`) and MAXIMUM UPGRADE ACHIEVED. A weapon that is only in storage hovers beside the robot instead.
+- **Cosmetic only:** demo shots are meshes/particles inside the cinematic scene (no `bullet()`/`explode()`, no ammo, cooldown, damage, XP or bolts). Sound reuses the weapons' existing sfx names.
+- **Repeat L5 of the same type:** a ~1.5 s version (weapon assembles, flash, title, stats-free sting).
+- **Saves:** `META.mk3Seen[type]` is written on start (so skipping counts as seen). **Settings:** Options → "MK III reveal: full / short / off" (`SETTINGS.cine`). `prefers-reduced-motion` plays the short version without flashes or shake. **Replay:** a gold `MK III ▶` tag on L5 weapon/pod rows in the parts list (storage/shelf) queues the full reveal again.
+- **Skip:** any key (Esc included, captured so it doesn't open the pause menu), mouse, touch, or any controller button (ignored for the first 0.3 s so the button that caused the upgrade can't skip it); a 0.25 s dip to black then back to the game.
+- **Audio:** soft synthesised pads, drone, kicks, bells and a chord stab (no harsh beeps), routed through one gain node that is faded and every oscillator stopped on exit; the music is ducked to 12% during the scene. Asset hook: set `CINE_MUSIC_URL` (cinematic.js) to a licensed track to replace the synth bed.
+- **Resources:** own geometries/materials/textures and the cloned weapon materials are disposed on exit; the scene is emptied; rays are one 16-triangle mesh, particles are two `Points` draw calls; no volumetrics.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.

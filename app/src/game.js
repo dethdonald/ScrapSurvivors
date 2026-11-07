@@ -187,6 +187,7 @@ function frame(now) {
   const perfT0 = performance.now(); let perfSim = 0;
   pollInput(dt);
   try { musicTick(dt); } catch (e) { console.warn('music', e); }
+  if (cineTick(dt)) { requestAnimationFrame(frame); return; }          // the MK III reveal owns the frame (gameplay and the stage clock stand still)
   if (S.mode === 'title' || S.mode === 'custom' || S.mode === 'catalog' || (S.mode === 'pause' && TITLE.fromOptions)) {
     renderTitle(dt);
   } else if (S.mode === 'hangar' || S.mode === 'inv') {
