@@ -65,6 +65,47 @@ function makeEnemyMesh(type, color, shape) {
       body.scale.set(s * 0.9, s * 1.2, s * 0.9); body.position.y = s * 0.6 + 0.2;
       inner.add(bx(0.4, 0.4, 0.7, COL.dark, 0, s * 0.9, s * 0.5));
       inner.add(bx(s * 0.9, 0.2, s * 0.9, COL.dark, 0, 0.1, 0));
+    } else if (type === 'pig') {
+      // a fat golden piggy bank on four stubby legs, coin slot on top
+      body.scale.set(s * 1.25, s * 0.95, s * 1.6); body.position.y = s * 0.78 + 0.3;
+      inner.add(bx(s * 0.8, s * 0.7, s * 0.55, color, 0, s * 0.78 + 0.25, s * 0.95));                  // snout
+      inner.add(bx(s * 0.45, s * 0.3, 0.1, 0xffd9a0, 0, s * 0.72 + 0.25, s * 1.24));
+      for (const sx of [-1, 1]) { inner.add(bx(0.4, 0.55, 0.3, color, sx * s * 0.42, s * 1.5, s * 0.6)); for (const sz of [-1, 1]) inner.add(bx(0.55, 0.65, 0.55, color, sx * s * 0.45, 0.33, sz * s * 0.5)); }
+      inner.add(bx(s * 0.5, 0.1, 0.12, COL.dark, 0, s * 1.76, 0));
+      inner.add(bx(0.18, 0.18, 0.5, color, 0, s * 1.1, -s * 0.95));
+      inner.add(bx(0.22, 0.22, 0.08, eye, s * 0.25, s * 1.02, s * 1.0, 0xb07a20)); inner.add(bx(0.22, 0.22, 0.08, eye, -s * 0.25, s * 1.02, s * 1.0, 0xb07a20));
+    } else if (type === 'magnetron') {
+      // a flat hovering disc ringed by three tall coil pylons with glowing blue caps
+      body.scale.set(s * 1.35, s * 0.3, s * 1.35); body.position.y = 2.6;
+      inner.add(bx(s * 0.8, 0.5, s * 0.8, COL.dark, 0, 1.9, 0));
+      for (let i = 0; i < 3; i++) {
+        const a = i / 3 * Math.PI * 2, x = Math.cos(a) * s * 0.62, z = Math.sin(a) * s * 0.62;
+        inner.add(bx(0.7, 3.2, 0.7, COL.dark, x, 4.3, z)); inner.add(bx(1.0, 0.5, 1.0, 0x4ab8ff, x, 6.1, z, 0x1b6a90));
+        const coil = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.12, 4, 12), M(0x9aa4ad)); coil.rotation.x = Math.PI / 2; coil.position.set(x, 4.6, z); inner.add(coil);
+      }
+      inner.add(bx(s * 0.5, 0.22, 0.1, eye, 0, 2.7, s * 0.68, 0xd09030));
+      for (const [x, z] of [[1.6, 1.6], [-1.6, 1.6], [1.6, -1.6], [-1.6, -1.6]]) inner.add(bx(0.8, 0.4, 0.8, 0x4ab8ff, x, 1.5, z, 0x1b6a90));
+    } else if (type === 'smelter') {
+      // a squat tracked furnace: glowing mouth in front, tall chimney and a vent panel on the back
+      body.scale.set(s * 0.95, s * 0.7, s * 1.25); body.position.y = 2.8;
+      for (const sx of [-1, 1]) inner.add(bx(1.5, 1.8, s * 1.5, COL.dark, sx * s * 0.62, 0.95, 0));
+      inner.add(bx(s * 0.6, 1.5, 0.4, 0xff7a1a, 0, 2.5, s * 0.78, 0xa04010));
+      inner.add(bx(1.1, 3.6, 1.1, COL.dark, s * 0.3, 6.2, -s * 0.35)); inner.add(bx(1.4, 0.4, 1.4, 0xf2c230, s * 0.3, 8.1, -s * 0.35, 0x5a4008));
+      inner.add(bx(s * 0.55, 1.6, 0.25, 0xff7a1a, 0, 3.3, -s * 0.8, 0xa04010));
+      for (let i = 0; i < 4; i++) inner.add(bx(0.5, 0.12, 0.12, i % 2 ? 0xf2c230 : COL.dark, -1.0 + i * 0.7, 5.3, s * 0.1));
+    } else if (type === 'hivemother') {
+      // a wide-legged spider: small head, huge swollen abdomen with three sockets for egg sacs
+      body.scale.set(s * 0.8, s * 0.55, s * 0.9); body.position.y = 2.6;
+      const ab = new THREE.Mesh(geoSphere, mat); ab.scale.setScalar(s * 0.75); ab.position.set(0, 3.6, -s * 0.55); inner.add(ab);
+      inner.add(bx(s * 0.5, s * 0.4, s * 0.45, COL.dark, 0, 2.7, s * 0.7)); inner.add(bx(s * 0.3, 0.14, 0.08, eye, 0, 2.85, s * 0.96, 0xd09030));
+      for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI * 2 + 0.5, x = Math.cos(a) * 1.4, z = -s * 0.55 + Math.sin(a) * 1.4; const sock = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.14, 4, 10), M(COL.dark)); sock.rotation.x = Math.PI / 2; sock.position.set(x, 6.0, z); inner.add(sock); }
+      for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) {
+        const z = 1.1 - i * 1.5, up = bx(0.4, 0.4, 3.6, COL.dark, sx * 3.2, 3.3, z); up.rotation.z = sx * -0.6; inner.add(up);
+        inner.add(bx(0.4, 3.0, 0.4, COL.dark, sx * 4.7, 1.5, z));
+      }
+    } else if (type === 'sac') {
+      const sp = new THREE.Mesh(geoSphere, mat); sp.scale.setScalar(r * 1.15); sp.position.y = r; inner.add(sp);
+      inner.add(bx(r * 0.7, 0.14, 0.08, 0xffffff, 0, r + 0.2, r * 1.1, 0x90b020));
     } else if (type === 'warden') {
       body.scale.set(5, 3.4, 4.4); body.position.y = 3.2;
       inner.add(bx(5.4, 1, 4.8, COL.dark, 0, 0.9, 0));
@@ -185,13 +226,20 @@ function spawnPoint(minD, maxD) {
 const STAGE_LEN = 600, BOSS_AT = 510, TIME_K = 900 / STAGE_LEN;
 const OVERTIME_T = STAGE_LEN;
 const oldT = () => S.test ? 0 : S.t * TIME_K;
-const overtime = () => (S.test || !S.boss) ? 0 : Math.max(0, S.t - OVERTIME_T);
+const overtime = () => (S.test || !S.boss || S.boss.type === 'pig') ? 0 : Math.max(0, S.t - OVERTIME_T);
 /* ordinary spawn density: a slow start, then a gentle wave (about 70 s) around a mean tuned so the stage pays ~75% of the old 15:00 rewards */
 const DENSITY_MEAN = 1.12;
 function densityMul() { const t = S.t; return DENSITY_MEAN * Math.min(1, 0.5 + t / 90 * 0.5) * (1 + 0.2 * Math.sin(t * 2 * Math.PI / 70 + 1)); }
 /* bosses that can be chosen at BOSS_AT (more are added by later chunks); minStage keeps harder ones out of early stages */
-const BOSS_POOL = [{ type: 'warden', minStage: 1 }];
-function pickBoss() { const ok = BOSS_POOL.filter(b => S.stage >= b.minStage); return pick(ok.length ? ok : BOSS_POOL).type; }
+const BOSS_POOL = [
+  { type: 'warden', minStage: 1, w: 1 }, { type: 'magnetron', minStage: 1, w: 1 }, { type: 'smelter', minStage: 1, w: 1 },
+  { type: 'hivemother', minStage: 1, w: 1 }, { type: 'pig', minStage: 1, w: 0.12 },       // the Golden Pig is very rare
+];
+function pickBoss() {
+  const ok = BOSS_POOL.filter(b => S.stage >= b.minStage), tot = ok.reduce((t, b) => t + b.w, 0);
+  let x = Math.random() * tot; for (const b of ok) { x -= b.w; if (x <= 0) return b.type; }
+  return ok[ok.length - 1].type;
+}
 function overtimeMul() { const o = overtime(); return o <= 0 ? null : { hp: 2 + o / 30, dmg: 1.5 + o / 90, spd: Math.min(1.35, 1.1 + o / 600), rate: 1.8 + o / 25 }; }
 function scaling() { const s = scalingBase(), ot = overtimeMul(); if (ot) { s.hp *= ot.hp; s.dmg *= ot.dmg; s.spd *= ot.spd; } return s; }
 function scalingBase() { const k = S.stage - 1, T = oldT(); return { hp: (1 + T / 130) * (1 + k * 1.1) * Math.pow(1.12, k), dmg: (1 + T / 600) * (1 + k * 0.45), spd: 1 + Math.min(0.35, T / 1800) + k * 0.07 }; }
@@ -223,7 +271,7 @@ function spawnEnemy(type, p, extra) {
   e.maxHp = e.hp;
   if (d.fly) e.pos.y = Math.max(p.y + 2, player.pos.y + rand(3, 12));
   // drawn instanced with every other enemy of its kind (see updateEnemyBatches)
-  e.color = e.elite ? new THREE.Color(ELITE.color) : tierColor(d.color);
+  e.color = e.elite ? new THREE.Color(ELITE.color) : d.passive ? new THREE.Color(d.color) : tierColor(d.color);
   e.tpl = enemyTemplate(type, shape);
   e.mesh = enemyProxy(type, shape); e.mesh.userData.mat.color.copy(e.color);
   if (e.elite) { e.mesh.scale.setScalar(ELITE.sizeMul); e.bar = makeHealthBar(); }
@@ -291,13 +339,16 @@ function spawnBoss(type = pickBoss()) {
     p = (k >= 0 && inner(k)) ? { x, z, y: H[k] } : spawnPoint(20, 30);
   } else p = spawnPoint(20, 32);
   const e = spawnEnemy(type, p);
-  e.pos.y += 45; e.boss = true; e.state = { volley: 4, slam: 8, summon: 12, slamming: true };
+  if (type === 'warden') e.pos.y += 45;                      // the Warden drops in from the sky; the others walk in
+  e.boss = true; e.state = type === 'warden' ? { volley: 4, slam: 8, summon: 12, slamming: true } : {};
+  // every boss scales with the stage and the (compressed) clock; the same formula for all of them
   e.maxHp = e.hp = ETYPES[type].hp * (1 + (S.stage - 1) * 0.9) * (1 + Math.max(0, oldT() - 300) / 1200);
   S.boss = e;
-  $('#bossbar').hidden = false;
   const bn = ((typeof ENEMY_NAMES !== 'undefined' && ENEMY_NAMES[type]) || type).toUpperCase();
+  $('#bossbar').hidden = false;
   $('#bossName').textContent = `${bn} · STAGE ${S.stage}`;
-  banner(bn, 'Kill it · exit opens', 'var(--hostile)', 3.5);
+  if (type === 'pig') { pigStart(e); banner(bn, 'Hit it for bolts · it will escape', '#f2c230', 3.5); }
+  else banner(bn, BOSS_HINT[type] || 'Kill it · exit opens', 'var(--hostile)', 3.5);
 }
 
 /* ============================================================
@@ -352,6 +403,7 @@ function droneCrash(e) {
 }
 function knock(e, dir, strength, lift = 0) {
   if (e.dead) return;
+  if (e.boss) { strength *= 0.1; lift = 0; }       // bosses barely budge: no launching, no tumbling, no stunlock
   flinch(e, dir, 0.12 + strength * 0.05);
   strength *= 1.4; lift *= 1.25;                 // enemies get thrown around a bit more
   const k = strength / e.mass;
@@ -392,6 +444,10 @@ function updateEnemies(dtAll) {
     }
     e.ldt = dt;
     const d = e.d;
+    if (e.boss) e.stun = Math.min(e.stun, 0);
+    if (e.held) { heldTick(e, dt); continue; }                    // gripped by the Warden
+    if (e.attach) { attachTick(e, dt); continue; }                // a Hive Mother's sac rides on its back
+    if (e.leap) { pigLeapTick(e, dt); continue; }
     e.hitCd -= dt; e.flash = Math.max(0, e.flash - dt); e.sawCd -= dt; e.stun -= dt; e.chillT = (e.chillT || 0) - dt; e.freezeT = (e.freezeT || 0) - dt;
     if (e.chillT > 0 && Math.random() < dt * 6) spark(ecenter(e).clone().add(new THREE.Vector3(rand(-.4, .4), rand(0, .6), rand(-.4, .4))), 0xbfe9ff);
     if (e.burnT > 0) {
@@ -414,8 +470,9 @@ function updateEnemies(dtAll) {
     } else {
       // close and below you: head straight at the wall and climb rather than walking the long way round
       const straight = !e.boss && !d.npc && (e.direct || (dy > 1.5 && hd < 16));
-      const [mx, mz] = d.npc ? vacSteer(e, dt) : straight ? [dx / (hd || 1), dz / (hd || 1)] : enemySteer(e, dx, dz, hd);
-      let sp = e.speed * hold * (e.freezeT > 0 ? 0.02 : e.chillT > 0 ? e.chillMul || 0.5 : 1);
+      const [mx, mz] = d.npc ? vacSteer(e, dt) : e.steer ? e.steer : straight ? [dx / (hd || 1), dz / (hd || 1)] : enemySteer(e, dx, dz, hd);
+      let sp = (e.steer ? (e.steerSpd || e.speed) : e.speed) * hold * (e.freezeT > 0 ? 0.02 : e.chillT > 0 ? e.chillMul || 0.5 : 1);
+      if (e.stand) sp = 0;
       if (hold && d.ranged && hd < 16 && Math.abs(dy) < 8) { sp = 0; e.cd -= dt; if (e.cd <= 0) { e.cd = 2.6; fireHostile(e, pp, 15); } }
       if (e.boss && hold) bossAI(e, dt, hd);
       if (d.bomb) {
@@ -481,7 +538,9 @@ function updateEnemies(dtAll) {
       if (e.boss && e.landed && e.state.slamming) { e.state.slamming = false; slamWave(e); }
     }
     e.support = false;
-    if (!d.npc && Math.hypot(dx, dy, dz) < e.r + 1.1 && e.hitCd <= 0) { e.hitCd = 0.8; hurt(e.dmg, e.pos); }
+    if (e.thrown) thrownTick(e, dt, dx, dy, dz);
+    if (e.dead) continue;
+    if (!d.npc && e.dmg > 0 && Math.hypot(dx, dy, dz) < e.r + 1.1 && e.hitCd <= 0) { e.hitCd = 0.8; hurt(e.dmg, e.pos); }
   }
   collideEnemies(dtAll);
   for (const e of enemies) if (e.ldt > 0) poseEnemy(e, e.ldt, player.pos);
@@ -625,7 +684,12 @@ function poseEnemy(e, dt, pp) {
 const UP3 = new THREE.Vector3(0, 1, 0), _pcv = new THREE.Vector3(), _flAx = new THREE.Vector3();
 const _cbX = new THREE.Vector3(), _cbY = new THREE.Vector3(), _cbZ = new THREE.Vector3(0, 1, 0), _cbM = new THREE.Matrix4();
 function bossAI(e, dt, hd) {
-  const st = e.state; st.volley -= dt; st.slam -= dt; st.summon -= dt;
+  if (e.type !== 'warden') { BOSS_AI[e.type](e, dt, hd); return; }
+  const st = e.state;
+  e.stand = false;
+  if ((st.stagger || 0) > 0) { st.stagger -= dt; e.stand = true; return; }
+  if (wardenGrab(e, dt)) return;
+  st.volley -= dt; st.slam -= dt; st.summon -= dt;
   if (st.volley <= 0) {
     st.volley = Math.max(2.2, 4 - S.stage * 0.3);
     for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; fireHostile(e, { x: e.pos.x + Math.cos(a) * 10, y: e.pos.y + 2, z: e.pos.z + Math.sin(a) * 10 }, 12, 4); }
@@ -747,13 +811,14 @@ function killEnemy(e) {
   if ((S.frenzyT || 0) > 0) dropBolt(e.pos, Math.random() < 0.15 ? 3 : 1);          // during a frenzy everything pays out
   // parts (and gems) only come in weapon cases: now and then from tougher enemies, always from the Warden
   {
-    const ch = e.boss ? 1 : e.mini ? 0.5 : e.elite ? 0.1 : e.type === 'brute' ? 0.1 : e.type === 'splitter' ? 0.025 : e.type === 'spitter' ? 0.004 : 0;
+    const ch = e.type === 'pig' ? 0 : e.boss ? 1 : e.mini ? 0.5 : e.elite ? 0.1 : e.type === 'brute' ? 0.1 : e.type === 'splitter' ? 0.025 : e.type === 'spitter' ? 0.004 : 0;
     if (ch && Math.random() < ch * (1 + luck * 0.02)) dropCase(e.pos.clone().setY(e.pos.y + 0.6));
   }
   if (e.elite) { for (let i = 0; i < 3; i++) dropBolt(e.pos, 1); for (let i = 0; i < 3; i++) dropGem(e.pos, 2); }   // tough enemies pay out, but no parts
   if (e.mini) { for (let i = 0; i < 6; i++) dropGem(e.pos, 3); for (let i = 0; i < 5; i++) dropBolt(e.pos, 1); }
   sfx('kill', 0.35);
-  if (e.boss) onBossDown(e);
+  if (e.type === 'pig') pigDown(e);
+  else if (e.boss) onBossDown(e);
 }
 /* Medium explosion: hurts the player (falling off with distance) and every enemy in range, throws survivors. */
 function bomberBlast(e) {
@@ -1101,6 +1166,7 @@ function damage(e, amt, manual) {
   if (e.dead) return;
   const crit = Math.random() < ((stats && stats.crit) || 0);
   if (crit) { amt *= 2; sfx('tink', 0.7); }
+  if (e.boss) amt = bossHit(e, amt);
   runStatDamage(DMG_SRC, Math.min(amt, Math.max(0, e.hp)), amt);
   if (!ENV_DMG) { dmgNumber(aimPt(e), amt, crit); sfx('squeak', 0.22); }      // no numbers for damage you didn't do
   if (Math.random() < 0.25 && e.pos.y - groundAt(e.pos.x, e.pos.z) < 3) splatter(e, 1, e.r * 1.2);

@@ -1,6 +1,6 @@
 {
   "name": "scrapsurvivors",
-  "version": "0.32.0",
+  "version": "0.33.0",
   "description": "3D survivors-style robot arena game",
   "main": "main.js",
   "private": true,

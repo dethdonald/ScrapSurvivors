@@ -13,7 +13,7 @@ const CAT = { tab: 'limbs', sel: null, thumbs: new Map(), r: null, scene: null, 
 const CAT_TABS = [
   ['limbs', 'Limbs'], ['weapons', 'Weapons'], ['parts', 'Parts'], ['gems', 'Gems'], ['combos', 'Combos'], ['powers', 'Power-ups'], ['enemies', 'Enemies'],
 ];
-const ENEMY_NAMES = { crawler: 'Crawler', drone: 'Drone', spitter: 'Spitter', bomber: 'Bomber', splitter: 'Splitter', splitling: 'Splitling', brute: 'Brute', warden: 'The Warden', robovac: 'RoboVac' };
+const ENEMY_NAMES = { crawler: 'Crawler', drone: 'Drone', spitter: 'Spitter', bomber: 'Bomber', splitter: 'Splitter', splitling: 'Splitling', brute: 'Brute', warden: 'The Warden', robovac: 'RoboVac', pig: 'Golden Pig', magnetron: 'Magnetron', smelter: 'Smelter', hivemother: 'Hive Mother', sac: 'Egg Sac' };
 const ENEMY_NOTES = {
   crawler: 'The basic swarm. Comes in cube, sphere and dome shapes. Some are elites: bigger, tougher, always worth killing.',
   drone: 'Flies straight at you over any terrain. Crashes and tumbles when shot down.',
@@ -23,7 +23,12 @@ const ENEMY_NOTES = {
   splitling: 'Small, fast and bouncy. Born from splitters.',
   brute: 'A hardened crawler that breaks through now and then. Mini-boss.',
   robovac: 'Not an enemy: a cleaning bot that roams the level hoovering up the mess. Never attacks, never targeted by lock-on. Shoot it for a big xp drop (another one drops in).',
-  warden: 'The stage boss. Arrives at 15:00, or early if you breach the gate. Kill it to open the exit.',
+  warden: 'Boss. Grabs a handful of nearby enemies (it glows and rings first), holds them over its head, then hurls the survivors at you in a spread. Hurt it hard while it holds them to interrupt the throw. Also fires volleys and slams.',
+  magnetron: 'Boss. A hovering disc with three coil pylons. Blue arcs and a ring warn of its magnetic pull; run, dash, jet away or duck behind terrain to break line of sight, then dodge the shockwave slam.',
+  smelter: 'Boss. A slow tracked furnace that lobs slag onto red circles (they leave fire pools for 4 s). Every 12 s it vents: while the vent glows it takes double damage.',
+  hivemother: 'Boss. A giant spider with three egg sacs on its back. Each sac pulses, then releases a wave of drones and splitlings. Shoot a sac to stop its spawns.',
+  pig: 'Very rare boss. Passive and harmless. Your first hit starts a short escape timer; further hits shake bolts out of it (capped at the price of a weapon case). Then it leaps away. The exit is open from the start.',
+  sac: 'A Hive Mother egg sac. Destroy it to stop that sac spawning enemies.',
 };
 
 /* every entry: { key, tab, name, kind, type } */

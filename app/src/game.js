@@ -43,7 +43,7 @@ function clearWorld() {
   targets.forEach(t => scene.remove(t.mesh)); targets = []; shots.forEach(s => scene.remove(s.mesh)); gems.forEach(g => scene.remove(g.mesh)); fx.forEach(f => scene.remove(f.obj));
   enemies = []; shots = []; gems = []; fx = []; WRECKS = 0; clearSkyRings(); wdClear(); wfxClear(); S.streak = 0; S.streakT = 0; $('#killMul').hidden = true; S.frenzyT = 0; $('#fzBar').hidden = true;
   if (S.gate) { scene.remove(S.gate.group); S.gate = null; }
-  clearShop(); clearTerminal(); TERM.nextAt = 0; TERM.checkT = 0; clearCases(); clearLegTrail(); clearStains();
+  clearShop(); clearTerminal(); clearHazards(); TERM.nextAt = 0; TERM.checkT = 0; clearCases(); clearLegTrail(); clearStains();
   if (S.nuke) { scene.remove(S.nuke.obj); S.nuke = null; }
   physDestroyRobot();
   clearRagdoll();
@@ -158,6 +158,7 @@ function simStep(dt) {
   updateAim();
   spawnTick(dt);
   updateEnemies(dt);
+  hazardTick(dt);
   if (S.mode !== 'play') return;
   updateWeapons(dt);
   updateShots(dt);

@@ -926,6 +926,13 @@ const ETYPES = {
   // not an enemy: a little cleaning bot that roams the level hoovering up the mess. Shootable (big xp), never targeted by lock-on.
   robovac: { hp: 320, speed: 2.2, dmg: 0, r: 0.75, mass: 2.5, xp: 12, color: 0xd8dde2, size: 1, npc: true },
   warden:  { hp: 16000, speed: 3.9, dmg: 30, r: 3.0,  mass: 60, xp: 0,  color: 0x6e1c30, size: 5,   boss: true },
+  // bosses (Chunk 08): one is picked at random at 8:30. passive = never attacks and keeps its own colour on every stage
+  pig:        { hp: 3200,  speed: 2.4, dmg: 0,  r: 1.5, mass: 25, xp: 0, color: 0xf2c230, size: 2.4, boss: true, passive: true },
+  magnetron:  { hp: 14000, speed: 3.0, dmg: 26, r: 2.8, mass: 55, xp: 0, color: 0x2a6fb8, size: 4.6, boss: true },
+  smelter:    { hp: 15000, speed: 2.3, dmg: 28, r: 3.0, mass: 70, xp: 0, color: 0xb8541c, size: 4.8, boss: true },
+  hivemother: { hp: 12000, speed: 2.7, dmg: 24, r: 3.0, mass: 55, xp: 0, color: 0x6a8f2a, size: 4.6, boss: true },
+  // not a boss: a Hive Mother's glowing egg sac. Shoot it to stop its spawns.
+  sac:        { hp: 700,   speed: 0,   dmg: 0,  r: 0.9, mass: 5,  xp: 0, color: 0xb6e040, size: 1.4 },
 };
 const CRAWLER_SHAPES = ['cube', 'sphere', 'dome'];
 /* Elite crawlers: an occasional pack leader. Bigger, tougher, health bar overhead, always drops a part. */

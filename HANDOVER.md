@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.32.0 · BUILD NOV 6|
+| **Version** | 0.33.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -81,6 +81,17 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ---
 
 ## Change log
+
+### 2026-11-06: 0.33.0 — Chunk 08/16, Five bosses (src/bosses.js)
+- **Rotation**: `BOSS_POOL` (combat.js) picks one boss at 8:30 on any stage, weighted: Warden, Magnetron, Smelter, Hive Mother 1 each, Golden Pig 0.12 (about 3%). All scale with `spawnBoss` (`ETYPES hp x (1 + 0.9 x (stage-1)) x clock factor`; damage via scalingBase). Overtime ignores the Pig (it is an optional bonus boss).
+- **Bosses resist** knockback (x0.1, no lift, no spin), stun is forced to 0 every frame, freeze and flinch already excluded.
+- **Warden** gained GRAB (every 11-14 s when >=3 ordinary enemies are within 15 m): yellow ring + flashing for 1.3 s (telegraph), grabs up to 8 (`e.held`, orbiting overhead and shootable), holds 2.4 s, then throws the survivors at you in a +-16 degree spread (30 m/s, `e.thrown`; a hit deals 80% of the Warden's damage and the thrown enemy is consumed). Damage >= 5% of its max HP during wind/hold INTERRUPTS: held enemies drop, 1.8 s stagger. It no longer needs a gate breach.
+- **Magnetron** (new, approved): hovering disc with 3 pylons. 1.5 s blue-ring telegraph, then 1.7 s pull (9.5 m/s toward it, only with line of sight, within 26 m), then red-ring shockwave slam (radius 10). Slow 5-orb spread every ~5 s. Counter: run, dash, jet or break line of sight behind terrain.
+- **Smelter** (new, approved): slag lands on 3 red circles (1.2 s warning, radius 3.4) and leaves 4 s fire pools (`HAZ`, hazardTick, contact tick every 0.5 s). Vents every 12 s for 4 s: x2 damage taken while open.
+- **Hive Mother** (new, approved): 3 separate `sac` enemies ride on its back (`e.attach`), each flashes then spawns a drone/splitling wave every ~9 s until destroyed; when all are down it enrages. Acid spread every 5 s.
+- **Golden Pig**: passive and harmless; exit opens at once. First valid hit starts an 18 s escape timer and captures `cap = casePrice()`; later hits pay `ceil(cap/12)` bolts at most once per 0.3 s, never beyond the cap; if killed the unpaid rest spills out (total still <= cap); at 0 s it leaps away.
+- Catalog entries and notes added for all five bosses and the sac. Tests: t63/t64 (rotation odds, scaling at stage 1 and 3, overtime, knock resist, grab phases wind/hold/throw with 8 held and 8 thrown, interruption, pig cap 30/30 under 2000 spam hits, pig kill 64/64, magnetron pull with and without line of sight, smelter hazards and vent x2, hive sacs; 4.7 ms per sim step with 300 enemies plus a boss).
+- Boss art is simple procedural blocks (instanced, static pose); polish can come with the UI/art chunks.
 
 ### 2026-11-06: 0.32.0 — Chunk 07/16, Economy, store reroll and Service Terminal
 - **Bolt income about -20%**: kill drop 9% to 7%, target-box drop 35% to 28%, elites 4 to 3 bolts, brute minis 6 to 5.
