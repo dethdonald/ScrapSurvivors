@@ -242,7 +242,8 @@ const HANGAR_RULES = BUILD_V2 ? {
 };
 function hangarCount(kind) {
   const loose = INV.bodies.flatMap(b => [b.item, ...childrenOf(b.item)]);
-  return [...allItems(), ...loose].filter(it => it && it.kind === kind).length;
+  // only fresh Lv 1 parts use up the stock: merging two of them hands you back a slot, so you can keep merging up the levels
+  return [...allItems(), ...loose].filter(it => it && it.kind === kind && (it.lvl || 1) <= 1).length;
 }
 const hangarAllows = (k, t) => SETTINGS.dev || ((HANGAR_RULES[k].max > 0) && (!HANGAR_RULES[k].types || HANGAR_RULES[k].types.includes(t)));
 function hangarLeft(k) { return SETTINGS.dev ? Infinity : HANGAR_RULES[k].max - hangarCount(k); }

@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.41.0 · BUILD NOV 6|
+| **Version** | 0.42.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -72,6 +72,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | `combat.js` | enemies, spawning, damage, shots, explosions, drops, gems, frenzy, kill streak, instancing, effects |
 | `weaponfx.js` | per-weapon looks, sounds and impacts |
 | `ink.js` | SCRAP INK art-style post pass (dev-only, off by default), presets and sliders |
+| `logo3d.js`, `logodata.js` | 3D title logo: slow turn, click pieces off (5 each, 15 total), physics, respawn after 10 s |
 | `cinematic.js` | MK III reveal cinematic (own scene, `S.mode='cine'`), queue, skip, replay |
 | `weaponmodels.js` | MK I/II/III weapon models by level, tier-up unfold, MK III hook |
 | `inventory.js` | workbench / hangar, parts list, tooltips, `sfx()`, twirl and spark helpers |
@@ -149,6 +150,10 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - Presets (Options -> Developer): Off, SCRAP INK (bands 4, outline 35%, dither 15%, contrast +12%, pixel 0%, scanlines 5%, intensity 100%), Light, Heavy, Custom (seven sliders; touching one switches to Custom). Saved in `SETTINGS.ink` (preset + custom values). **Defaults OFF; Developer mode first**: the controls only show and the effect only runs while Developer mode is on (`INK_PUBLIC = true` in ink.js opens it to everyone).
 - Outlines are colour/luminance based, with NO extra depth or normal pass (that would mean rendering the scene a second time). Geometric depth/normal outlines are the documented upgrade path if the look needs them. It is a style filter, not new geometry or hand-painted scratches.
 - Tests: page loads without errors; every preset renders in combat and with a boss; dev gating (off when dev is off), cinematic bypass, custom slider -> saved settings, label/UI sync, default off. Same-frame comparison screenshots (Off / SCRAP INK / Light / Heavy) reviewed. Software-renderer frame cost (headless, so only a rough guide): the extra pass was within measurement noise for SCRAP INK (about 3.4 -> 3.6 ms per frame at 960x540) and about +1 ms for Heavy; real GPU timings should be checked on the Deck.
+
+### 2026-11-07: 0.42.0 3D title logo + hangar merge fix
+- **3D title logo (logo3d.js, logodata.js).** The new logo model replaces the text logo on the title screen (the old h1 stays invisible only to hold the layout). It turns very slowly. Click a piece 5 times and it drops off with physics (private Rapier world, ballistic fallback), lies for 10 s, then flies back. 15 clicks in total drop every piece still on. The count restarts once everything is home. Source model in art/, packed by tools/logo_pack.py (regenerate logodata.js with it).
+- **Hangar merge fix.** The hangar stock limit (2 weapons/arms) counted merged parts, so after one merge you were stuck at L2. Only Lv 1 parts now use up stock, so merges can continue up the levels. `hangarCount` in inventory.js; tighten there if you want a hangar level cap.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
