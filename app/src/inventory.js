@@ -48,12 +48,12 @@ function refAccepts(r, it) {
   return false;
 }
 const COMBINABLE = ['leg', 'arm', 'weapon', 'module', 'lower'];
-const canCombine = (a, b) => a && b && a !== b && a.kind === b.kind && a.type === b.type && (a.kind === 'gem' ? (a.lvl || 1) < GEM_MAX
-  : (COMBINABLE.includes(a.kind) || (a.kind === 'block' && BLOCKS[a.type].upgradable)) && a.lvl < maxLvlOf(a));
+/* Two parts merge when they are the same kind and type AND the same level, below the cap (L1+L1 -> L2 ... L4+L4 -> L5). */
+const canCombine = (a, b) => sameLevelPair(a, b) && (COMBINABLE.includes(a.kind) || a.kind === 'gem' || (a.kind === 'block' && BLOCKS[a.type].upgradable)) && upgradeCheck(a).ok;
 function combineInto(t, h) {
-  t.prevLvl = t.lvl;
-  if (t.kind === 'gem') { t.lvl = Math.min(GEM_MAX, (t.lvl || 1) + 1); return null; }     // gems: one tier per merge, up to IV
-  addXP(t, mergeXP(t, h));                        // the duplicate's experience pours in (plus a level's worth)
+  if (!canCombine(t, h)) return h;              // refused: nothing changes and the duplicate is handed back
+  const r = upgradeItem(t, 1); if (!r.ok) return h;
+  if (t.kind === 'gem') return null;
   // the duplicate's gems fill empty gem slots; the rest go to storage
   for (const gm of armGems(h)) { const k = (t.gems || []).indexOf(null); if (k >= 0) t.gems[k] = gm; else storePut(gm); }
   if (h.kind === 'arm') {
@@ -91,7 +91,7 @@ function firstFree(it) {
 }
 function findCombineTarget(it) {
   let best = null;
-  for (const o of allItems()) if (canCombine(o, it) && (!best || o.lvl > best.lvl)) best = o;
+  for (const o of allItems()) if (canCombine(o, it) && !best) best = o;
   return best;
 }
 /* New parts from a level-up: empty mount first, then combine with a duplicate, then storage, then the workbench. */
@@ -256,16 +256,16 @@ function partRow(it, attrs, tag) {
   const extra = childrenOf(it).length;
   const sub = itemSub(it) + (it.kind === 'arm' && armGuns(it).length ? ' · ' + armGuns(it).map(itemName).join(' + ') : extra ? ` · +${extra} part${extra > 1 ? 's' : ''}` : '');
   const icon = partIcon(it) || ICONS[it.kind] || ICONS.box;
-  const xp = upgradeable(it) && (it.xp || 0) > 0 ? `<span class="pxp"><i style="width:${(xpFrac(it) * 100).toFixed(0)}%"></i></span>` : '';
+  const xp = '';
   void sub;
   const wpn = it.kind === 'weapon', armGunIcons = it.kind === 'arm' ? armGuns(it).map(g => weaponIcon(g.type)).join('') : '';
   return `<div class="prow${wpn ? ' wrow' : ''}" ${attrs}><i>${icon}</i><span><b>${itemName(it)} ${it.kind === 'gem' ? '' : mkTag(it.lvl)} ${attrTag(it)}${armGunIcons ? `<em class="rowguns">${armGunIcons}</em>` : ''}${extra && it.kind !== 'arm' ? `<em class="rowx">+${extra}</em>` : ''}</b>${xp}</span>${it.autoUp ? '<span class="tagS auto">AUTO</span>' : ''}${tag ? `<span class="tagS">${tag}</span>` : ''}</div>`;
 }
 function xpBarHTML(it) {
-  if (!upgradeable(it)) return '';
-  if (it.lvl >= maxLvlOf(it)) return `<span class="xpbar"><i style="width:100%"></i></span><small class="xpTxt">MAX ${it.kind === 'arm' || it.kind === 'leg' ? 'MARK' : 'LEVEL'}</small>`;
-  const nm = it.kind === 'arm' || it.kind === 'leg' ? `Mk ${ROMAN[it.lvl + 1]}` : `Lv ${it.lvl + 1}`;
-  return `<span class="xpbar"><i style="width:${(xpFrac(it) * 100).toFixed(1)}%"></i></span><small class="xpTxt">${Math.floor(it.xp || 0)} / ${xpNeedOf(it)} xp → ${nm}</small>`;
+  if (!upgradeable(it) || it.kind === 'gem') return '';
+  const mx = levelCap(it);
+  if (it.lvl >= mx) return `<span class="xpbar"><i style="width:100%"></i></span><small class="xpTxt">MAX LEVEL</small>`;
+  return `<span class="xpbar"><i style="width:${(it.lvl / mx * 100).toFixed(0)}%"></i></span><small class="xpTxt">Level ${it.lvl} / ${mx} · merge an identical Lv ${it.lvl} to reach Lv ${it.lvl + 1}</small>`;
 }
 function renderBench() {
   if ($('#inv').hidden) return;
@@ -510,7 +510,8 @@ function commitSnap(b) {
   const cur = refGet(t.ref);
   if (t.combine && cur && canCombine(cur, it)) {
     const left = combineInto(cur, it);
-    say(cur.kind === 'gem' ? `${itemName(cur)} ${cur.lvl >= GEM_MAX ? '· MAX' : '▲'}` : cur.lvl > cur.prevLvl ? `${itemName(cur)} ▲ Lv ${cur.lvl}` : `${itemName(cur)} · ${Math.round(xpFrac(cur) * 100)}% to Lv ${cur.lvl + 1}`);
+    say(cur.kind === 'gem' ? `${itemName(cur)} ${cur.lvl >= GEM_MAX ? '· MAX' : '▲'}` : `${itemName(cur)} ▲ Lv ${cur.lvl}`);
+    if (S.inRun && stats) partLeveled(cur);
     if (left) spawnBody(left, t.pos.clone().addScaledVector(t.out, 0.8), t.out.clone().multiplyScalar(3));
     sfx('combine');
   } else if (!cur && refAccepts(t.ref, it)) {
@@ -1013,9 +1014,9 @@ function setTip(item, obj, row) {
     TIP.offTimer = setTimeout(() => { if (!TIP.item) { tip.hidden = true; line.setAttribute('hidden', ''); } }, 95);
     return;
   }
-  const r = rarityOf(item.kind === 'gem' ? TIER_START[Math.min(5, item.lvl || 1)] : item.lvl), showRar = item.kind !== 'block' || BLOCKS[item.type].upgradable;
+  const r = rarityOf(item.lvl || 1), showRar = item.kind !== 'block' || BLOCKS[item.type].upgradable;
   $('#tipName').innerHTML = partIcon(item, 'picon tipicon') + itemName(item) + armGems(item).map(g => ` <span class="tipAttr" style="color:${ATTRS[g.type].color}">✦ ${ATTRS[g.type].name}</span>`).join('');
-  $('#tipRar').innerHTML = item.kind === 'gem' ? `<span style="color:${ATTRS[item.type].color}">Tier ${ROMAN[item.lvl || 1]}</span> of IV · ${itemSub(item)}` : showRar ? `<span style="color:${r.css}">${r.name}</span> · Lv ${item.lvl} · ${itemSub(item)}` + xpBarHTML(item) : itemSub(item);
+  $('#tipRar').innerHTML = item.kind === 'gem' ? `<span style="color:${ATTRS[item.type].color}">Tier ${ROMAN[item.lvl || 1]}</span> of V · ${itemSub(item)}` : showRar ? `<span style="color:${r.css}">${r.name}</span> · Lv ${item.lvl} · ${itemSub(item)}` + xpBarHTML(item) : itemSub(item);
   const cmp = compareTo(item), cmpRows = cmp ? new Map(partInfo(cmp)) : null;
   $('#tipStats').innerHTML = partInfo(item).map(([a, b]) => `<div><span>${a}</span><b>${b}${cmpRows ? statDelta(a, b, cmpRows.get(a)) : ''}</b></div>`).join('')
     + armGems(item).map(g => `<div class="tipDesc" style="color:${ATTRS[g.type].color}">✦ ${item.kind === 'leg' ? LEG_GEM[g.type] : ATTRS[g.type].desc}</div>`).join('')

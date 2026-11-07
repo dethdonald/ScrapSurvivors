@@ -25,18 +25,24 @@ function rollRarity(luck = 0) {
   for (let i = 0; i < w.length; i++) { x -= w[i]; if (x <= 0) return i + 1; }
   return 1;
 }
-/* Part levels run 1..100. The level decides the rarity colour:
-   Lv 1-4 Common, 5-9 Uncommon, 10-29 Rare, 30-59 Epic, 60-100 Legendary.
-   A dropped part starts at the bottom of its rarity: a common gun is Lv 1, a rare one Lv 10.
-   Combining two of the same part adds their levels together (capped at 100). */
-const MAX_LVL = 100;
-const TIER_START = [0, 1, 5, 10, 30, 60];
-function tierOf(lvl) { for (let t = 5; t >= 1; t--) if (lvl >= TIER_START[t]) return t; return 1; }
+/* Every upgradeable part runs Level 1..5, and the level IS the rarity:
+   L1 Common, L2 Uncommon, L3 Rare, L4 Epic, L5 Legendary.
+   A dropped part arrives at its rolled rarity's level. Two identical parts of the same level merge into one of the next level
+   (L1+L1 -> L2 ... L4+L4 -> L5). There is no usage experience on parts; only the player earns XP.
+   The balance tables were tuned on the old 1..100 scale, so stat formulas are still written for that scale: LEGACY_LV maps a
+   level 1..5 onto the formula level it is evaluated at (see wrapLevelStats). */
+const MAX_LVL = 5;
+const TIER_START = [0, 1, 2, 3, 4, 5];
+const LEGACY_LV = [0, 1, 10, 30, 60, 100];
+const sLv = lvl => LEGACY_LV[Math.max(1, Math.min(5, Math.round(lvl) || 1))];
+function tierOf(lvl) { return Math.max(1, Math.min(5, Math.round(lvl) || 1)); }
+/* An old save or dev-shelf item may carry a level on the old 1..100 scale (or part experience): bring it onto Level 1..5. */
+function migrateLvl(lvl) { lvl = Math.round(lvl) || 1; if (lvl <= 5 && lvl >= 1) return lvl; return lvl >= 60 ? 5 : lvl >= 30 ? 4 : lvl >= 10 ? 3 : lvl >= 5 ? 2 : 1; }
 const rarityOf = lvl => RARITY[tierOf(lvl)];
 /* 0 at Lv 1, rising toward 1 by about Lv 60: used for stats that must not run away (speeds, turn rates). */
 const lvlCurve = (lvl, k = 22) => 1 - Math.exp(-(lvl - 1) / k);
 const mkTag = lvl => `<em class="mk r${tierOf(lvl)}">Lv ${lvl}</em>`;
-const lvTag = it => it.kind === 'gem' ? `<em class="mk r${Math.min(4, it.lvl)}">Tier ${ROMAN[it.lvl || 1]}</em>` : mkTag(it.lvl);
+const lvTag = it => it.kind === 'gem' ? `<em class="mk r${Math.min(5, it.lvl)}">Tier ${ROMAN[it.lvl || 1]}</em>` : mkTag(it.lvl);
 
 /* ---------- Level-up stat upgrades ----------
    Each card rolls a rarity; v[rarity] is the bonus. Bonuses last for the whole run. */
@@ -68,7 +74,7 @@ function rollLoot(luck = 0) {
   for (const p of pool) { x -= p[2]; if (x <= 0) { pickd = p; break; } }
   // a rolled rarity gives exactly the first level of that rarity
   const tier = rollRarity(luck);
-  // limbs (arms and legs) always come at level 1: their marks are earned by using them
+  // limbs (arms and legs) always drop at level 1 and are raised by merging identical ones
   const it = mkItem(pickd[0], pickd[1], (pickd[0] === 'block' && !BLOCKS[pickd[1]].upgradable) || isLimb(pickd[0]) ? 1 : TIER_START[tier]);
   return it;
 }
@@ -133,7 +139,7 @@ const LEGS = {
     name: 'Frame Leg', speed: 4.6, jump: 3.6, carry: 2.2, mass: 0.4, desc: 'Reliable. Clears any ledge the arena needs.',
     // Articulated: return { ik } and the game plants the foot on the ground and bends the knee to reach it.
     model(g, { lvl, out }) {
-      const t = 0.15 + 0.06 * lvlCurve(lvl), a = 0.72, b = 0.72;
+      const t = 0.15 + 0.06 * lvlCurve(sLv(lvl)), a = 0.72, b = 0.72;
       joint(g, [0, 0, 0], 0.17, JOINT_COL);
       const thigh = new THREE.Group(); g.add(thigh);
       thigh.add(bx(t, a, t, 0x6b7680, 0, -a / 2, 0));
@@ -150,7 +156,7 @@ const LEGS = {
     name: 'Spider Leg', speed: 4.8, jump: 3.0, carry: 2.6, mass: 0.45, climb: 2.4,
     desc: 'Long, jointed and arched. Steps straight up ledges over twice as tall as other legs can.',
     model(g, { lvl, out }) {
-      const t = 0.1 + 0.04 * lvlCurve(lvl), a = 0.9, b = 1.0, side = Math.sign(out.x) || 1;
+      const t = 0.1 + 0.04 * lvlCurve(sLv(lvl)), a = 0.9, b = 1.0, side = Math.sign(out.x) || 1;
       joint(g, [0, 0, 0], 0.15, JOINT_COL);
       const thigh = new THREE.Group(); g.add(thigh);
       thigh.add(bx(t, a, t, 0x2e363e, 0, -a / 2, 0));
@@ -379,7 +385,7 @@ const WEAPONS = {
       // first target: the enemy under the crosshair, or the closest one near the line of fire
       let t = te && !te.dead ? te : null;
       if (!t) { const d = tp.clone().sub(o).normalize(); let best = 2.2 * 2.2; for (const e of enemies) { if (e.dead || e.d.npc) continue; const c = aimPt(e), v = c.clone().sub(o), along = v.dot(d); if (along < 0 || along > this.range) continue; const off = v.lengthSq() - along * along; if (off < best) { best = off; t = e; } } }
-      const pts = [o.clone()], power = 0.9 + 1.6 * lvlCurve(lv, 35);      // bigger, more spectacular bolts as it levels
+      const pts = [o.clone()], power = 0.9 + 1.6 * lvlCurve(sLv(lv), 35);      // bigger, more spectacular bolts as it levels
       arcMuzzle(o, tp.clone().sub(o).normalize(), power);
       if (!t) { pts.push(tp.clone()); lightning(pts, power); return; }
       let dmg = this.dmg(lv) * m.dmg; const hit = new Set();
@@ -692,7 +698,7 @@ for (const k of ATTR_KEYS) GEMS[k] = {
   },
 };
 const mkGem = type => mkItem('gem', type || pick(ATTR_KEYS));
-const GEM_MAX = 4;                                   // a gem can be upgraded 3 times: I -> II -> III -> IV
+const GEM_MAX = 5;                                   // gems share the five levels: I -> II -> III -> IV -> V
 /* type -> best tier, for a list of gems */
 const gemMap = gs => { const m = new Map(); for (const g of gs) m.set(g.type, Math.max(m.get(g.type) || 0, g.lvl || 1)); return m; };
 const armGems = a => (a && a.gems ? a.gems.filter(Boolean) : []);
@@ -753,7 +759,7 @@ Object.assign(MODULES, {
   blades: {
     name: 'Blade Ring', mass: 0.5, blades: true,
     desc: 'Not a gun: every few seconds it flings spinning blades that circle you, cutting everything they pass. More blades, faster, as it levels. Opens a gem slot at Lv 10 and another at Lv 30; gems change the blades.',
-    gemSlots: lvl => (lvl >= 10 ? 1 : 0) + (lvl >= 30 ? 1 : 0),
+    gemSlots: lvl => [0, 0, 0, 1, 2, 2][Math.max(1, Math.min(5, lvl))],      // L3 opens the first gem slot, L4 the second
     n: lvl => 2 + Math.floor(lvl / 20), dmg: lvl => 9 * (1 + 0.06 * (lvl - 1)), cd: lvl => 4.2 / (1 + 1.5 * lvlCurve(lvl, 35)), life: 3.2,
     model(g, { out }) {
       joint(g, [0, 0, 0], 0.13, JOINT_COL);
@@ -909,22 +915,16 @@ const WRISTS = ['weapon', 'weapon2'];
 const FACE_ORDER = ['right', 'left', 'front', 'back', 'top', 'bottom'];
 const OPPOSITE = { right: 'left', left: 'right', front: 'back', back: 'front', top: 'bottom', bottom: 'top' };
 let nextItemId = 1;
-/* Arms go Mk I -> III and legs Mk I -> II. Loot rolled at a rarity level maps onto those few marks. */
-const maxLvlOf = it => it.kind === 'arm' || it.kind === 'lower' ? 3 : it.kind === 'leg' ? 2 : it.kind === 'gem' ? GEM_MAX : MAX_LVL;
-function markFor(kind, lvl) {
-  if (kind === 'lower') return lvl >= 60 ? 3 : lvl >= 10 ? 2 : Math.max(1, Math.min(3, lvl));
-  if (kind === 'arm') return lvl >= 60 ? 3 : lvl >= 10 ? 2 : Math.max(1, Math.min(3, lvl));
-  if (kind === 'leg') return lvl >= 30 ? 2 : Math.max(1, Math.min(2, lvl));
-  return lvl;
-}
-/* stats for arms and legs scale from these equivalents of the old 1..100 levels */
-// arms and legs: a new mark only opens gem slots; their stats stay the same at every mark
-const effLvl = it => it.kind === 'arm' || it.kind === 'leg' || it.kind === 'lower' ? 1 : it.lvl;
-/* gem slots: arms earn one per mark (none at Mk I), legs one at Mk II, some modules have their own */
+/* Everything upgradeable (weapons, arms, modules, lower halves, legacy legs, upgradable blocks, gems) tops out at Level 5. */
+const maxLvlOf = it => it.kind === 'gem' ? GEM_MAX : MAX_LVL;
+const markFor = (kind, lvl) => Math.max(1, Math.min(MAX_LVL, Math.round(lvl) || 1));
+/* arms, legs and lowers scale on the same five levels (their own stats are set in armRate/armTurn/lowerMul below) */
+const effLvl = it => sLv(it.lvl);
+/* gem slots follow one schedule for arms, lower halves and legs: none at L1, one at L2-L3, two at L4-L5 */
+const SLOT_SCHEDULE = [0, 0, 1, 1, 2, 2];
 function gemSlotsFor(it) {
-  if (it.kind === 'arm') return Math.max(0, Math.min(2, it.lvl - 1));
-  if (it.kind === 'leg') return Math.max(0, Math.min(1, it.lvl - 1));
-  if (it.kind === 'lower') return Math.max(0, Math.min(2, it.lvl - 1));
+  if (it.kind === 'arm' || it.kind === 'lower') return SLOT_SCHEDULE[Math.max(1, Math.min(5, it.lvl))];
+  if (it.kind === 'leg') return Math.min(1, SLOT_SCHEDULE[Math.max(1, Math.min(5, it.lvl))]);
   if (it.kind === 'module' && MODULES[it.type] && MODULES[it.type].gemSlots) return MODULES[it.type].gemSlots(it.lvl);
   return 0;
 }
@@ -998,29 +998,29 @@ function partIcon(it, cls = 'picon') {
   const p = PART_ICONS[it.kind + ':' + it.type]; if (!p) return '';
   return `<svg class="${cls}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${p}</svg>`;
 }
-/* ---------- part experience: every upgradeable part starts a level at 0 xp and earns it by being used ---------- */
-const xpNeed = lvl => Math.round(60 + 14 * lvl);                  // xp to go from lvl to lvl+1
-// arms and legs have only a few marks, so each one takes much longer to earn
-// arm xp = damage dealt through its guns (Mk II within the first stage, Mk III takes a few stages); leg xp = 10 per metre walked
-const xpNeedOf = it => it.kind === 'arm' ? [0, 12000, 45000][it.lvl] || 45000 : it.kind === 'lower' ? [0, 15000, 40000][it.lvl] || 40000 : it.kind === 'leg' ? 15000 : xpNeed(it.lvl);
-function xpTotal(lvl, it) { let t = 0; for (let l = 1; l < lvl; l++) t += it ? xpNeedOf({ kind: it.kind, lvl: l }) : xpNeed(l); return t; }
-const upgradeable = it => it && it.kind !== 'gem' && (it.kind !== 'block' || (BLOCKS[it.type] && BLOCKS[it.type].upgradable));     // (lower halves level up too)
-/* Adds xp to a part; returns how many levels it gained. */
-function addXP(it, amt) {
-  const mx = maxLvlOf(it);
-  if (!upgradeable(it) || !(amt > 0) || it.lvl >= mx) return 0;
-  it.xp = (it.xp || 0) + amt;
-  let n = 0;
-  while (it.lvl < mx && it.xp >= xpNeedOf(it)) { it.xp -= xpNeedOf(it); it.lvl++; n++; }
-  if (it.lvl >= mx) it.xp = 0;
-  // a new mark can open a gem slot: tell the player
-  const added = syncGemSlots(it);
-  if (added && typeof gemSlotDialog === 'function') gemSlotDialog(it, added);
-  return n;
+/* ---------- upgrades ----------
+   One place decides whether a part can go up a level and does it: merging duplicates, auto-upgrade, and later the Upgrade Orb all
+   go through upgradeItem(). Parts have no experience of their own. */
+const upgradeable = it => it && (it.kind === 'gem' || it.kind !== 'block' || (BLOCKS[it.type] && BLOCKS[it.type].upgradable));
+/* ceiling for this part: normal parts L5 (adapters get their own lower cap in a later chunk via it.maxLvl) */
+const levelCap = it => Math.min(maxLvlOf(it), it && it.maxLvl ? it.maxLvl : 99);
+function upgradeCheck(it, by = 1) {
+  if (!it || !upgradeable(it)) return { ok: false, reason: 'not upgradeable' };
+  if (!(by >= 1)) return { ok: false, reason: 'bad amount' };
+  if ((it.lvl || 1) >= levelCap(it)) return { ok: false, reason: 'max level' };
+  return { ok: true, from: it.lvl || 1, to: Math.min(levelCap(it), (it.lvl || 1) + by) };
 }
-const xpFrac = it => it.lvl >= maxLvlOf(it) ? 1 : clamp((it.xp || 0) / xpNeedOf(it), 0, 1);
-/* Merging a duplicate pours in everything it had earned, plus a full level's worth on top. */
-const mergeXP = (t, h) => xpTotal(h.lvl, h) + (h.xp || 0) + xpNeedOf(t);
+/* Raises a part's level (never past its cap). Returns {ok, from, to, reason, added}; changes nothing when refused.
+   Gem slots that the new level opens are added; the player's stats are refreshed by the caller via partLeveled(). */
+function upgradeItem(it, by = 1) {
+  const c = upgradeCheck(it, by); if (!c.ok) return c;
+  it.prevLvl = it.lvl || 1; it.lvl = c.to;
+  c.added = syncGemSlots(it);
+  if (c.added && typeof gemSlotDialog === 'function') gemSlotDialog(it, c.added);
+  return c;
+}
+/* Same kind, same type, same level, below the cap: the rule for merging two parts. */
+const sameLevelPair = (a, b) => !!a && !!b && a !== b && a.kind === b.kind && a.type === b.type && (a.lvl || 1) === (b.lvl || 1);
 const DEFS = { lower: () => LOWERS, leg: () => LEGS, arm: () => ARMS, weapon: () => WEAPONS, module: () => MODULES, block: () => BLOCKS, gem: () => GEMS };
 function itemDef(it) { return DEFS[it.kind]()[it.type]; }
 function itemName(it) { return itemDef(it).name + (it.kind === 'gem' ? ' ' + ROMAN[it.lvl || 1] : ''); }
@@ -1050,10 +1050,10 @@ function childrenOf(it) {
 /* Rows shown in the workbench hover window for any part. */
 function partInfo(it) {
   const rows = partInfoBase(it);
-  if (it.kind === 'arm' || it.kind === 'leg' || it.kind === 'lower') rows.unshift(['Mark', `${ROMAN[it.lvl]}/${ROMAN[maxLvlOf(it)]}`], ['Gem slots', `${gemSlotsFor(it)}/${it.kind === 'leg' ? 1 : 2}`]);
-  if (it.kind === 'lower') rows.unshift(['Gems', armGems(it).length ? armGems(it).map(g => `${ATTRS[g.type].name}`).join(' + ') : it.gems && it.gems.length ? `${it.gems.length} empty` : 'opens at Mk II']);
-  if (it.kind === 'arm') { rows.unshift(['Gems', armGems(it).length ? armGems(it).map(g => ATTRS[g.type].name).join(' + ') : (it.gems && it.gems.length ? `${it.gems.length} empty` : 'opens at Mk II')]); const ck = armCombo(it); if (ck && COMBOS[ck]) rows.unshift(['Combo', COMBOS[ck][0]]); }
-  if (it.kind === 'leg') rows.unshift(['Gem', armGems(it).length ? `${ATTRS[armGems(it)[0].type].name}: ${LEG_GEM[armGems(it)[0].type]}` : it.gems && it.gems.length ? 'empty' : 'opens at Mk II']);
+  if (it.kind === 'arm' || it.kind === 'leg' || it.kind === 'lower') rows.unshift(['Level', `${it.lvl}/${maxLvlOf(it)}`], ['Gem slots', `${gemSlotsFor(it)}/${it.kind === 'leg' ? 1 : 2}`]);
+  if (it.kind === 'lower') rows.unshift(['Gems', armGems(it).length ? armGems(it).map(g => `${ATTRS[g.type].name}`).join(' + ') : it.gems && it.gems.length ? `${it.gems.length} empty` : 'opens at L2']);
+  if (it.kind === 'arm') { rows.unshift(['Gems', armGems(it).length ? armGems(it).map(g => ATTRS[g.type].name).join(' + ') : (it.gems && it.gems.length ? `${it.gems.length} empty` : 'opens at L2')]); const ck = armCombo(it); if (ck && COMBOS[ck]) rows.unshift(['Combo', COMBOS[ck][0]]); }
+  if (it.kind === 'leg') rows.unshift(['Gem', armGems(it).length ? `${ATTRS[armGems(it)[0].type].name}: ${LEG_GEM[armGems(it)[0].type]}` : it.gems && it.gems.length ? 'empty' : 'opens at L2']);
   return rows;
 }
 function partInfoBase(it) {
@@ -1110,7 +1110,29 @@ const airJumpsFor = total => AIR_JUMP_AT.filter(t => total >= t).length;
 function legSpeed(l) { return LEGS[l.type].speed * (1 + 0.5 * lvlCurve(effLvl(l))); }
 function legJump(l) { return LEGS[l.type].jump + 1.6 * lvlCurve(effLvl(l)); }
 function legCarry(l) { return (LEGS[l.type].carry || 2) * (1 + 1.0 * lvlCurve(effLvl(l))); }
-function armRate(a) { const A = ARMS[a.type]; return A.rate * (1 + (A.rateUp ?? 0.15) * 6 * lvlCurve(effLvl(a))); }
-function armTurn(a) { const A = ARMS[a.type]; return (A.turn || 20) * (1 + (A.turnUp ?? 0.35) * 6 * lvlCurve(effLvl(a))); }
+/* Arms: each level adds +5% damage, +2.5% fire rate and +8% turn speed (L5 = +20% / +10% / +32%) */
+const armDmgMul = a => 1 + 0.05 * (markFor('arm', a.lvl) - 1);
+function armRate(a) { const A = ARMS[a.type]; return A.rate * (1 + 0.025 * (markFor('arm', a.lvl) - 1)); }
+function armTurn(a) { const A = ARMS[a.type]; return (A.turn || 20) * (1 + 0.08 * (markFor('arm', a.lvl) - 1)); }
+/* Lower halves: hull and shield grow with level (L5 = x1.7 hull, x2.8 shield); wheels get faster, spiders climb longer */
+const LOWER_HP = [0, 1, 1.16, 1.32, 1.5, 1.7], LOWER_SH = [0, 1, 1.4, 1.8, 2.2, 2.8];
+const lowerHp = it => (LOWERS[it.type].hp || 0) * LOWER_HP[markFor('lower', it.lvl)];
+const lowerShield = it => (LOWERS[it.type].shield || 0) * LOWER_SH[markFor('lower', it.lvl)];
+const lowerPerk = (it, kind) => 1 + (kind === 'wheels' ? 0.025 : kind === 'spider' ? 0.0625 : 0) * (markFor('lower', it.lvl) - 1) * (it.type === kind ? 1 : 0);
 /* Weight in tonnes: higher levels are a little heavier. */
-function partMass(it) { const d = itemDef(it); return (d.mass ?? 0.3) * (it.kind === 'block' ? 1 : 1 + 0.25 * lvlCurve(it.lvl)); }
+function partMass(it) { const d = itemDef(it); return (d.mass ?? 0.3) * (it.kind === 'block' ? 1 : 1 + 0.25 * lvlCurve(sLv(it.lvl))); }
+
+/* ---------- level scaling ----------
+   Every stat formula above is written as f(lvl) on the old 1..100 scale. This wraps them once, so callers keep passing the real
+   part level (1..5) and the formula sees LEGACY_LV[level]. Only one-argument "lvl =>" functions are wrapped. */
+(function wrapLevelStats() {
+  const wrapAll = tbl => {
+    for (const d of Object.values(tbl)) for (const k of Object.keys(d)) {
+      const f = d[k];
+      if (typeof f !== 'function' || f.length !== 1 || k === 'gemSlots' || f._lv5) continue;
+      if (!/^\(?\s*lvl\s*\)?\s*=>|^\w*\(\s*lvl\s*\)\s*\{/.test(Function.prototype.toString.call(f))) continue;
+      const w = function (lvl) { return f.call(this, sLv(lvl)); }; w._lv5 = true; d[k] = w;
+    }
+  };
+  wrapAll(WEAPONS); wrapAll(MODULES); wrapAll(BLOCKS);
+})();

@@ -59,7 +59,7 @@ function computeStats() {
   let hp = 0, sh = 0, sp = 0, jp = 0, air = 0, bodySpeed = 0, carry = 0;
   for (const b of mountedBodies()) { const d = BLOCKS[b.type]; hp += d.hp || 0; sh += d.shield || 0; bodySpeed += d.speed || 0; }
   const V2L = BUILD_V2 && L.body && L.body.kind === 'lower' ? L.body : null;
-  if (V2L) { const d = LOWERS[V2L.type]; hp += d.hp || 0; sh += d.shield || 0; }
+  if (V2L) { hp += lowerHp(V2L); sh += lowerShield(V2L); }
   const legs = groundedLegs();
   // V2: however many legs a lower half has, together they count as one pair (six spider legs aren't three times the carry)
   const lk = V2L && legs.length ? 2 / legs.length : 1;
@@ -89,6 +89,7 @@ function computeStats() {
   const legF = n === 0 ? 0.35 : n === 1 ? 0.6 : n === 2 ? 1 : n === 3 ? 1.07 : 1.12;
   s.maxHp = Math.max(1, hp); s.maxShield = sh;
   s.speed = Math.max(2.4, ((n ? (sp / n) * 2 * legF : 3.2) + bodySpeed) * (n ? s.weightMul : 1));
+  if (V2L) { s.speed *= lowerPerk(V2L, 'wheels'); s.scamper *= lowerPerk(V2L, 'spider'); }
   s.jump = n ? (jp / n) * (n === 1 ? 0.7 : 1) * clamp(s.weightMul, 0.3, 1.3) : 0.8;
   // whatever the legs and the load, the frame can always clear the tallest step the terrain has (CLIMB, with the
   // ledge pull-up), so no hole or pit can trap you
@@ -101,7 +102,7 @@ function computeStats() {
   s.accelMul = clamp(Math.pow(LOAD_REF / s.load, 0.6), 0.35, 1.35) * s.grip;   // wheels slide
   // how heavy the frame feels: -0.6 (light, twitchy) .. 1.2 (heavy, weighty). Drives landings, slides, turning and camera weight
   s.heavy = clamp((s.load - LOAD_REF) / LOAD_REF, -0.6, 1.2);
-  s.airJumps = air + airJumpsFor(s.legLv) + [0, 1, 2, 3, 3][s.legGems.get('split') || 0]; s.flip = s.legLv >= FLIP_AT; s.dashes = 0;
+  s.airJumps = air + airJumpsFor(s.legLv) + [0, 1, 2, 3, 3, 4][s.legGems.get('split') || 0]; s.flip = s.legLv >= FLIP_AT; s.dashes = 0;
   if (s.legGems.has('ice')) s.accelMul *= 0.6;          // skates: quick, but slippery
   if (s.misLegs) s.accelMul *= Math.pow(0.6, s.misLegs);
   // jetpacks: summed thrust and fuel
@@ -207,7 +208,6 @@ function playerStep(dt) {
       P.vel.x = dx / l * CFG.dashSpeed; P.vel.z = dz / l * CFG.dashSpeed;
       P.vel.y = Math.max(P.vel.y, 0);
       P.dashT = CFG.dashTime; P.dashCd = CFG.dashCooldown; P.dashCharges--; P.slideT = 0;
-      for (const it of mountedItems()) if (it.kind === 'module' && it.type === 'dash') partXP(it, XP_RATE.dash);
       ring(P.pos.clone().setY(P.pos.y + 1.2), 2.2, 0.25, COL.cyan);
     }
   }

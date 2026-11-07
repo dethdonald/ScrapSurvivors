@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.26.1 (`VERSION` in `src/title.js`) |
+| **Version** | 0.27.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -81,6 +81,20 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ---
 
 ## Change log
+
+### 2026-11-06: 0.27.0 — Chunk 02/16, unified component levelling (user approved AUDIT_01 tables and answers 1-5)
+- Every upgradeable part (weapon, arm, module, lower half, legacy leg, upgradable block, gem) is now **Level 1..5**; level = rarity (L1 Common ... L5 Legendary). `MAX_LVL=5`, `TIER_START=[0,1,2,3,4,5]`, `GEM_MAX=5`.
+- **Stat tables:** formulas stay written on the old 1..100 scale; `LEGACY_LV=[0,1,10,30,60,100]` maps L1..5 onto them. `wrapLevelStats()` (end of data.js) wraps every one-arg `lvl =>` function in WEAPONS/MODULES/BLOCKS so callers keep passing the real level. Direct `lvlCurve(...)` uses on raw levels must call `sLv(lvl)` first.
+- **Gem slots:** arms and lowers 0/1/1/2/2 (`SLOT_SCHEDULE`), legacy legs max 1, Blades 0/0/1/2/2, Missile Pod 1.
+- **Arms:** per level +5% damage (`armDmgMul`), +2.5% fire rate, +8% turn. **Lowers:** hull x[1,1.16,1.32,1.5,1.7], shield x[1,1.4,1.8,2.2,2.8] (`lowerHp/lowerShield`), wheels +2.5% speed/level, spider +6.25% wall scamper/level. Twin spread and Sentry tracking values from the audit are NOT implemented yet (Chunk 05).
+- **Removed usage XP** from parts: `xpNeedOf/addXP/mergeXP/xpFrac/partUseTick/creditDamage/XP_RATE` gone; XP bars replaced by level text/pips. Player XP untouched.
+- **One upgrade path:** `upgradeCheck(it)`, `upgradeItem(it, by)` in data.js (respects `it.maxLvl` for later adapters, adds gem slots, refuses at cap and changes nothing). `canCombine`/`combineInto` (inventory.js) require same kind, same type, SAME level and use it; a refused merge hands the duplicate back. Auto-upgrade uses the same rule. Later orbs must call `upgradeItem`, then `partLeveled(it)` when in a run.
+- **Migration:** `migrateLvl(old)` maps old levels (1-4 -> L1, 5-9 -> L2, 10-29 -> L3, 30-59 -> L4, 60+ -> L5). Nothing persisted holds parts (loadout/inventory/shelf are not saved), so only dev-shelf/dev copies could carry old levels; stale `.xp` is ignored.
+- Dev panel "max levels" now sets L5. **`CFG.unlimitedParts` left ON on purpose:** the user approved turning it off, but no starting shelf exists anywhere (`INV.shelf` is reset to `[]` in game.js and never filled), so switching it off now would leave the hangar empty and the game unplayable. Needs a defined starting shelf first (proposed for Chunk 07 or earlier on request).
+- Tests: /tmp scripts t50/t51 (all 13 weapons + 8 modules at L1..5 match old formulas at mapped levels, merge chain L1->L5, same-level-only rule, max rejection for every kind, gem chain, arm merge keeps guns, auto-upgrade, stats with L5 lower/arms, inventory renders, no page errors).
+
+### 2026-11-06: Chunk 01/16 audit (no code change)
+- Wrote `AUDIT_01.md`: code map, Level 1-5 tables, usage-XP migration, build order, 10-minute reward analysis, boss gaps. Awaiting user approval before Chunk 02.
 
 > Dates are the owner's local dates (America/New_York). Items before 2026-11-02 evening were made earlier in the
 > project; their exact dates weren't recorded, so they're grouped as "Earlier".

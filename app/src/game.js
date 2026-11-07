@@ -161,7 +161,6 @@ function simStep(dt) {
   if (S.mode !== 'play') return;
   updateWeapons(dt);
   updateShots(dt);
-  partUseTick(dt);
   wfxTick(dt);
   legGemTick(dt);
   skyBarrelTick(dt);

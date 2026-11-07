@@ -133,7 +133,7 @@ function devDrop(kind) {
 function devSetLevels(max) {
   for (const it of allItems()) {
     if (!upgradeable(it) && it.kind !== 'gem') continue;
-    it.lvl = max ? maxLvlOf(it) : 1; it.xp = 0;
+    it.lvl = max ? maxLvlOf(it) : 1; delete it.xp;
     syncGemSlots(it);
     // fewer slots after a reset: gems that no longer fit go to storage
     if (it.gems) { const n = gemSlotsFor(it); while (it.gems.length > n) { const g = it.gems.pop(); if (g) L.store.push(g); } }

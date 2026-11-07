@@ -882,39 +882,20 @@ function comboBoom(s, p, r) {
 /* Ice: slowed for a few seconds; higher tiers slow harder and longer (50% -> 20% speed) */
 function chill(e, t = 1) { if (e.dead) return; e.chillT = Math.max(e.chillT || 0, 2 + t); e.chillMul = Math.min(e.chillT > 0 && e.chillMul ? e.chillMul : 1, Math.max(0.2, 0.6 - 0.1 * t)); }
 function ignite(e, dmg) { if (e.dead) return; e.burnT = 3; e.burnDps = Math.max(e.burnDps || 0, Math.max(4, dmg * 0.45)); }
-/* ---------- part experience from use ---------- */
 const FIXED_DMG = 0.6;          // a gun bolted straight onto a block (no arm to hold it) hits for 60%
 /* damage that isn't yours (enemies hurting each other or themselves, falls, barrels you didn't set off) runs inside envDmg():
    kills made there still count, but don't feed your kill streak */
 let ENV_DMG = 0;
 function envDmg(fn) { ENV_DMG++; try { return fn(); } finally { ENV_DMG--; } }
-let DMG_SRC = null;             // the part whose damage is being dealt right now (gets the xp)
-const XP_RATE = { dmg: 0.05, armDmg: 1, leg: 10, jet: 5, dash: 10, passive: 0.5, gear: 1.2 };
-function partXP(it, amt) { if (addXP(it, amt)) partLeveled(it); }
-function creditDamage(w, amt) {
-  const x = amt * XP_RATE.dmg; partXP(w, x);
-  const arm = mountedArms().find(a => armGuns(a).includes(w)); if (arm) partXP(arm, amt * XP_RATE.armDmg);
-}
+let DMG_SRC = null;             // the part whose damage is being dealt right now
+/* After a part's level changes: stats follow straight away and a small banner lists it. */
 function partLeveled(it) {
-  // stats follow the new level straight away
   if (S.inRun && stats) { const prev = stats; stats = computeStats(); syncCaps(); player.hp = Math.min(stats.maxHp, player.hp + Math.max(0, stats.maxHp - prev.maxHp)); renderLoadoutHUD(); }
   const box = $('#partUps'); if (!box) return;
   const el = document.createElement('div'); el.innerHTML = `${partIcon(it)}${itemName(it).toUpperCase()} · LV ${it.lvl}`;
   box.appendChild(el); setTimeout(() => el.remove(), 2700);
   while (box.children.length > 4) box.firstChild.remove();
   sfx('reloaded', 0.5);
-}
-/* legs earn by distance, jetpacks by burn time, passive modules and spin gears by running */
-function partUseTick(dt) {
-  const P = player, hs = Math.hypot(P.vel.x, P.vel.z);
-  for (const it of mountedItems()) {
-    if (it.kind === 'leg' || it.kind === 'lower') { if (P.onGround) partXP(it, hs * dt * XP_RATE.leg); }
-    else if (it.kind === 'module') {
-      if (it.type === 'jetpack') { if (P.jetting) partXP(it, dt * XP_RATE.jet); }
-      else if (it.type === 'magnet' || it.type === 'radar') partXP(it, dt * XP_RATE.passive);
-    } else if (it.kind === 'block' && BLOCKS[it.type].spin) partXP(it, dt * XP_RATE.gear);
-    else if (it.kind === 'block' && BLOCKS[it.type].pack) partXP(it, dt * XP_RATE.passive);
-  }
 }
 /* ---------- leg gems ---------- */
 const legWithGem = t => BUILD_V2 && L.body && L.body.kind === 'lower' ? (armGems(L.body).some(g => g.type === t) ? L.body : null) : groundedLegsCache().find(l => armGems(l).some(g => g.type === t)) || null;
@@ -1108,7 +1089,6 @@ function damage(e, amt, manual) {
   if (e.dead) return;
   const crit = Math.random() < ((stats && stats.crit) || 0);
   if (crit) { amt *= 2; sfx('tink', 0.7); }
-  if (DMG_SRC) creditDamage(DMG_SRC, Math.min(amt, Math.max(0, e.hp)));
   runStatDamage(DMG_SRC, Math.min(amt, Math.max(0, e.hp)), amt);
   if (!ENV_DMG) { dmgNumber(aimPt(e), amt, crit); sfx('squeak', 0.22); }      // no numbers for damage you didn't do
   if (Math.random() < 0.25 && e.pos.y - groundAt(e.pos.x, e.pos.z) < 3) splatter(e, 1, e.r * 1.2);
@@ -1301,7 +1281,7 @@ function nearestEnemy(o, range, exclude) {
 }
 /* Arm Mk: +15% fire rate per level (turn speed is applied in the visuals) */
 const berserkMul = () => (S.berserkT > 0 ? 2 : 1);           // BERSERK: double fire rate on everything
-function armMods(arm) { const A = ARMS[arm.type]; return { dmg: A.dmg * stats.dmg, rate: armRate(arm) * stats.fire * berserkMul(), auto: A.auto, range: A.range || 1 }; }
+function armMods(arm) { const A = ARMS[arm.type]; return { dmg: A.dmg * stats.dmg * armDmgMul(arm), rate: armRate(arm) * stats.fire * berserkMul(), auto: A.auto, range: A.range || 1 }; }
 
 /* Fire a weapon: plays its sound, and the Split Chamber stat can add extra shots. */
 /* Magazines: each weapon fires its magazine, then reloads (reload speed is its own stat). */

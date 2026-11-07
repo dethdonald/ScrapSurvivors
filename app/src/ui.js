@@ -68,7 +68,7 @@ function renderXhLeft() {
   // the part bar along the top of the screen, split either side of the timer: each part's icon and its level bar
   const order = { weapon: 0, arm: 1, leg: 2, module: 3, block: 4 };
   const its = mountedItems().filter(it => upgradeable(it)).sort((a, b) => order[a.kind] - order[b.kind]);
-  const chip = it => { const mx = it.lvl >= maxLvlOf(it), f = mx ? 1 : xpFrac(it);
+  const chip = it => { const mx = it.lvl >= maxLvlOf(it), f = it.lvl / maxLvlOf(it);
     return `<div class="pchip${mx ? ' max' : ''}" title="${itemName(it)}">${it.kind === 'weapon' ? weaponIcon(it.type) : partIcon(it)}<em><i style="width:${(f * 100).toFixed(1)}%"></i></em></div>`; };
   const half = Math.ceil(its.length / 2);
   const html = `<div class="pbl">${its.slice(0, half).map(chip).join('')}</div><div class="pbgap"></div><div class="pbr">${its.slice(half).map(chip).join('')}</div>`;
