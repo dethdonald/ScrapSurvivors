@@ -124,7 +124,7 @@ function shopAction(act) {
   else if (act === 'attr') pickAttrPart();
 }
 /* ---- slot machine ---- */
-const REEL = ['⚙', '⚡', '◆', '✦', '☢'];
+const REEL = ['■', '▲', '◆', '●', '✚'];
 function spinSlot() {
   S.bolts -= shopCost('slot'); $('#shopBolts').textContent = S.bolts;
   const luck = stats.luck || 0, x = Math.random();
@@ -171,8 +171,8 @@ function pickAttrPart() {
   S.bolts -= shopCost('attr'); $('#shopBolts').textContent = S.bolts;
   receiveItem(g); sfx('levelup');
   const sub = $('#shopSub'); sub.hidden = false;
-  sub.innerHTML = `<div class="slotmsg" style="color:${A.color}">✦ ${GEMS[g.type].name}<br><small>${A.desc}</small></div>`;
-  setTimeout(() => { closeShop(); shopDone({ h: `✦ ${A.name.toUpperCase()} GEM`, s: 'In storage', c: A.color }); }, 1400);
+  sub.innerHTML = `<div class="slotmsg" style="color:${A.color}">◆ ${GEMS[g.type].name}<br><small>${A.desc}</small></div>`;
+  setTimeout(() => { closeShop(); shopDone({ h: `◆ ${A.name.toUpperCase()} GEM`, s: 'In storage', c: A.color }); }, 1400);
 }
 $('#shopLeave').addEventListener('click', closeShop);
 
@@ -224,7 +224,7 @@ function drawHolo(sp, price, afford) {
   c.globalAlpha = 0.12; c.fillStyle = col; c.fillRect(20, 18, 216, 92);
   c.globalAlpha = 1; c.fillStyle = col; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.font = '600 22px "JetBrains Mono", monospace'; c.fillText('LOCKED', 128, 42);
-  c.font = '700 40px "JetBrains Mono", monospace'; c.fillText(`⬢ ${price}`, 128, 82);
+  c.font = '700 40px "JetBrains Mono", monospace'; c.fillText(`${price} B`, 128, 82);
   c.globalAlpha = 0.18; c.fillStyle = '#000'; for (let y = 0; y < cv.height; y += 4) c.fillRect(0, y, cv.width, 2);   // scanlines
   tex.needsUpdate = true;
 }

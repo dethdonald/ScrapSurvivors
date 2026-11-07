@@ -731,8 +731,8 @@ const GEM_MAX = 5;                                   // gems share the five leve
 /* type -> best tier, for a list of gems */
 const gemMap = gs => { const m = new Map(); for (const g of gs) m.set(g.type, Math.max(m.get(g.type) || 0, g.lvl || 1)); return m; };
 const armGems = a => (a && a.gems ? a.gems.filter(Boolean) : []);
-const attrTag = it => armGems(it).map(g => `<em class="attr" style="color:${ATTRS[g.type].color}">✦ ${ATTRS[g.type].name}</em>`).join(' ')
-  + (it && it.kind === 'gem' ? `<em class="attr" style="color:${ATTRS[it.type].color}">✦</em>` : '');
+const attrTag = it => armGems(it).map(g => `<em class="attr" style="color:${ATTRS[g.type].color}">◆ ${ATTRS[g.type].name}</em>`).join(' ')
+  + (it && it.kind === 'gem' ? `<em class="attr" style="color:${ATTRS[it.type].color}">◆</em>` : '');
 
 /* ---------- Modules (upper mounts) ----------
    apply(s, lvl): change the frame's stats. Fields you can change on s:
@@ -1051,7 +1051,7 @@ const PART_ICONS = {
 function partIcon(it, cls = 'picon') {
   if (!it) return '';
   if (it.kind === 'weapon' && WEAPON_ICONS[it.type]) return weaponIcon(it.type);
-  if (it.kind === 'gem') return `<svg class="${cls} gemi" viewBox="0 0 24 24" style="color:${ATTRS[it.type].color}" fill="currentColor" aria-hidden="true">${PART_ICONS.gem}</svg>`;
+  if (it.kind === 'gem') return `<svg class="${cls} gemi" viewBox="0 0 24 24" style="color:${ATTRS[it.type].color}" fill="currentColor" aria-hidden="true">${typeof ICON !== 'undefined' && ICON.draw('gem', it.type) ? ICON.draw('gem', it.type).inner : PART_ICONS.gem}</svg>`;
   const p = PART_ICONS[it.kind + ':' + it.type]; if (!p) return '';
   return `<svg class="${cls}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${p}</svg>`;
 }

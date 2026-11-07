@@ -5,6 +5,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
 <title>Scrap Survivors</title>
 <link rel="stylesheet" href="src/style.css">
+<link rel="stylesheet" href="src/retro.css">
 </head>
 <body>
 <div id="game">
@@ -16,29 +17,26 @@
     <div id="vignette"></div>
     <div id="crosshair" class="xh"><i></i><b></b></div>
     <div id="devHint" hidden><b>TEST RANGE</b> <span><kbd>F1</kbd> dev panel</span> <span><kbd>V</kbd> spawn at crosshair</span> <span><kbd>Enter</kbd> build</span></div>
-    <div id="xhLeft"></div>
     <div id="xhWrap"><div id="xhAmmo"></div><div id="xhBolts"></div></div>
     <div id="partUps"></div>
     <div id="killMul" hidden><div class="km"><small>×</small><b id="kmN">0</b></div><i class="kmBar"><i id="kmFill"></i></i><div class="kmLbl">KILL STREAK</div></div>
+    <!-- top left: health (thin), shield below it, bolts -->
     <div class="tl hbox">
-      <div class="eyebrow">Frame · Stage <span class="mono" id="stageTxt">1</span></div>
-      <div class="hstat"><span data-sym="hp"></span><b class="mono" id="hpTxt">50</b></div>
-      <div class="bar"><i id="hpBar"></i></div>
-      <div class="hstat sh"><span data-sym="shield"></span><b class="mono" id="shTxt">0</b></div>
-      <div class="bar sh"><i id="shBar"></i></div>
+      <div class="eyebrow">Frame</div>
+      <div class="hline"><span data-sym="hp"></span><div class="bar thin"><i id="hpBar"></i></div><b class="mono" id="hpTxt">50</b></div>
+      <div class="hline sh"><span data-sym="shield"></span><div class="bar thin sh"><i id="shBar"></i></div><b class="mono" id="shTxt">0</b></div>
+      <div class="hline bolts"><span data-sym="bolts"></span><b class="mono" id="boltTxt">0</b></div>
       <div class="mob mono" id="mobility"></div>
     </div>
+    <!-- top centre: stage, timer, next event -->
     <div class="tc">
-      <div class="hbox tbox"><div class="eyebrow">Time</div><div id="timer" class="mono">00:00</div></div>
+      <div class="hbox tbox"><div class="eyebrow">Stage <span class="mono" id="stageTxt">1</span></div><div id="timer" class="mono">00:00</div></div>
       <div id="objective">Drop</div>
     </div>
-    <div class="tr hbox">
-      <div class="eyebrow">Pilot</div>
-      <div class="lvrow"><b class="big mono" id="lvlTxt">LV 1</b></div>
-      <div class="hrow"><span data-sym="kills"></span><b class="mono" id="killTxt">0</b></div>
-      <div class="hrow bolts"><span data-sym="bolts"></span><b class="mono" id="boltTxt">0</b></div>
-      <div class="hrow circ"><span data-sym="circuits"></span><b class="mono" id="circTxt">0</b></div>
-    </div>
+    <!-- top right: minimap -->
+    <div class="tr hbox" id="mmBox"><div class="eyebrow">Scan</div><canvas id="minimap" width="168" height="168"></canvas><div class="mmkey mono" id="mmKey"></div></div>
+    <!-- numbers other code writes to; no longer shown on the HUD -->
+    <div id="hudData" hidden><b id="killTxt"></b><b id="circTxt"></b><div id="loadout"></div><div id="xhLeft"></div></div>
     <div id="bossbar" class="hbox" hidden><div class="eyebrow name" id="bossName">THE WARDEN</div><div class="bar"><i id="bossFill"></i></div></div>
     <canvas id="qrIntro" hidden></canvas>
     <div id="countdown" hidden>3</div>
@@ -46,13 +44,12 @@
     <div id="dmgLayer"></div>
     <div id="fzBar" hidden><b>COIN FRENZY</b><i><i id="fzFill"></i></i></div>
     <div id="bzBar" hidden><b>BERSERK</b><i><i id="bzFill"></i></i></div>
-    <div id="xpline"><i id="xpFill"></i><b id="xpEdge"></b><span id="xpPct" class="mono"></span><div id="xpSparks"></div></div>
+    <div id="xpline"><i id="xpFill"></i><b id="xpEdge"></b><span id="xpPct" class="mono"></span><div id="xpSparks"></div><span id="lvlTxt" class="mono">LV 1</span></div>
     <div id="banner" hidden><div class="h" id="bannerH"></div><div class="s" id="bannerS"></div></div>
     <div id="marker" hidden><span id="markerTxt">GATE</span></div>
     <div id="shopMarker" class="smarker" hidden><span id="shopMarkerTxt">STORE</span></div>
     <div id="prompt" hidden></div>
     <div id="rewardPop" hidden></div>
-    <div id="loadoutBox" class="hbox"><div class="eyebrow">Armament</div><div id="loadout"></div></div>
     <div id="hint"></div>
   </div>
 
@@ -64,6 +61,7 @@
       <div class="bbar"><i id="bHpBar"></i></div>
       <div class="bstat sh"><span data-sym="shield"></span><b class="mono" id="bSh">0</b></div>
       <div class="bbar sh"><i id="bShBar"></i></div>
+      <div class="socks mono" id="sockSum"></div>
     </div>
     <div class="abilities">
       <h3>Abilities</h3>
@@ -126,7 +124,7 @@
           <div class="patchdir" id="patchDir"></div>
           <div class="custrow patchbtns"><button class="btn ghost nav" id="patchSave">Save</button><button class="btn ghost nav" id="patchNew">New</button><button class="btn ghost nav" id="patchDup">Duplicate</button><button class="btn ghost nav" id="patchDel">Delete</button><button class="btn ghost nav" id="patchClear">Clear</button></div>
           <h3>Sticker bomb</h3>
-          <label class="bombrow"><span>Amount</span><input class="nav" id="bombAmt" type="range" min="0" max="12" step="0.01"><b id="bombPeace" title="Maxed out">☮</b></label>
+          <label class="bombrow"><span>Amount</span><input class="nav" id="bombAmt" type="range" min="0" max="12" step="0.01"><b id="bombPeace" title="Maxed out">MAX</b></label>
           <div class="custrow"><button class="btn ghost nav" id="stickerReset">⟳ Reshuffle</button></div>
           <div class="custhint">Drag: slide · Pull off: peel</div>
         </div>
@@ -242,7 +240,7 @@
             <button class="btn ghost nav" id="xhSizeBtn">Size: medium</button>
             <div class="xhprev" aria-hidden="true"><div id="xhPreview" class="xh"><i></i><b></b></div></div>
           </div>
-          <button class="btn ghost nav" id="xhPartsBtn">Part level bar: on</button>
+          <button class="btn ghost nav" id="crtBtn">CRT effect: on</button>
           <button class="btn ghost nav" id="autoModBtn">Auto-upgrade new modules: on</button>
         </div>
         <div class="optsec">
@@ -255,9 +253,11 @@
     </div>
   </section>
 
+  <div id="crt" aria-hidden="true"></div>
+  <div id="youDied" hidden><b>YOU DIED</b><small>press any key to skip</small></div>
   <section id="over" class="overlay" hidden>
     <div class="menu overcard">
-      <h2>FRAME DESTROYED</h2>
+      <h2>YOU DIED</h2>
       <div class="osub" id="overSub"></div>
       <div class="otiles mono" id="recap"></div>
       <details class="odetails" id="overDetails">
@@ -280,6 +280,7 @@
 <script src="src/post.js"></script>
 <script src="src/data.js"></script>
 <script src="src/symbols.js"></script>
+<script src="src/icons.js"></script>
 <script src="src/shapes.js"></script>
 <script src="src/terrain.js"></script>
 <script src="src/robot.js"></script>
@@ -297,6 +298,7 @@
 <script src="src/bosses.js"></script>
 <script src="src/gemfx.js"></script>
 <script src="src/arena.js"></script>
+<script src="src/hud.js"></script>
 <script src="src/wcase.js"></script>
 <script src="src/title.js"></script>
 <script src="src/catalog.js"></script>

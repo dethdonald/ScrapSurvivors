@@ -1,0 +1,109 @@
+/* ============================================================
+   RETRO DIAGNOSTICS THEME (Chunk 13): 80s/90s industrial military terminal.
+   Charcoal and black, sharp rectangles, mono technical type, thin outlines, restrained hazard stripes, a faint CRT.
+   Loaded after style.css and overrides it. --accent is the player's SECONDARY colour, made contrast-safe in config.js.
+   ============================================================ */
+:root{
+  --ink:#08090a; --panel:rgba(12,13,14,.95); --panel2:#131517; --line:#3a4046; --frame:#c9cfd2; --frame-dim:#3a4046; --fill:rgba(9,10,11,.9);
+  --text:#dde1de; --dim:#8c959a; --hostile:#e2465c;
+  --f-display:'Cascadia Mono','Consolas','DejaVu Sans Mono',ui-monospace,monospace;
+  --accent:var(--orange); --on-accent:#05070a;
+}
+html,body{background:#050607}
+#game,#game *{border-radius:0!important}
+#game button,#game input,#game select{font-family:var(--f-display)}
+h1,h2,h3,.eyebrow,.btn,.card .tag,.card .nm{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.14em}
+.menu h2,.overcard h2{letter-spacing:.3em;font-size:22px}
+
+/* ---- panels: thin outlines, corner ticks, no soft shadows ---- */
+.hbox,.bstats,.abilities,.parts,.menu,.readycheck,.card,#prompt,#banner,.toast,.slotdlg,.tip{background:var(--fill);border:1px solid var(--frame-dim)!important;box-shadow:none}
+.hbox::after,.bstats::after,.abilities::after,.parts::after,.menu::after{border-color:var(--frame)!important;border-width:1px!important}
+.hbox>.eyebrow,.bstats>.eyebrow{background:#08090a;color:var(--accent);letter-spacing:.2em}
+.prow{border:1px solid var(--frame-dim);background:transparent}
+.prow:hover,.card:hover,.card:focus-visible{border-color:var(--accent);background:rgba(255,255,255,.04)}
+.card.rar{border-width:1px!important;box-shadow:none}
+.card.rar.r5{box-shadow:inset 0 0 0 1px var(--accent)}
+:focus-visible{outline:1px solid var(--accent)!important;outline-offset:2px}
+.btn{background:transparent;color:var(--accent);border:1px solid var(--accent);box-shadow:none;letter-spacing:.2em;font-size:13px;padding:10px 20px;position:relative}
+.btn:hover,.btn:focus-visible{background:var(--accent);color:var(--on-accent)}
+.btn.ghost{color:var(--text);border:1px solid var(--frame-dim)}
+.btn.ghost:hover,.btn.ghost:focus-visible{border-color:var(--accent);background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.35}
+/* hazard stripe: restrained, a thin muted rule along panel tops and at the title; never a heavy band */
+:root{--hazard:repeating-linear-gradient(-45deg,var(--accent) 0 5px,#08090a 5px 10px)}
+.menu::before,.parts::before,.tmenu::before,.custpanel::before,.dpanel::before,.bstats::before{height:3px!important;opacity:.55!important}
+.hazard-foot{height:3px;opacity:.55}
+.winbar{height:8px;opacity:.7}
+.catpanel::before{height:6px;opacity:.7}
+kbd{border:1px solid var(--frame-dim);background:transparent;color:var(--accent)}
+.bar,.bbar{background:#050607;border:1px solid var(--frame-dim)}
+
+/* ---- HUD layout (exact): top-left health/shield/bolts, top-centre stage/timer/next event, top-right minimap, bottom XP ---- */
+#hud .tl.hbox{top:14px;left:16px;width:min(250px,42vw);padding:12px 12px 8px;gap:5px;background:rgba(8,9,10,.6)}
+.hline{display:grid;grid-template-columns:18px 1fr auto;align-items:center;gap:8px}
+.hline [data-sym],.hline svg{width:16px;height:16px;color:var(--text)}
+.hline b{font-size:13px;font-weight:600;min-width:34px;text-align:right}
+.hline.bolts{grid-template-columns:18px auto;color:#e8c35a}.hline.bolts [data-sym],.hline.bolts svg{color:#e8c35a}
+.hline.bolts b{text-align:left;font-size:14px}
+.bar.thin{height:5px}.bar.thin.sh{height:4px}
+.bar.thin i{background:var(--text)}.bar.thin.sh i{background:var(--shield)}
+.tc .tbox{padding:14px 18px 6px;background:rgba(8,9,10,.6);min-width:150px}
+#timer{font-size:26px;letter-spacing:.12em}
+#objective{margin-top:6px;font-size:11px;letter-spacing:.16em;color:var(--dim);background:rgba(8,9,10,.6);border:1px solid var(--frame-dim);padding:3px 10px;display:inline-block}
+#hud .tr.hbox{top:14px;right:16px;width:auto;padding:10px;background:rgba(8,9,10,.6)}
+#minimap{display:block;width:168px;height:168px;border:1px solid var(--frame-dim);background:#050607;image-rendering:pixelated}
+.mmkey{font-size:9px;color:var(--dim);margin-top:5px;letter-spacing:.08em;white-space:nowrap}
+.mmkey i{display:inline-block;width:6px;height:6px;margin:0 3px 0 6px;vertical-align:baseline}
+#xpline{height:10px;right:74px;background:#050607;border-top:1px solid var(--frame-dim);border-right:1px solid var(--frame-dim)}
+#xpline #lvlTxt{position:absolute;left:100%;top:-1px;margin-left:0;width:74px;height:11px;line-height:11px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--accent);background:#050607;border:1px solid var(--frame-dim);border-left:0;padding:0;box-sizing:border-box}
+#xpPct{display:none}
+#hud #speedo{display:none}
+/* reload indicators beside the crosshair: compact and independent, one per gun (Twin Arm shows two) */
+#xhWrap{left:calc(50% + 30px);gap:3px}
+#xhAmmo{gap:3px}
+#xhAmmo .xrow{gap:4px;opacity:.7}
+#xhAmmo .wicon{width:20px;height:9px}
+#xhAmmo .xrow>i{width:30px;height:3px}
+#xhAmmo .xrow em{display:none}
+#xhAmmo .xrow b{font-size:10px;min-width:20px}
+#xhBolts{display:none}
+#bossbar.hbox{bottom:46px;background:rgba(8,9,10,.7)}
+#bossbar .eyebrow.name{color:var(--hostile)}
+.xh i{background:var(--text)}.xh b{border-width:1px;transform:rotate(0) scale(.6)}
+.xh[data-style=diamond] b{transform:rotate(45deg) scale(.6)}
+
+/* ---- CRT: a very faint scanline sheet and a corner shade over everything; off in Options ---- */
+#crt{position:fixed;inset:0;pointer-events:none;z-index:50;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 62%,rgba(0,0,0,.34) 100%);mix-blend-mode:multiply;opacity:.55}
+
+/* ---- the death sequence ---- */
+#youDied{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;pointer-events:none;background:rgba(2,3,4,0);animation:dieFade 3.2s ease-in forwards}
+#youDied b{font-family:var(--f-display);font-size:clamp(34px,8vw,92px);letter-spacing:.35em;color:#c8232f;font-weight:700;opacity:0;animation:dieText 2.6s ease-out .9s forwards;padding-left:.35em;text-shadow:0 0 18px rgba(200,35,47,.45)}
+#youDied small{font-family:var(--f-mono);font-size:11px;letter-spacing:.3em;color:var(--dim);text-transform:uppercase;opacity:0;animation:dieText 1s ease-out 2.4s forwards}
+@keyframes dieFade{to{background:rgba(2,3,4,.82)}}
+@keyframes dieText{to{opacity:1}}
+#over .overcard{animation:dieIn .8s ease-out both}
+@keyframes dieIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.otile,.okv{border:1px solid var(--frame-dim);background:transparent}
+
+/* ---- small windows and the Steam Deck: keep the HUD inside the screen ---- */
+@media (max-width:1000px),(max-height:620px){
+  #minimap{width:120px;height:120px}
+  #hud .tl.hbox{width:min(210px,40vw)}
+  #timer{font-size:20px}
+}
+@media (prefers-reduced-motion:reduce){#youDied,#youDied b,#youDied small{animation-duration:.01s;animation-delay:0s}#crt{display:none}}
+
+/* ---- icon registry sizes ---- */
+.ic{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;color:var(--text);flex:none}
+.ic16{width:16px;height:16px}.ic24{width:24px;height:24px}.ic32{width:32px;height:32px}.ic48{width:48px;height:48px}
+.ic.wide{height:auto}.ic.missing{color:var(--hostile)}
+.ic-svg{display:block;max-width:100%}
+
+/* ---- hangar: socket summary and part tags ---- */
+.socks{display:flex;gap:10px;margin-top:6px;font-size:12px;color:var(--text)}
+.socks .sk{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--frame-dim);padding:2px 6px}
+.socks .sk.none{color:var(--dim)}
+.tagS.own{color:var(--text);border:1px solid var(--frame-dim);background:transparent}
+.tagS.orb{color:#05070a;background:#b45cff}
+.tagS.auto{color:var(--on-accent);background:var(--accent)}

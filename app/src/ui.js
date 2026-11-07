@@ -73,7 +73,6 @@ function renderXhLeft() {
   const half = Math.ceil(its.length / 2);
   const html = `<div class="pbl">${its.slice(0, half).map(chip).join('')}</div><div class="pbgap"></div><div class="pbr">${its.slice(half).map(chip).join('')}</div>`;
   const el = $('#xhLeft'); if (el.dataset.h !== html) { el.dataset.h = html; el.innerHTML = html; }
-  el.hidden = !SETTINGS.xhParts;
 }
 const ammoTag = w => WEAPONS[w.type].mag ? `<span class="ammo" data-w="${w.id}"><b></b><i><i></i></i></span>` : '';
 function updateAmmo() {
@@ -185,7 +184,7 @@ function updateRadar() {
     for (const c of cases) if (!c.open) add(c.x, c.y + 1.2, c.z, '▣', 'case');
     if (S.shop) add(S.shop.x, S.shop.y + 3, S.shop.z, '$', 'store');
     for (const e of enemies) if (!e.dead && (e.elite || e.mini)) add(e.pos.x, e.pos.y + e.r * 2 + 0.6, e.pos.z, '!', 'elite');
-    for (const g of gems) if (g.kind === 'loot' || g.kind === 'vacuum' || g.kind === 'nuke' || g.kind === 'health') add(g.pos.x, g.pos.y + 0.8, g.pos.z, g.kind === 'loot' ? '◆' : g.kind === 'health' ? '+' : '★', g.kind === 'loot' ? 'part' : 'power');
+    for (const g of gems) if (g.kind === 'loot' || g.kind === 'vacuum' || g.kind === 'nuke' || g.kind === 'health') add(g.pos.x, g.pos.y + 0.8, g.pos.z, g.kind === 'loot' ? '◆' : g.kind === 'health' ? '+' : '+', g.kind === 'loot' ? 'part' : 'power');
   }
   list.sort((a, b) => a.d - b.d);
   let i = 0;
@@ -207,11 +206,12 @@ function updateHUD(dt) {
   updateDmgNumbers(dt); updateRadar();
   updateAmmo(); updateReloadMarkers(); updateLockMarkers();
   // boss bar (bottom of the screen): the Warden, or the brute that turns up every 5 minutes
+  drawMinimap(dt);
   const bossE = S.boss || (S.mini && !S.mini.dead ? S.mini : null);
   $('#bossbar').hidden = !bossE;
   if (bossE) {
     $('#bossFill').style.transform = `scaleX(${clamp(bossE.hp / bossE.maxHp, 0, 1)})`;
-    $('#bossName').textContent = bossE === S.boss ? `THE WARDEN · STAGE ${S.stage}` : `BRUTE CRAWLER · ${fmt(S.t)}`;
+    $('#bossName').textContent = bossLabel(bossE);
   }
   $('#hpBar').style.transform = `scaleX(${clamp(P.hp / stats.maxHp, 0, 1)})`;
   $('#shBar').style.transform = `scaleX(${stats.maxShield ? clamp(P.shield / stats.maxShield, 0, 1) : 0})`;
@@ -226,22 +226,19 @@ function updateHUD(dt) {
   if (stats.legs < 2) mob += `<span style="color:var(--hostile)">Unstable</span>`;
   $('#mobility').innerHTML = mob;
   $('#timer').textContent = fmt(S.t); clockHeat(dt);
+  { const hn = $('#hint'); const hide = S.t > 30 && !S.test; if (hn.hidden !== hide) hn.hidden = hide; }          // the key hints fade away after the first half minute: no permanent help bar
   $('#lvlTxt').textContent = 'LV ' + S.level;
   $('#killTxt').textContent = S.kills;
   $('#boltTxt').textContent = S.bolts; $('#circTxt').textContent = META.circuits;
   updateXpLine(dt);
-  let obj;
-  if (S.mode === 'drop') obj = 'Drop';
-  else if (S.bossDead) obj = 'Exit open';
-  else if (S.boss) obj = overtime() > 0 ? 'OVERTIME · kill the boss' : 'Kill the boss';
-  else obj = `Boss ${fmt(BOSS_AT - S.t)}`;
+  let obj = nextEventText();
   if (S.test && !S.boss && !S.bossDead) obj = `Test · ${enemies.filter(e => !e.dead).length} enemies`;
   $('#objective').textContent = obj;
   hitT -= dt;
   const ch = $('#crosshair');
   ch.className = 'xh' + (hitT > 0 ? ' hit' : aim.enemy ? ' on' : '');
   XH.bloom = Math.max(0, XH.bloom - dt * (1.6 + XH.bloom * 2));
-  if ((xhLeftT -= dt) <= 0) { xhLeftT = 0.5; if (SETTINGS.xhParts && L && L.body) renderXhLeft(); }
+  if ((xhLeftT -= dt) <= 0) { xhLeftT = 0.5; if (false) renderXhLeft(); }
   ch.style.transform = `translate(-50%, -50%) scale(${(1 + XH.bloom * 0.85).toFixed(3)})`;
   ch.style.filter = XH.bloom > 0.02 ? `drop-shadow(0 0 ${(XH.bloom * 6).toFixed(1)}px rgba(255,190,120,${(XH.bloom * 0.9).toFixed(2)}))` : '';
   ch.hidden = S.mode !== 'play';
@@ -370,9 +367,8 @@ function syncSettingsUI() {
   optRow('#physBtn', 'Physics body', !!SETTINGS.physics, PHYS.ready ? '' : 'Loading…');
   optRow('#gfxBtn', 'Graphics', SETTINGS.gfx);
   optRow('#devBtn', 'Developer mode', !!SETTINGS.dev);
-  optRow('#xhPartsBtn', 'Part level bar', !!SETTINGS.xhParts);
+  optRow('#crtBtn', 'CRT effect', SETTINGS.crt !== false); { const c = $('#crt'); if (c) c.hidden = SETTINGS.crt === false; }
   optRow('#autoModBtn', 'Auto-upgrade new modules', SETTINGS.autoUpMods !== false);
-  $('#xhLeft').hidden = !SETTINGS.xhParts;
   $('#skipBtn').hidden = !SETTINGS.dev || !!S.test;
   $('#devPanelBtn').hidden = !S.test;
   optRow('#detailBtn', 'World detail', SETTINGS.detail !== false);
@@ -428,7 +424,7 @@ $('#xhStyleBtn').addEventListener('click', () => { SETTINGS.xhStyle = cycle(XH_S
 $('#xhColorBtn').addEventListener('click', () => { SETTINGS.xhColor = cycle(Object.keys(XH_COLORS), SETTINGS.xhColor); saveSettings(); syncSettingsUI(); });
 $('#xhSizeBtn').addEventListener('click', () => { SETTINGS.xhSize = cycle(XH_SIZES.map(s => s[1]), SETTINGS.xhSize); saveSettings(); syncSettingsUI(); });
 $('#autoModBtn').addEventListener('click', () => { SETTINGS.autoUpMods = !(SETTINGS.autoUpMods !== false); saveSettings(); syncSettingsUI(); });
-$('#xhPartsBtn').addEventListener('click', () => { SETTINGS.xhParts = !SETTINGS.xhParts; saveSettings(); syncSettingsUI(); });
+$('#crtBtn').addEventListener('click', () => { SETTINGS.crt = SETTINGS.crt === false; saveSettings(); syncSettingsUI(); });
 $('#devBtn').addEventListener('click', () => {
   SETTINGS.dev = !SETTINGS.dev; saveSettings(); syncSettingsUI();
   if (typeof INV !== 'undefined' && INV.hangar && !$('#inv').hidden) renderBench();
@@ -451,9 +447,8 @@ $('#againBtn').addEventListener('click', () => toHangar());
 function gameOver() {
   // the frame falls apart first; the summary appears a moment later
   if (S.mode === 'dying' || S.mode === 'over') return;
-  S.mode = 'dying'; S.dieT = 2.4; S.total += S.t;
+  S.mode = 'dying'; S.dieT = 3.4; S.total += S.t; deathStart();
   $('#crosshair').hidden = true; $('#prompt').hidden = true;
-  banner('FRAME DOWN', '', 'var(--hostile)', 2.2);
   startCelebration();
   physDestroyRobot(true);
   startRagdoll();
@@ -468,7 +463,7 @@ function runStatDamage(src, dealt, raw) {
 }
 function runStatKill(e) {
   const st = S.st; if (!st) return;
-  const k = e.boss ? 'warden' : e.mini ? 'brute' : e.elite ? 'elite' : e.type;
+  const k = e.boss ? e.type : e.mini ? 'brute' : e.elite ? 'elite' : e.type;
   st.kills[k] = (st.kills[k] || 0) + 1;
 }
 function runStatTick(dt) {
@@ -476,14 +471,14 @@ function runStatTick(dt) {
   const d = Math.hypot(player.pos.x - player.prev.x, player.pos.z - player.prev.z); if (d < 5) st.dist += d;
   st.peakT -= dt; if (st.peakT <= 0) { st.peakT = 0.5; let n = 0; for (const e of enemies) if (!e.dead) n++; if (n > st.peak) st.peak = n; }
 }
-const KILL_NAMES = { crawler: 'Crawlers', elite: 'Elite crawlers', drone: 'Drones', spitter: 'Spitters', bomber: 'Bombers', splitter: 'Splitters', splitling: 'Splitlings', brute: 'Brutes', warden: 'Wardens' };
+const KILL_NAMES = { crawler: 'Crawlers', elite: 'Elite crawlers', drone: 'Drones', spitter: 'Spitters', bomber: 'Bombers', splitter: 'Splitters', splitling: 'Splitlings', brute: 'Brutes', warden: 'Wardens', robovac: 'Vacuum bots', pig: 'Pigs', magnetron: 'Magnetrons', smelter: 'Smelters', hivemother: 'Hive Mothers', sac: 'Sacs' };
 const big = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(1) + 'k' : String(Math.round(n));
 function showGameOver() {
-  S.mode = 'over'; unlockPointer(); $('#hud').hidden = true;
+  S.mode = 'over'; unlockPointer(); $('#hud').hidden = true; deathEnd();
   const st = S.st || newRunStats();
   $('#overSub').textContent = S.test ? 'Test range' : 'Stage ' + S.stage; $('#overDetails').open = false;
   // headline tiles (the numbers count up)
-  const tiles = [['time', S.total, fmt], ['kills', S.kills], ['level', S.level], ['bolts', st.bolts]];
+  const tiles = [['time', S.total, fmt], ['stage', S.stage], ['level', S.level], ['kills', S.kills], ['bolts', st.bolts]];
   $('#recap').innerHTML = tiles.map(([a], i) => `<div class="otile" data-tip="${symName(a)}">${sym(a, '')}<b data-i="${i}">0</b></div>`).join('');
   const t0 = performance.now(), tick = () => {
     const k = Math.min(1, (performance.now() - t0) / 1100), e = 1 - Math.pow(1 - k, 3);

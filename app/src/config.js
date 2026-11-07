@@ -95,7 +95,18 @@ function brightAccent(hex) {
     return '#' + c.setHSL(h.h, Math.max(0.65, h.s), Math.min(0.72, Math.max(0.55, h.l))).getHexString();
   } catch (e) { return hex; }
 }
-function applyThemeColor() { try { const c = CUSTOM.color2 || '#ff7a1a'; const r = document.documentElement.style; r.setProperty('--sec', c); r.setProperty('--orange', c); } catch (e) {} }
+/* The secondary colour is the HUD accent. It must stay readable on the near-black panels: lift it until its contrast against the panel colour is at least 4.5:1,
+   and pick black or white text for anything drawn ON the accent. */
+function accentSafe(hex) {
+  const lin = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const lum = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  let r = parseInt(hex.slice(1, 3), 16) || 255, g = parseInt(hex.slice(3, 5), 16) || 122, b = parseInt(hex.slice(5, 7), 16) || 26;
+  const bg = lum(10, 11, 12);
+  for (let i = 0; i < 12 && (lum(r, g, b) + 0.05) / (bg + 0.05) < 4.5; i++) { r = Math.round(r + (255 - r) * 0.18); g = Math.round(g + (255 - g) * 0.18); b = Math.round(b + (255 - b) * 0.18); }
+  const L = lum(r, g, b), on = (L + 0.05) / 0.05 > 1.05 / (L + 0.05) ? '#05070a' : '#ffffff';
+  return { hex: '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join(''), on };
+}
+function applyThemeColor() { try { const a = accentSafe(CUSTOM.color2 || '#ff7a1a'); const r = document.documentElement.style; r.setProperty('--sec', a.hex); r.setProperty('--orange', a.hex); r.setProperty('--accent', a.hex); r.setProperty('--on-accent', a.on); } catch (e) {} }
 function saveCustom() { CUSTOM.rev++; applyThemeColor(); try { localStorage.setItem('scrapsurvivors.custom', JSON.stringify({ color: CUSTOM.color, color2: CUSTOM.color2, patch: CUSTOM.patch, patches: CUSTOM.patches, cur: CUSTOM.cur, bomb: CUSTOM.bomb, stickers: CUSTOM.stickers, layout: CUSTOM.layout, cosmetics: CUSTOM.cosmetics })); } catch (e) {} }
 
 if (typeof THREE !== 'undefined' && CUSTOM.color2) CUSTOM.color2 = brightAccent(CUSTOM.color2);

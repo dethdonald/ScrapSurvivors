@@ -55,7 +55,7 @@ function startStage() {
   clearWorld();
   genTerrain((Math.random() * 1e9) | 0);
   setLevelPalette(); _skyCol.copy(LEVEL_PAL.sky);
-  buildTerrainMesh();
+  buildTerrainMesh(); mmBuild();
   physResetWorld();
   Object.assign(S, {
     t: 0, spawnAcc: 0, flowT: 0, rerolls: 3, shopAwayT: 0, berserkT: 0, berserkLast: -999, vacSeeded: false, vacT: 0, gateOpen: false, bossSpawned: false, bossDead: false, boss: null, mini: null, nextMini: 200, hordeIdx: 0,

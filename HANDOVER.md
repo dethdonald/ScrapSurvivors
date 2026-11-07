@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.37.0 · BUILD NOV 6|
+| **Version** | 0.38.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -107,6 +107,15 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - **Boss-down mass kill:** killing a boss killed every enemy in one call (300+ enemies = a 3 s freeze here, 11 s in the long run). Survivors now go down in a quick wave, 12 per step (`CULL`/`cullTick`), harmless meanwhile: worst step 3,086 ms → 99 ms.
 - **Measurements** (headless Chromium, SwiftShader, so absolute numbers are pessimistic; compare before→after): 500–600 enemies, plain: 11.0 → 7.1 ms/step; Twin Arm 6.1 → 4.0; Lightning+Lightning 6.2 → 4.0; Poison+Poison 6.8 → 3.3; Lifesteal+Poison 5.3 → 5.8 (noise); Explode+Bounce 9.3 → 7.3; Split+Homing 57 → 20 (shots 1,525 → 420); Fire+Ice 7.7 → 6.3; Orbit+Poison 10.0 → 5.2; boss + 500 horde 6.2 → 4.8. Staged late game (jumps to 0/150/300/450 s, boss at 510 s, overtime from 620 s, then a boss kill): avg 1.6 → 3.4 → 4.4 → 8.2 → 8.0 → 12.5 ms/step with up to 644 enemies; heap flat at 29 MB, scene children stay bounded (390–1,445), no errors. 55 combos still fire cleanly; spectators 0.06 ms.
 - **Remaining issues:** occasional 40–80 ms `updateShots` steps with Lightning + Poison and fast guns (chain arcs); an overtime horde of 640 enemies costs ~12 ms/step here (fine on a real GPU/CPU, still worth a check on your PC); the dupcheck script only catches duplicate functions, so a duplicate top-level `const` slipped in once (caught by the page test). Not touched (visual redesign later): full sound mixing/ducking rework.
+
+### 0.38.0 — Chunk 13: Retro UI and HUD
+- Retro-futuristic industrial diagnostics theme (`src/retro.css`): charcoal panels, sharp corners, mono type, thin outlines, restrained hazard stripes, optional CRT overlay (Options → CRT effect). Emoji removed.
+- Secondary robot colour drives a contrast-safe accent (`accentSafe`, ≥4.5:1, auto black/white on-accent text).
+- HUD per spec: health/shield/bolts top-left, stage/timer/next event top-centre, heading-up minimap top-right, crosshair + compact per-weapon reload rows, slim full-width XP bar with level at the end. Permanent ability bar removed.
+- Central icon registry `src/icons.js` (16/24/32/48 px): weapons, parts, gems (distinct marks), power-ups, status effects, stats.
+- Hangar: robot auto-centred/framed on pedestal for any size; socket summary; owned (×N) and ORB tags.
+- Death: skippable jingle, YOU DIED fade, stats screen (time, stage, level, kills, bolts, etc.).
+- Reroll 50 bolts and terminal 100 bolts shown.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.

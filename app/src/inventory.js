@@ -267,7 +267,23 @@ function partRow(it, attrs, tag) {
   const xp = '';
   void sub;
   const wpn = it.kind === 'weapon', armGunIcons = it.kind === 'arm' ? armGuns(it).map(g => weaponIcon(g.type)).join('') : '';
-  return `<div class="prow${wpn ? ' wrow' : ''}" ${attrs}><i>${icon}</i><span><b>${itemName(it)} ${it.kind === 'gem' || it.kind === 'orb' ? '' : mkTag(it.lvl)} ${attrTag(it)}${armGunIcons ? `<em class="rowguns">${armGunIcons}</em>` : ''}${extra && it.kind !== 'arm' ? `<em class="rowx">+${extra}</em>` : ''}</b>${xp}</span>${it.autoUp ? '<span class="tagS auto">AUTO</span>' : ''}${tag ? `<span class="tagS">${tag}</span>` : ''}</div>`;
+  return `<div class="prow${wpn ? ' wrow' : ''}" ${attrs}><i>${icon}</i><span><b>${itemName(it)} ${it.kind === 'gem' || it.kind === 'orb' ? '' : mkTag(it.lvl)} ${attrTag(it)}${armGunIcons ? `<em class="rowguns">${armGunIcons}</em>` : ''}${extra && it.kind !== 'arm' ? `<em class="rowx">+${extra}</em>` : ''}</b>${xp}</span>${it.autoUp ? '<span class="tagS auto">AUTO</span>' : ''}${partTags(it)}${tag ? `<span class="tagS">${tag}</span>` : ''}</div>`;
+}
+/* sockets on the frame: how many arm (sphere) and module (cube) sockets the torso has, how many are filled, and any adapters that change a socket's kind */
+function socketSummary() {
+  const up = mountedItems().find(o => o.kind === 'block' && BLOCKS[o.type] && BLOCKS[o.type].upper);
+  if (!up) return '<span class="sk none">no torso</span>';
+  const def = BLOCKS[up.type], cnt = { arm: [0, 0], module: [0, 0] }; let adapters = 0;
+  def.sockets.forEach((s, i) => { const it = up.slots[i]; const k = s.accepts; if (!cnt[k]) return; cnt[k][1]++; if (it) cnt[k][0]++; if (it && it.kind === 'adapter') adapters++; });
+  const pill = (k, name) => `<span class="sk" data-tip="${name} sockets: filled / total">${ICON.html(k === 'arm' ? 'arm' : 'module', k === 'arm' ? 'basic' : 'jetpack', 16)} ${cnt[k][0]}/${cnt[k][1]}</span>`;
+  return pill('arm', 'Arm') + pill('module', 'Module') + (adapters ? `<span class="sk" data-tip="Adapters in use">${ICON.html('adapter', 'arm2mod', 16)} ${adapters}</span>` : '');
+}
+/* the small tags on a parts row: how many you own, and whether an Upgrade Orb could raise it */
+function partTags(it) {
+  if (!it || it.kind === 'block' || it.kind === 'orb') return '';
+  const own = allItems().filter(o => o.kind === it.kind && o.type === it.type).length;
+  const orbOk = upgradeable(it) && upgradeCheck(it).ok && allItems().some(o => o.kind === 'orb');
+  return (own > 1 ? `<span class="tagS own" data-tip="You own ${own}">×${own}</span>` : '') + (orbOk ? '<span class="tagS orb" data-tip="An Upgrade Orb in storage could raise this">ORB</span>' : '');
 }
 function xpBarHTML(it) {
   if (!upgradeable(it) || it.kind === 'gem') return '';
@@ -280,6 +296,7 @@ function renderBench() {
   const st = stats;
   $('#benchEyebrow').textContent = INV.hangar ? 'Hangar' : `Workbench · Stage ${S.stage}`;
   $('#bHp').textContent = st.maxHp; $('#bSh').textContent = st.maxShield;
+  $('#sockSum').innerHTML = socketSummary();
   $('#bHpBar').style.width = Math.min(100, st.maxHp / 3) + '%';
   $('#bShBar').style.width = Math.min(100, st.maxShield / 1.5) + '%';
   // abilities: a row of symbol chips; hover one for what it means
@@ -833,13 +850,26 @@ function benchPad(dt, pressed, released) {
   vc.style.transform = `translate(${c.x}px, ${c.y}px)`;
 }
 
+/* The robot stands on the pedestal and the camera frames it: whatever its size, it stays centred and fully in view (zooming out is still free). */
+const FIT = { c: BENCH_TARGET.clone(), goal: BENCH_TARGET.clone(), r: 2, rg: 2, need: 0, t: 0 }, _fb = new THREE.Box3(), _fs = new THREE.Vector3(), _fc = new THREE.Vector3();
+function benchFit() {
+  const now = performance.now();
+  if (previewModel && now - FIT.t > 250) {
+    FIT.t = now; _fb.setFromObject(previewModel);
+    if (!_fb.isEmpty()) { _fb.getSize(_fs); _fb.getCenter(_fc); FIT.goal.set(0, Math.max(_fc.y, 0.9), 0); FIT.rg = Math.max(_fs.y * 0.5, Math.hypot(_fs.x, _fs.z) * 0.5, 1.4); }
+  }
+  FIT.c.lerp(FIT.goal, 0.12); FIT.r += (FIT.rg - FIT.r) * 0.12;
+  const half = Math.min(Math.tan(bcam.fov * Math.PI / 360), Math.tan(bcam.fov * Math.PI / 360) * bcam.aspect);
+  FIT.need = FIT.r / half * 1.3;
+  return FIT;
+}
 /* ---------- per frame ---------- */
 function updateBenchCamera() {
   bcam.aspect = innerWidth / innerHeight;
   if (innerWidth > 900) bcam.setViewOffset(innerWidth, innerHeight, innerWidth * 0.14, 0, innerWidth, innerHeight); else bcam.clearViewOffset();
-  const cp = Math.cos(INV.pitch);
-  bcam.position.set(BENCH_TARGET.x + Math.sin(INV.yaw) * cp * INV.dist, BENCH_TARGET.y + Math.sin(INV.pitch) * INV.dist, BENCH_TARGET.z + Math.cos(INV.yaw) * cp * INV.dist);
-  bcam.lookAt(BENCH_TARGET);
+  const cp = Math.cos(INV.pitch), T = benchFit(), D = Math.max(INV.dist, T.need);
+  bcam.position.set(T.c.x + Math.sin(INV.yaw) * cp * D, T.c.y + Math.sin(INV.pitch) * D, T.c.z + Math.cos(INV.yaw) * cp * D);
+  bcam.lookAt(T.c);
   bcam.updateProjectionMatrix();
   bcam.updateMatrixWorld();
 }
@@ -1088,11 +1118,11 @@ function setTip(item, obj, row) {
     return;
   }
   const r = rarityOf(item.lvl || 1), showRar = item.kind !== 'block' || BLOCKS[item.type].upgradable;
-  $('#tipName').innerHTML = partIcon(item, 'picon tipicon') + itemName(item) + armGems(item).map(g => ` <span class="tipAttr" style="color:${ATTRS[g.type].color}">✦ ${ATTRS[g.type].name}</span>`).join('');
+  $('#tipName').innerHTML = partIcon(item, 'picon tipicon') + itemName(item) + armGems(item).map(g => ` <span class="tipAttr" style="color:${ATTRS[g.type].color}">◆ ${ATTRS[g.type].name}</span>`).join('');
   $('#tipRar').innerHTML = item.kind === 'orb' ? `<span style="color:${ORB_COLOR}">Upgrade orb</span> · drag onto a part` : item.kind === 'gem' ? `<span style="color:${ATTRS[item.type].color}">Tier ${ROMAN[item.lvl || 1]}</span> of V · ${itemSub(item)}` : showRar ? `<span style="color:${r.css}">${r.name}</span> · Lv ${item.lvl} · ${itemSub(item)}` + xpBarHTML(item) : itemSub(item);
   const cmp = compareTo(item), cmpRows = cmp ? new Map(partInfo(cmp)) : null;
   $('#tipStats').innerHTML = partInfo(item).map(([a, b]) => `<div><span>${a}</span><b>${b}${cmpRows ? statDelta(a, b, cmpRows.get(a)) : ''}</b></div>`).join('')
-    + armGems(item).map(g => `<div class="tipDesc" style="color:${ATTRS[g.type].color}">✦ ${item.kind === 'leg' ? LEG_GEM[g.type] : ATTRS[g.type].desc}</div>`).join('')
+    + armGems(item).map(g => `<div class="tipDesc" style="color:${ATTRS[g.type].color}">◆ ${item.kind === 'leg' ? LEG_GEM[g.type] : ATTRS[g.type].desc}</div>`).join('')
     + (item.kind === 'arm' && armCombo(item) && COMBOS[armCombo(item)] ? `<div class="tipDesc combo">◆ Combo · <b>${COMBOS[armCombo(item)][0]}</b>: ${COMBOS[armCombo(item)][1]}</div>` : '')
     + (item.kind === 'arm' && armGems(item).length === 1 ? `<div class="tipDesc">+1 gem → combo</div>` : '')
     + (item.kind === 'leg' && misplacedLegs().includes(item) ? `<div class="tipDesc warn">Off the ground · slows you</div>` : '')
