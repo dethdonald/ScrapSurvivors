@@ -166,6 +166,7 @@ function renderFrame(sc, cam) {
     MAT_OUT.uniforms.bloom.value = U[0].texture;
   }
   MAT_OUT.uniforms.tex.value = POST.rt.texture; MAT_OUT.uniforms.useBloom.value = bloom ? 1 : 0;
+  if (typeof inkFinish === 'function' && inkFinish()) return;      // SCRAP INK (ink.js) drew the final pass
   blit(MAT_OUT, null);
 }
 

@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.40.0 · BUILD NOV 6|
+| **Version** | 0.41.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -68,6 +68,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | `player.js` | stats, movement (coyote time, jump buffer, wall kick, scamper, slide, dash), visuals, camera |
 | `combat.js` | enemies, spawning, damage, shots, explosions, drops, gems, frenzy, kill streak, instancing, effects |
 | `weaponfx.js` | per-weapon looks, sounds and impacts |
+| `ink.js` | SCRAP INK art-style post pass (dev-only, off by default), presets and sliders |
 | `cinematic.js` | MK III reveal cinematic (own scene, `S.mode='cine'`), queue, skip, replay |
 | `weaponmodels.js` | MK I/II/III weapon models by level, tier-up unfold, MK III hook |
 | `inventory.js` | workbench / hangar, parts list, tooltips, `sfx()`, twirl and spark helpers |
@@ -137,6 +138,14 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - **Skip:** any key (Esc included, captured so it doesn't open the pause menu), mouse, touch, or any controller button (ignored for the first 0.3 s so the button that caused the upgrade can't skip it); a 0.25 s dip to black then back to the game.
 - **Audio:** soft synthesised pads, drone, kicks, bells and a chord stab (no harsh beeps), routed through one gain node that is faded and every oscillator stopped on exit; the music is ducked to 12% during the scene. Asset hook: set `CINE_MUSIC_URL` (cinematic.js) to a licensed track to replace the synth bed.
 - **Resources:** own geometries/materials/textures and the cloned weapon materials are disposed on exit; the scene is emptied; rays are one 16-triangle mesh, particles are two `Points` draw calls; no volumetrics.
+
+### 0.41.0 — Chunk 16: SCRAP INK shader (final chunk)
+- New `src/ink.js` (loaded last) + a 2-line hook at the end of `renderFrame` (post.js). Pipeline: scene -> HDR -> bloom -> tone-map (`MAT_OUT`) -> **ink pass** -> screen. When Ink is off, `MAT_OUT` draws straight to the screen exactly as before (no extra pass, no extra target). The HUD is DOM, so text stays sharp.
+- The shader (`MAT_INK`), one full-screen pass on the tone-mapped image: luminance **posterisation** into cel bands (hue kept, 4 bands in SCRAP INK), **ordered 4x4 dithering** only in the shadows, **contrast** (+12%, reduced in the darks), thin dark **outlines** (Roberts cross on luminance, faded in dark areas so dark robots aren't crushed, capped at 80% so hordes don't become black soup), optional **pixelation**, subtle **CRT scanlines**, and a **master intensity** mix.
+- Protected on purpose: very bright pixels and bright saturated effects bypass the banding (flames, glows, bloom, golden gold), the MK III cinematic is never inked (`S.mode==='cine'`), the part-viewer canvases are separate, the player accent colour keeps its hue (banding changes brightness only).
+- Presets (Options -> Developer): Off, SCRAP INK (bands 4, outline 35%, dither 15%, contrast +12%, pixel 0%, scanlines 5%, intensity 100%), Light, Heavy, Custom (seven sliders; touching one switches to Custom). Saved in `SETTINGS.ink` (preset + custom values). **Defaults OFF; Developer mode first**: the controls only show and the effect only runs while Developer mode is on (`INK_PUBLIC = true` in ink.js opens it to everyone).
+- Outlines are colour/luminance based, with NO extra depth or normal pass (that would mean rendering the scene a second time). Geometric depth/normal outlines are the documented upgrade path if the look needs them. It is a style filter, not new geometry or hand-painted scratches.
+- Tests: page loads without errors; every preset renders in combat and with a boss; dev gating (off when dev is off), cinematic bypass, custom slider -> saved settings, label/UI sync, default off. Same-frame comparison screenshots (Off / SCRAP INK / Light / Heavy) reviewed. Software-renderer frame cost (headless, so only a rough guide): the extra pass was within measurement noise for SCRAP INK (about 3.4 -> 3.6 ms per frame at 960x540) and about +1 ms for Heavy; real GPU timings should be checked on the Deck.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.

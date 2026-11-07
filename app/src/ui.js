@@ -359,6 +359,7 @@ function optRow(sel, label, v, tip) {
   if (tip) el.dataset.tip = tip; else delete el.dataset.tip;
 }
 function syncSettingsUI() {
+  if (typeof inkSyncUI === 'function') inkSyncUI();
   $('#uiScale').value = SETTINGS.uiScale || 1; syncUIScaleLabel();
   $('#musicVol').value = SETTINGS.music ?? 0.6; $('#musicVal').textContent = Math.round((SETTINGS.music ?? 0.6) * 100) + '%';
   $('#sens').value = SETTINGS.sens; $('#sensVal').textContent = (+SETTINGS.sens).toFixed(1);
