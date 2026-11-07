@@ -673,6 +673,26 @@ const COMBOS = {
   'split+split':         ['Shotgun Fan', 'A wide fan of extra shots.'],
   'fire+fire':           ['Inferno', 'Burns twice as hot and twice as long.'],
   'ice+ice':             ['Deep Freeze', 'Every hit freezes enemies solid.'],
+  // Lifesteal and Poison combos (Chunk 10)
+  'bounce+lifesteal':    ['Bloodshot', 'After a bounce, hitting a new enemy heals you.'],
+  'homing+lifesteal':    ['Bloodhound', 'Hitting the homed target heals a little; killing it heals more.'],
+  'lifesteal+orbit':     ['Vampiric Halo', 'Orbiting shots siphon life from what they cut.'],
+  'lifesteal+lightning': ['Life Conduit', 'Every chain jump siphons life (inside the arm cap).'],
+  'explode+lifesteal':   ['Blood Burst', 'A blast that kills sends out a healing pulse.'],
+  'lifesteal+split':     ['Leech Swarm', 'Each different enemy your split shots reach heals you.'],
+  'fire+lifesteal':      ['Blood Furnace', 'Burning enemies that die release a healing pulse.'],
+  'ice+lifesteal':       ['Cryostasis', 'Healing below half health grants brief damage resistance (12 s cooldown).'],
+  'lifesteal+lifesteal': ['Blood Bank', 'Healing that would overflow becomes a small temporary shield.'],
+  'bounce+poison':       ['Contagion', 'Bounces carry poison stacks to a fresh enemy.'],
+  'homing+poison':       ['Patient Zero', 'Shots home on infected enemies; infected kills spread the poison once.'],
+  'orbit+poison':        ['Toxic Halo', 'The orbiting ring poisons whatever it touches.'],
+  'lightning+poison':    ['Neurotoxin', 'Chains poison and stagger heavily infected enemies (bosses resist).'],
+  'explode+poison':      ['Toxic Burst', 'Blasts poison everything and spread the stacks of enemies they kill.'],
+  'poison+split':        ['Viral Spread', 'Heavily poisoned hits send a weaker stack to a neighbour.'],
+  'fire+poison':         ['Toxic Combustion', 'A heavily poisoned burning enemy bursts into a poisonous blast.'],
+  'ice+poison':          ['Septic Frost', 'The more stacks, the slower the enemy (capped).'],
+  'poison+poison':       ['Superstrain', 'Poison lasts longer and its kills spread it a little.'],
+  'lifesteal+poison':    ['Parasitic Infection', 'Poisoned enemies that die heal you, by their stacks (capped).'],
 };
 const comboKey = (a, b) => [a, b].sort().join('+');
 function armCombo(arm) { const g = armGems(arm); return g.length === 2 ? comboKey(g[0].type, g[1].type) : null; }

@@ -158,7 +158,7 @@ function simStep(dt) {
   updateAim();
   spawnTick(dt);
   updateEnemies(dt);
-  hazardTick(dt);
+  hazardTick(dt); gemComboTick(dt);
   if (S.mode !== 'play') return;
   updateWeapons(dt);
   updateShots(dt);

@@ -67,6 +67,8 @@ function computeStats() {
   s.misLegs = equippedLegs().filter(l => !legs.includes(l)).length;
   // gems in legs that are actually on the ground change how you move
   s.legGems = gemMap(V2L ? armGems(V2L) : legs.flatMap(armGems));
+  s.combos = new Map();                      // combos of the equipped arms (two gems in one arm), for the effects that are not tied to one shot
+  for (const a of mountedArms()) { const k = armCombo(a); if (k && COMBOS[k]) s.combos.set(k, gemMap(armGems(a))); }
   // leg levels add up: Lv 10 total gives a double jump, 30 a triple, then 60, 100, 150; from 50 every air jump is a flip
   s.legLv = legs.reduce((t, l) => t + effLvl(l), 0);
   s.canSprint = legs.some(l => LEGS[l.type].rolling);      // only treads can sprint / boost

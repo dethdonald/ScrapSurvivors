@@ -719,6 +719,8 @@ function fireHostile(e, tgt, speed, yo = 1.4) {
 /* ---------- player damage and rewards ---------- */
 function hurt(a, from) {
   if (player.iframes > 0 || S.mode !== 'play') return;
+  a = comboHurt(a);
+  if (a <= 0.01) return;
   if (from) camKick(new THREE.Vector3(player.pos.x - from.x, 0, player.pos.z - from.z), Math.min(0.32, 0.1 + a * 0.006));   // the view jolts away from whatever hit you
   if (S.test && DEV.god) { player.iframes = 0.15; cam.shake = Math.max(cam.shake, 0.12); sfx('hurt', 0.25); return; }
   player.iframes = 0.15; player.shieldT = stats.shieldDelay;
@@ -782,6 +784,7 @@ function wipeStains(x, z, r) {
 function killEnemy(e) {
   if (e.dead) return;
   e.dead = true; e.hp = 0;
+  gemKill(e);
   if (!e.d.fly || e.pos.y - groundAt(e.pos.x, e.pos.z) < 6) splatter(e, 5 + (Math.random() * 5 | 0), 0.6 + e.r * 1.6);
   scene.remove(e.mesh); S.kills++; runStatKill(e); if (!ENV_DMG) streakKill(e); discoverEnemy(e.type);
   if (e.d.fly && !e.boss) droneCrash(e);
@@ -846,7 +849,8 @@ function shotAttrHit(s, e) {
   const T = k => A.get ? A.get(k) || 0 : (A.has(k) ? 1 : 0), cb = A.combo;
   const dealt = HIT_E === e ? HIT_DEALT : 0; HIT_E = null;
   if (A.has('lifesteal') && dealt > 0) lifestealHit(s, dealt, T('lifesteal'));
-  if (A.has('poison')) poisonHit(e, s.dmg, T('poison'));
+  if (A.has('poison')) poisonHit(e, s.dmg, T('poison'), cb === 'poison+poison' ? { sup: true, dur: POIS_TIME * 1.75 } : undefined);
+  if (cb) comboHit(s, e, dealt, cb, T);
   // Thermal Shock: ice on a burning enemy, or fire on a frozen one, shatters it
   if (cb === 'fire+ice' && (e.burnT > 0 || e.chillT > 0) && (e.shockCd || 0) < S.t) {
     e.shockCd = S.t + 0.6; damage(e, s.dmg * 3, s.manual); e.burnT = 0; e.chillT = 0;
@@ -863,7 +867,7 @@ function shotAttrHit(s, e) {
       done.add(n); const to = aimPt(n);
       let dmg = s.dmg * (0.5 + 0.1 * T('lightning'));
       if (cb === 'ice+lightning') { if (n.chillT > 0) dmg *= 2; chill(n, T('ice')); }
-      damage(n, dmg, s.manual); lightning([fromPt, to], cb === 'lightning+lightning' ? 1.2 : 0.6);
+      damage(n, dmg, s.manual); if (cb) comboJump(s, n, HIT_DEALT, cb, T); lightning([fromPt, to], cb === 'lightning+lightning' ? 1.2 : 0.6);
       if (A.has('fire')) ignite(n, s.dmg * (cb === 'fire+lightning' ? 2 : 1));
       if (cb === 'explode+lightning') { explode(to, 1.6, s.dmg * 0.4, s.manual); }
       return to;
@@ -875,7 +879,7 @@ function shotAttrHit(s, e) {
       from = to;
     }
   }
-  if (A.has('explode') && s.miniBoom) { explode(s.pos, s.miniBoom, s.dmg * (0.45 + 0.15 * T('explode')), s.manual); comboBoom(s, s.pos, s.miniBoom); s.life = 0; }
+  if (A.has('explode') && s.miniBoom) { const k0 = S.kills, pl = cb === 'explode+poison' ? poisonedNear(s.pos, s.miniBoom) : null; explode(s.pos, s.miniBoom, s.dmg * (0.45 + 0.15 * T('explode')), s.manual); comboBoom(s, s.pos, s.miniBoom); if (cb) comboBoomGem(s, s.pos, s.miniBoom, k0, pl); s.life = 0; }
 }
 /* Fire: burns for 3 s; refreshing it never stacks above the strongest burn */
 /* ---------- gem combos (two gems in one arm) ---------- */
@@ -903,6 +907,7 @@ function applyComboToShot(s, cb) {
 /* per-frame combo behaviour; returns true if the shot was used up */
 function comboShotTick(s, dt) {
   const cb = s.combo;
+  comboTickGem(s, dt);
   if (cb === 'fire+homing' && s.homing) { s.trailT = (s.trailT || 0) - dt; if (s.trailT <= 0 && s.pos.y - groundAt(s.pos.x, s.pos.z) < 4) { s.trailT = 0.1; groundPatch(s.pos, 'fire', 2, 1, s.src); } }
   if (cb === 'homing+orbit' && s.orbit) {
     const e = nearestEnemy(player.pos.clone().setY(player.pos.y + 1), 7);
@@ -936,6 +941,7 @@ function comboShotTick(s, dt) {
 /* things that happen each time a bouncing shot bounces */
 function comboBounce(s) {
   const cb = s.combo, p = s.pos;
+  comboBounceGem(s);
   if (cb === 'bounce+homing') { const e = nearestEnemy(p, 16, s.hit); if (e) { s.target = e; s.homing = true; s.homeRate = 7; s.speed = Math.max(s.speed || 30, 30); s.vel.copy(aimPt(e).sub(p).normalize().multiplyScalar(s.speed)).setY(Math.max(4, s.vel.y)); s.grav = 10; } }
   if (cb === 'bounce+lightning') { const done = new Set(); for (let i = 0; i < 2; i++) { const e = nearestEnemy(p, 5, done); if (!e) break; done.add(e); damage(e, s.dmg * 0.5, s.manual); lightning([p.clone(), aimPt(e)], 0.5); } }
   if (cb === 'bounce+explode') explode(p.clone(), 1.6, s.dmg * 0.5, s.manual);
@@ -1409,6 +1415,7 @@ function ejectCasing(o, dir, kind) {
   });
 }
 let CUR_ATTRS = new Map();
+let CUR_VOL = 0;         // one id per trigger pull: shots from the same volley share it (Leech Swarm)
 let CUR_ARM = null;      // the arm whose shot is being made (Lifesteal needs to know which arm to cap)
 let HIT_E = null, HIT_DEALT = 0;     // the last enemy damage() hit and how much really landed (no overkill)
 let CUR_RANGE = 1;       // weapon range multiplier while a shot is being made (arm range x the Long Barrel stat)
@@ -1421,7 +1428,7 @@ function fireW(W, c) {
     c = { ...c, tp: c.tp.clone().addScaledVector(side, Math.cos(a) * r).addScaledVector(up, Math.sin(a) * r), te: null };
   }
   // attributes live on arms and change whatever gun the arm holds
-  CUR_ATTRS = gemMap(armGems(c.arm)); CUR_ATTRS.combo = armCombo(c.arm); CUR_ARM = c.arm || null;
+  CUR_ATTRS = gemMap(armGems(c.arm)); CUR_ATTRS.combo = armCombo(c.arm); CUR_ARM = c.arm || null; CUR_VOL++;
   DMG_SRC = c.w; CUR_KICK = W.kick || 0.6; CUR_WTYPE = c.w.type;
   if (c.manual) XH.bloom = Math.min(1, XH.bloom + 0.16 + (W.kick || 0) * 0.07);     // the reticle flares (looks only: aim is unchanged)
   W.fire(c);
@@ -1664,7 +1671,7 @@ function bullet(o, tgt, speed, dmg, opt = {}) {
   const m = rocket ? bx(0.25, 0.25, 0.6, COL.red, 0, 0, 0, 0x701020) : new THREE.Mesh(geoBullet, B(0xffd9a8));
   m.position.copy(o); scene.add(m);
   const s = { mesh: m, pos: o.clone(), last: o.clone(), vel: dir.multiplyScalar(speed), life: (opt.life || 1.4) * CUR_RANGE, r: rocket ? 0.45 : 0.25, dmg,
-    pierce: opt.pierce || 0, hit: new Set(), explode: (opt.explode || 0) * CUR_RANGE, src: DMG_SRC, arm: CUR_ARM, target: opt.target, rocket, speed, manual: opt.manual, knock: opt.knock ?? 1.5,
+    pierce: opt.pierce || 0, hit: new Set(), explode: (opt.explode || 0) * CUR_RANGE, src: DMG_SRC, arm: CUR_ARM, vol: CUR_VOL, target: opt.target, rocket, speed, manual: opt.manual, knock: opt.knock ?? 1.5,
     selfHurt: !!opt.selfHurt, attrs: CUR_ATTRS };
   // homing rockets loft up first, then dive onto their target
   if (rocket && opt.target && !opt.noArc) { s.vel.y += speed * 0.55; s.climb = 0.16; }
@@ -1814,7 +1821,7 @@ function updateShots_(dt) {
       if (e.dead || s.hit.has(e)) continue;
       const rr = s.r + e.r + (e.boss ? 1.6 : 0);
       if (segDist2(s.last, s.pos, aimPtT(e)) < rr * rr) {
-        if (s.explode) { if (s.rocket && !s.pod) wfxRocketBoom(s.pos, s.explode); explode(s.pos, s.explode, s.dmg, s.manual, s.selfHurt); blastAttrs(s); s.life = 0; break; }
+        if (s.explode) { if (s.rocket && !s.pod) wfxRocketBoom(s.pos, s.explode); const k0 = S.kills, pl = s.attrs && s.attrs.combo === 'explode+poison' ? poisonedNear(s.pos, s.explode) : null; explode(s.pos, s.explode, s.dmg, s.manual, s.selfHurt); blastAttrs(s); if (s.attrs && s.attrs.combo) comboBoomGem(s, s.pos, s.explode, k0, pl); s.life = 0; break; }
         const wasAlive = !e.dead;
         damage(e, s.dmg, s.manual); s.hit.add(e);
         if (!s.flame) flinch(e, s.vel, 0.12 + (s.wt || 1) * 0.12);

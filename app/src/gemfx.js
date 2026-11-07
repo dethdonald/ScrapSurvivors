@@ -31,18 +31,29 @@ function lifestealHit(s, dealt, lvl) {
   const lv = Math.max(1, Math.min(5, lvl | 0)), L = arm.ls || (arm.ls = { t: -9, amt: 0 });
   if (S.t - L.t >= 1) { L.t = S.t; L.amt = 0; }                    // a fresh one-second window shared by every shot of this arm
   const room = LS_CAP[lv] - L.amt; if (room <= 0) return;
-  const got = healPlayer(Math.min(room, dealt * LS_PCT[lv] / 100));
-  L.amt += got;
+  const want = Math.min(room, dealt * LS_PCT[lv] / 100), hp0 = player.hp, got = healPlayer(want);
+  const bank = s.attrs && s.attrs.combo === 'lifesteal+lifesteal';
+  if (bank) {                                                      // Blood Bank: what would overheal becomes a small temporary shield (capped)
+    const over = want - got; if (over > 0) { BANK.amt = Math.min(10 + 5 * lv, BANK.amt + over); BANK.t = 8; }
+    L.amt += want;                                                 // the overheal counts towards the arm cap too
+  } else L.amt += got;
+  if (got > 0 && s.attrs && s.attrs.combo === 'ice+lifesteal' && hp0 < stats.maxHp * 0.5 && S.t >= (S.cryoCd || 0)) {   // Cryostasis: healing while below half HP -> brief resistance, 12 s cooldown
+    S.cryoT = 2; S.cryoCd = S.t + 12; ring(new THREE.Vector3(player.pos.x, player.pos.y + 0.3, player.pos.z), 3, 0.4, 0xbfe9ff);
+  }
 }
-/* Poison: add one stack. base = the applying hit's original damage. */
-function poisonHit(e, base, lvl) {
-  if (e.dead || e.d.npc || !(base > 0)) return;
-  const lv = Math.max(1, Math.min(5, lvl | 0)), dps = base * POIS_PCT[lv] / 100, max = e.boss ? POIS_BOSS[lv] : POIS_MAX[lv];
-  const P = e.pois || (e.pois = { st: [], t: 0, acc: 0 });
+/* Poison: add one stack worth `dps`. opt: dur (seconds), gen (spread generation), sup (Superstrain: spreads when it kills). */
+function poisonAdd(e, dps, lv, opt) {
+  if (e.dead || e.d.npc || !(dps > 0)) return;
+  lv = Math.max(1, Math.min(5, lv | 0)); const max = e.boss ? POIS_BOSS[lv] : POIS_MAX[lv] + (opt && opt.sup ? 1 : 0);
+  const P = e.pois || (e.pois = { st: [], t: 0, acc: 0, gen: 0, lv, sup: false });
   if (P.st.length < max) P.st.push(dps);
   else { let mi = 0; for (let i = 1; i < P.st.length; i++) if (P.st[i] < P.st[mi]) mi = i; if (dps > P.st[mi]) P.st[mi] = dps; }   // full: the weakest stack makes way
-  P.t = POIS_TIME;                                                  // every hit refreshes the timer
+  P.lv = Math.max(P.lv, lv); P.t = Math.max(P.t, (opt && opt.dur) || POIS_TIME);                // every hit refreshes the timer
+  if (opt && opt.gen !== undefined) P.gen = Math.max(P.gen, opt.gen);
+  if (opt && opt.sup) P.sup = true;
 }
+/* base = the applying hit's original damage */
+function poisonHit(e, base, lvl, opt) { const lv = Math.max(1, Math.min(5, lvl | 0)); poisonAdd(e, base * POIS_PCT[lv] / 100, lv, opt); }
 function poisonTick(e, dt) {
   const P = e.pois; if (!P) return;
   P.t -= dt;
@@ -106,6 +117,136 @@ function addPatch(x, z, lv) {
   while (LOWER.patches.length > MAX_PATCHES) { const o = LOWER.patches.shift(); scene.remove(o.m); o.m.material.dispose(); }
 }
 function clearGemFx() {
+  S.cryoT = 0; S.cryoCd = 0; BANK.amt = 0; VOLS.clear(); for (const k in PROCS) delete PROCS[k]; HEAL_POOL.t = -9;
   for (const t of LOWER.patches) { scene.remove(t.m); t.m.material.dispose(); }
   LOWER.patches.length = 0; LOWER.ls.anchor = null; LOWER.ls.stored = 0; LOWER.ls.last = -9; LOWER.ps.anchor = null;
+}
+
+/* ============================================================
+   COMBOS with Lifesteal and Poison (Chunk 10). Every proc is bounded:
+     - heals from combos share one pool (COMBO_HEAL_CAP HP per second) on top of the arm cap;
+     - pulses, blasts and spreads are limited per second by procOK();
+     - poison spread only goes one generation deep (copies carry gen 1 and never spread again);
+     - combos live in ONE arm (two gems); lower-half gems keep their own movement meaning.
+   ============================================================ */
+const COMBO_HEAL_CAP = 6;
+const PROCS = {};
+function procOK(key, perSec) { const P = PROCS[key] || (PROCS[key] = { t: -9, n: 0 }); if (S.t - P.t >= 1) { P.t = S.t; P.n = 0; } if (P.n >= perSec) return false; P.n++; return true; }
+function comboLv(key, gem) { const m = stats && stats.combos && stats.combos.get(key); return m ? (m.get(gem) || 1) : 0; }     // level of `gem` in an equipped arm with this combo, 0 if none
+let HEAL_POOL = { t: -9, amt: 0 };
+function comboHeal(n) {
+  if (!(n > 0) || S.mode !== 'play') return 0;
+  if (S.t - HEAL_POOL.t >= 1) { HEAL_POOL.t = S.t; HEAL_POOL.amt = 0; }
+  const room = COMBO_HEAL_CAP - HEAL_POOL.amt; if (room <= 0) return 0;
+  const want = Math.min(room, n), got = healPlayer(want); HEAL_POOL.amt += got; return got;
+}
+function pulseFx(color) { const p = new THREE.Vector3(player.pos.x, player.pos.y + 0.3, player.pos.z); ring(p, 3.2, 0.35, color); }
+function poisonSpread(from, n, range, take, potency, tag) {
+  const P = from.pois; if (!P || P.gen >= 1) return 0;                      // copies never spread again: no chains
+  const stacks = P.st.slice().sort((a, b) => b - a).slice(0, take), done = new Set([from]); let c = 0;
+  for (let i = 0; i < n; i++) {
+    const t = nearestEnemy(ecenter(from).clone(), range, done); if (!t) break; done.add(t);
+    for (const d of stacks) poisonAdd(t, d * potency, P.lv, { gen: 1, dur: P.t > 0 ? Math.min(P.t, POIS_TIME) : POIS_TIME, sup: false });
+    if (t.pois) spark(ecenter(t).clone(), POIS_COLOR); c++;
+  }
+  return c;
+}
+/* called from shotAttrHit for every direct hit. dealt = damage that really landed. */
+function comboHit(s, e, dealt, cb, T) {
+  const ls = T('lifesteal'), po = T('poison');
+  switch (cb) {
+    case 'bounce+lifesteal':                                        // Bloodshot: hitting a NEW enemy after a bounce heals
+      if ((s.nb || 0) > 0 && dealt > 0 && procOK('bloodshot', 4)) comboHeal(LS_CAP[ls] * 0.6); break;
+    case 'homing+lifesteal':                                        // Bloodhound: the homed target hurts a little, killing it heals
+      if (s.homing && e === s.target && procOK('bloodhound', 6)) comboHeal(e.dead ? LS_CAP[ls] * 1.0 : LS_CAP[ls] * 0.25); break;
+    case 'lifesteal+orbit':                                         // Vampiric Halo: orbiters siphon
+      if (s.orbit && dealt > 0 && procOK('halo', 5)) comboHeal(LS_CAP[ls] * 0.25); break;
+    case 'lifesteal+split': {                                       // Leech Swarm: each DISTINCT enemy a volley's shots reach heals
+      if (!s.vol) break; let v = VOLS.get(s.vol); if (!v) { v = new Set(); VOLS.set(s.vol, v); if (VOLS.size > 24) VOLS.delete(VOLS.keys().next().value); }
+      if (!v.has(e)) { v.add(e); if (v.size >= 2 && procOK('leech', 5)) comboHeal(LS_CAP[ls] * 0.4); } break; }
+    case 'bounce+poison': s.lastE = e; break;                        // Contagion: remember who it just hit
+    case 'poison+split':                                            // Viral Spread: a heavily poisoned hit sends a weaker stack to a neighbour
+      if (e.pois && e.pois.st.length >= 2 && procOK('viral', 8)) { const n = nearestEnemy(ecenter(e).clone(), 6, new Set([e])); if (n) poisonHit(n, s.dmg * 0.5, po, { gen: 1 }); } break;
+    case 'lightning+poison': neuro(e, s, po); break;
+    case 'fire+poison':                                             // Toxic Combustion: heavily poisoned AND burning -> one poisonous blast
+      if (e.pois && e.pois.st.length >= 3 && e.burnT > 0 && !e.toxBlast && procOK('combust', 4)) {
+        e.toxBlast = true; const c = ecenter(e).clone(); blast(c, 3, POIS_COLOR); ring(new THREE.Vector3(c.x, groundAt(c.x, c.z), c.z), 3.4, 0.35, POIS_COLOR);
+        let n = 0; for (const o of enemies) { if (o.dead || o === e || o.d.npc || n >= 12) continue; if (ecenter(o).distanceToSquared(c) < 9 + o.r * o.r) { poisonHit(o, s.dmg * 0.6, po, { gen: 1 }); n++; } }
+        damage(e, s.dmg * 0.4, s.manual); sfx('pop2', 0.3);
+      } break;
+    case 'ice+poison':                                              // Septic Frost: slow grows with stacks, capped (bosses less)
+      if (e.pois) { const st = e.pois.st.length, floor = e.boss ? 0.75 : 0.45; e.chillT = Math.max(e.chillT || 0, 3); e.chillMul = Math.min(e.chillMul || 1, Math.max(floor, 1 - 0.1 * st)); } break;
+    case 'poison+poison': if (e.pois) { e.pois.t = Math.max(e.pois.t, POIS_TIME * 1.75); e.pois.sup = true; } break;   // Superstrain: longer poison
+  }
+}
+const VOLS = new Map();
+/* Neurotoxin: lightning staggers a heavily infected enemy (not bosses), once per 2 s per enemy */
+function neuro(e, s, po) {
+  if (e.pois && e.pois.st.length >= 3 && !e.boss && (e.neuroCd || 0) < S.t && procOK('neuro', 8)) { e.neuroCd = S.t + 2; e.stun = Math.max(e.stun, 0.6); e.vel.x *= 0.2; e.vel.z *= 0.2; spark(aimPt(e), 0x9fff7a); }
+}
+/* one lightning chain jump (n = the enemy it reached, dealt = what landed) */
+function comboJump(s, n, dealt, cb, T) {
+  if (cb === 'lifesteal+lightning') lifestealHit(s, dealt, T('lifesteal'));          // Life Conduit: each jump siphons, inside the arm's normal cap
+  if (cb === 'lightning+poison') { poisonHit(n, s.dmg * 0.5, T('poison'), { gen: 1 }); neuro(n, s, T('poison')); }
+}
+/* each time a combo shot bounces off the ground */
+function comboBounceGem(s) {
+  const cb = s.combo;
+  if (cb === 'bounce+lifesteal') s.nb = (s.nb || 0) + 1;
+  if (cb === 'bounce+poison' && s.lastE && s.lastE.pois && !s.lastE.dead && procOK('contagion', 6)) {   // Contagion: carry the stacks to a fresh enemy
+    const n = nearestEnemy(s.pos, 8, new Set([s.lastE]));
+    if (n && s.lastE.pois) { const from = s.lastE.pois, stacks = from.st.slice().sort((a, b) => b - a).slice(0, 2); for (const d of stacks) poisonAdd(n, d, from.lv, { gen: 1 }); spark(aimPt(n), POIS_COLOR); }
+  }
+}
+/* per frame for combo shots */
+function comboTickGem(s, dt) {
+  const cb = s.combo;
+  if (cb === 'homing+poison' && s.homing) {                                          // Patient Zero: shots swing onto an infected enemy
+    s.pzT = (s.pzT || 0) - dt;
+    if (s.pzT <= 0 && (!s.target || !s.target.pois)) {
+      s.pzT = 0.3; let best = null, bd = 14 * 14;
+      for (const e of enemies) { if (e.dead || !e.pois || e.d.npc) continue; const d = aimPtT(e).distanceToSquared(s.pos); if (d < bd) { bd = d; best = e; } }
+      if (best) s.target = best;
+    }
+  }
+  if (cb === 'orbit+poison' && s.orbit) {                                            // Toxic Halo: the ring poisons whatever it passes
+    s.toxT = (s.toxT || 0) - dt;
+    if (s.toxT <= 0) {
+      s.toxT = 0.4; const po = (s.attrs && s.attrs.get && s.attrs.get('poison')) || 1;
+      for (const e of enemies) { if (e.dead || e.d.npc || (e.haloCd || 0) > S.t) continue; if (aimPtT(e).distanceToSquared(s.pos) < (1.3 + e.r) ** 2) { e.haloCd = S.t + 0.5; poisonHit(e, s.dmg * 0.5, po, { gen: 1 }); } }
+    }
+  }
+}
+/* explosions made by a combo shot: k0 = S.kills before the blast, list = poisoned enemies in range before it */
+function comboBoomGem(s, p, r, k0, list) {
+  const cb = s.attrs && s.attrs.combo; if (!cb) return;
+  const kills = S.kills - k0, T = k => (s.attrs.get && s.attrs.get(k)) || 0;
+  if (cb === 'explode+lifesteal' && kills > 0 && procOK('bburst', 3)) { comboHeal(Math.min(5, kills) * LS_CAP[T('lifesteal')] * 0.35); pulseFx(0xd6204a); }   // Blood Burst: a healing pulse when a blast kills
+  if (cb === 'explode+poison' && list) {                                             // Toxic Burst: enemies the blast killed spill their poison onto neighbours
+    for (const e of list) if (e.dead && e.pois && procOK('tburst', 10)) poisonSpread(e, 3, r + 3, 2, 0.8);
+    for (const e of enemies) if (!e.dead && !e.d.npc && ecenter(e).distanceTo(p) < r + e.r) poisonHit(e, s.dmg * 0.4, T('poison'), { gen: 1 });
+  }
+}
+const poisonedNear = (p, r) => enemies.filter(e => !e.dead && e.pois && ecenter(e).distanceTo(p) < r + e.r + 1);
+/* any enemy dying (called from killEnemy) */
+function gemKill(e) {
+  if (!stats || !stats.combos || !stats.combos.size) return;
+  if (e.burnT > 0 && comboLv('fire+lifesteal', 'lifesteal') && procOK('furnace', 3)) { comboHeal(LS_CAP[comboLv('fire+lifesteal', 'lifesteal')] * 0.8); pulseFx(0xff5a2a); }     // Blood Furnace
+  if (e.pois) {
+    const st = e.pois.st.length;
+    const pz = comboLv('homing+poison', 'poison'); if (pz && procOK('pzero', 4)) poisonSpread(e, 2, 6, 2, 1);               // Patient Zero: infected kills spread
+    const ss = comboLv('poison+poison', 'poison'); if (ss && e.pois.sup && procOK('super', 3)) poisonSpread(e, 1, 5, 2, 0.8);  // Superstrain: limited kill spread
+    const pi = comboLv('lifesteal+poison', 'lifesteal'); if (pi && procOK('parasite', 4)) comboHeal(Math.min(LS_CAP[pi] * 2, st * LS_CAP[pi] * 0.4));   // Parasitic Infection: heals by stacks, capped
+  }
+}
+/* damage the player takes: Cryostasis resistance, Blood Bank shield */
+function comboHurt(a) {
+  if ((S.cryoT || 0) > 0) a *= 0.7;
+  if (BANK.amt > 0) { const ab = Math.min(BANK.amt, a); BANK.amt -= ab; a -= ab; }
+  return a;
+}
+const BANK = { amt: 0, t: 0 };
+function gemComboTick(dt) {
+  if ((S.cryoT || 0) > 0) S.cryoT -= dt;
+  if (BANK.amt > 0) { BANK.t -= dt; if (BANK.t <= 0) BANK.amt = 0; }
 }

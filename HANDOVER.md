@@ -13,7 +13,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.34.0 · BUILD NOV 6|
+| **Version** | 0.35.0 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -81,6 +81,13 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ---
 
 ## Change log
+
+### 0.35.0 — Chunk 10: Nineteen gem combinations
+- 19 new combos (COMBOS now 55): Bloodshot, Bloodhound, Vampiric Halo, Life Conduit, Blood Burst, Leech Swarm, Blood Furnace, Cryostasis, Blood Bank, Contagion, Patient Zero, Toxic Halo, Neurotoxin, Toxic Burst, Viral Spread, Toxic Combustion, Septic Frost, Superstrain, Parasitic Infection. All 36 originals untouched.
+- New code in `src/gemfx.js`: `comboHit/comboJump/comboBounceGem/comboTickGem/comboBoomGem/gemKill/comboHurt/gemComboTick`; `stats.combos` (player.js) lets world effects (kill, hurt) know which combos are equipped.
+- Limits: combo heals share a 6 HP/s pool on top of the arm cap; every proc has a per-second budget (`procOK`); spread poison carries `gen:1` and never spreads again (no chains); bosses keep their stack caps and ignore Neurotoxin stagger; Septic Frost slow is capped (45% / 25% on bosses); Blood Bank shield capped at 10+5×level and decays after 8 s; Cryostasis has a 12 s cooldown.
+- Lower-half gems unchanged (combos are arm-only).
+- Tested: all 55 combos fire 4 s against 12 enemies with no errors, max 52 live shots, 0.84 ms/step.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
