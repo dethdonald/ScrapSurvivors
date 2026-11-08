@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.43.18 · BUILD NOV 6';
+const VERSION = '0.43.19 · BUILD NOV 6';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -285,8 +285,9 @@ function placeTitleTip() {
   _ttb.setFromObject(p); _ttb.getCenter(_ttv).project(TITLE.cam);
   const W = innerWidth, Hh = innerHeight, ax = (_ttv.x + 1) / 2 * W, ay = (1 - _ttv.y) / 2 * Hh;
   const tip = $('#titleTip'), tw = tip.offsetWidth * UIZ.z, th = tip.offsetHeight * UIZ.z;
-  // the window stays put, between the menu and the frame; only its line follows the part as the robot turns
-  const x = Math.round(W * 0.43), y = Math.round(Hh * 0.4);
+  // the window stays put, up in the top-right corner clear of the robot; only its line follows the part as it turns
+  const margin = 28;
+  const x = Math.round(W - margin - tw), y = Math.round(margin);
   tip.style.transform = `translate(${x}px, ${y}px) scale(${UIZ.z})`;
   const ex = ax > x + tw ? x + tw : ax < x ? x : x + tw / 2, ey = ay < y ? y : ay > y + th ? y + th : y + th / 2;
   $('#ttL').setAttribute('x1', ex); $('#ttL').setAttribute('y1', ey); $('#ttL').setAttribute('x2', ax); $('#ttL').setAttribute('y2', ay);
