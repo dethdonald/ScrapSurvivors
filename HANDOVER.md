@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.15 · BUILD NOV 6|
+| **Version** | 0.43.16 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -274,7 +274,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ### 2026-11-08: 0.43.13 update status on the title screen, Steam Deck Gaming Mode launch fix
 
 - **Update status on the title screen** (after the version number; packaged builds only, the Play.bat dev copy shows nothing): UP TO DATE · UPDATE x AVAILABLE · DOWNLOADING… (Windows, polls every 5 s for up to a minute) · UPDATE x DOWNLOADED + a RESTART TO UPDATE button (Windows) · RESTART THE GAME TO INSTALL (Deck/Linux, the launcher updates on start) · CAN'T CHECK (NO ACCESS) when the private repo has no token · COULDN'T CHECK when offline. `main.js` `update-status` (IPC, `net.fetch`, same `github-token.txt` next to the exe / launcher, cached 1 min) and `restart`; `preload.js` exposes `desktop.updateStatus()` / `desktop.restart()`; UI in `title.js` `checkUpdate()`, styles `.tupd`. The Windows "downloaded" state reads `%APPDATA%\ScrapSurvivors\game-files\pending\VERSION` directly, so the already-shipped Windows build gets it through a normal update. All six states tested in a packaged build against a mock GitHub.
-- **Steam Deck Gaming Mode crash on launch** (still open): first try unset `LD_PRELOAD` (Steam's overlay) -> the game then sat on Steam's endless loading screen in Gaming Mode, because the overlay library is how gamescope recognises the game's window. REVERTED: keep the overlay. The launcher still passes `--ozone-platform=x11`, logs every launch (env + output) to `launch-log.txt` next to it, and if the game dies within 10 s it retries once with `--disable-gpu-sandbox --in-process-gpu`.
+- **Steam Deck endless loading screen on launch** (resolved): first try unset `LD_PRELOAD` (Steam's overlay) -> the game then sat on Steam's endless loading screen in Gaming Mode, because the overlay library is how gamescope recognises the game's window. REVERTED: keep the overlay. The launcher still passes `--ozone-platform=x11`, logs every launch (env + output) to `launch-log.txt` next to it, and if the game dies within 10 s it retries once with `--disable-gpu-sandbox --in-process-gpu`. Separately, the same endless-loading symptom showed up again in Desktop Mode - turned out Steam's non-Steam-game shortcut was pointed at the `ScrapSurvivors` binary directly instead of `ScrapSurvivors.sh`. Skipping the launcher script means no update check, no logging, and none of the launch flags above, which is also why Steam can't detect the window properly. **The Steam shortcut's Target must be `ScrapSurvivors.sh`, never the raw binary.**
 
 ### 2026-11-08: 0.43.14 Steam Deck launcher: keep Steam's overlay
 
@@ -299,6 +299,21 @@ forcing an update and for diagnosing a stuck one. The shared logic moved into `d
 (sourced by both scripts) so there's one copy of the actual update code, not two. All three files
 (`ScrapSurvivors.sh`, `Update.sh`, `update-lib.sh`) now travel together — the self-update step copies all
 three down, and `publish.sh` pushes all three.
+
+### 2026-11-08: fixed - Steam Deck launch hang, now mode-aware (0.43.16)
+Conflicting real-world results: Gaming Mode needs Steam's overlay library (LD_PRELOAD) kept, or gamescope
+can't recognise the window and Steam loads forever (0.43.13/14). But Desktop Mode showed the OPPOSITE -
+Steam hung loading WITH the overlay preloaded, and only booted once LD_PRELOAD was cleared via Launch
+Options. One fixed behavior can't satisfy both, so `deck/ScrapSurvivors.sh` now detects which mode it's
+actually running under (Gaming Mode's session reports `XDG_CURRENT_DESKTOP`/`XDG_SESSION_DESKTOP` as
+"gamescope") and only keeps LD_PRELOAD there - it's cleared everywhere else (Desktop Mode, or running
+outside Steam entirely). The detection result and LD_PRELOAD's final state are now logged to
+`launch-log.txt` for every launch. If this guess about gamescope's env var is wrong, that log line will
+show it.
+
+Also: confirmed and documented a separate pitfall - a non-Steam-game shortcut pointed at the raw
+`ScrapSurvivors` binary instead of `ScrapSurvivors.sh` skips the launcher (no update check, no logging,
+no launch flags) and can show the same symptom. The Steam shortcut's Target must be `ScrapSurvivors.sh`.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
