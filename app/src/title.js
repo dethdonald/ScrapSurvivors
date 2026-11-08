@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.43.12 · BUILD NOV 6';
+const VERSION = '0.43.13 · BUILD NOV 6';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -337,6 +337,28 @@ function stepTitlePieces(dt) {
 }
 function clearTitlePieces() { TITLE.pieces.forEach(p => TITLE.scene.remove(p.obj)); TITLE.pieces = []; }
 
+/* ---------- update status (title screen) ----------
+   Asks the desktop side (main.js update-status) whether GitHub has a newer version. Nothing is shown in the dev copy. */
+const UPD = { busy: false, polls: 0 };
+async function checkUpdate() {
+  const el = $('#updTxt');
+  if (!el || !window.desktop || !window.desktop.updateStatus || UPD.busy) return;
+  UPD.busy = true;
+  let r = null; try { r = await window.desktop.updateStatus(); } catch (e) {}
+  UPD.busy = false;
+  if (!r || r.state === 'dev') { el.innerHTML = ''; return; }
+  const v = String(r.remote || '').replace(/[^0-9.]/g, '');
+  const line = (cls, txt) => `<span class="dot ${cls}"></span><span class="${cls}">${txt}</span>`;
+  if (r.state === 'current') el.innerHTML = line('ok', 'UP TO DATE');
+  else if (r.state === 'ready') el.innerHTML = line('new', `UPDATE ${v} DOWNLOADED`) + '<button class="updBtn" id="updRestart">RESTART TO UPDATE</button>';
+  else if (r.state === 'downloading') el.innerHTML = line('new', `UPDATE ${v} AVAILABLE · DOWNLOADING…`);
+  else if (r.state === 'available') el.innerHTML = line('new', `UPDATE ${v} AVAILABLE · RESTART THE GAME TO INSTALL`);
+  else el.innerHTML = line('err', r.reason === 'noaccess' ? 'CAN\'T CHECK FOR UPDATES (NO ACCESS)' : 'COULDN\'T CHECK FOR UPDATES');
+  const b = $('#updRestart'); if (b) b.addEventListener('click', () => window.desktop.restart());
+  // the Windows build downloads in the background: look again until it's ready (a minute at most)
+  if (r.state === 'downloading' && UPD.polls++ < 12) setTimeout(checkUpdate, 5000);
+}
+
 /* ---------- screen flow ---------- */
 function openTitle() {
   setupTitleScene();
@@ -344,6 +366,7 @@ function openTitle() {
   ['#hud', '#inv', '#over', '#pause', '#levelup', '#perk', '#shop'].forEach(s => { const e = $(s); if (e) e.hidden = true; });
   $('#title').hidden = false;
   $('#verTxt').textContent = 'VERSION ' + VERSION;
+  checkUpdate();
   clearTitlePieces();
   spawnTitleRobot();
   if (typeof logoOpen === 'function') logoOpen();

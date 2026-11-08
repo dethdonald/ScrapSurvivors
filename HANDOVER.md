@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.12 · BUILD NOV 6|
+| **Version** | 0.43.13 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -260,7 +260,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - **Builds** (`Documents\ScrapSurvivors\Builds\`): `ScrapSurvivors-0.43.12-Windows.zip` (portable: Electron 33.2.1 win32-x64, `electron.exe` renamed `ScrapSurvivors.exe`, game in `resources/app`, `default_app.asar` removed; no updater, unsigned so SmartScreen warns) and `ScrapSurvivors-0.43.12-SteamDeck-linux.tar.gz` (same with linux-x64 + `ScrapSurvivors.sh`). Delivered as 20 MB pieces + `Join builds.bat` (copy /b + certutil SHA256 check) + `README-BUILDS.txt`. Built in-session: download `electron-v33.2.1-<plat>.zip` from GitHub releases (checksums verified against SHASUMS256.txt), unzip, drop the app in. The Linux build was smoke-tested under xvfb (loads the game, no errors in its log). electron-builder is not needed.
 - **Deck updater never worked**: the repo dethdonald/ScrapSurvivors is PRIVATE, so the launcher's anonymous `raw.githubusercontent.com` check failed silently and the Deck kept its old version. `deck/ScrapSurvivors.sh` now reads an optional `github-token.txt` next to it (fine-grained, this repo only, Contents read-only) and then uses the GitHub API (`contents/VERSION` raw + `tarball/main`). Tested against the real repo: no token -> starts old version; token -> 0.43.8 updated to 0.43.12. Never ship the token in a shared copy.
 - **Windows updater** (`tools/bootstrap.js`): the Windows build's `resources/app` = `package.json` (main: bootstrap.js) + `bootstrap.js` + `game/` (bundled copy). At start it promotes `%APPDATA%\ScrapSurvivors\game-files\pending` -> `current`, runs whichever of bundled / current has the higher VERSION, then 3 s after ready checks GitHub in the background (`net.fetch`, so it follows the PC's proxy settings; optional `github-token.txt` next to the exe; extracts only `<top>/app/` from the tarball with a tiny ustar/pax reader) and stages a newer version in `pending` for the NEXT launch. Log: `%APPDATA%\ScrapSurvivors\update-log.txt`. Tested over 3 launches against a local mirror of the real repo tarball (this sandbox's proxy blocks Chromium's own networking): 0.43.11 bundled -> downloaded -> switched to 0.43.12 -> no-op. Rebuild the Windows package only when Electron changes.
-- **Publishing**: run `/home/claude/publish.sh` after EVERY delivery (it had been skipped since 0.43.8). The Deck only needs a rebuilt package when Electron itself changes.
+- **Publishing (Luke's rule, 2026-11-08): ASK Luke after each delivery whether to publish that version to GitHub; only run `/home/claude/publish.sh` when he says yes.** Publishing is what pushes the update to installed Windows/Deck builds. The builds only need repackaging when Electron itself changes. Releases can't be created from Claude sessions (HTTP 403); Luke uploads release assets himself.
 
 ### 2026-11-08: 0.43.12 title screen polish: window crowd, logo, walking turns
 
@@ -270,6 +270,11 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - **Stage floor back, flat**: one solid floor surface across the whole view (fading into the fog), with the grid drawn on it; no raised pedestal.
 - **Robot turns on its feet**: no more turntable glide. It turns in bursts and the legs step it round (alternating, planted feet, step thumps); walk-ins step too, wheels roll; the walked-in robot keeps its heading instead of snapping forward.
 - Removed the hazard-stripe bar above the title menu (`style.css`).
+
+### 2026-11-08: 0.43.13 update status on the title screen, Steam Deck Gaming Mode launch fix
+
+- **Update status on the title screen** (after the version number; packaged builds only, the Play.bat dev copy shows nothing): UP TO DATE · UPDATE x AVAILABLE · DOWNLOADING… (Windows, polls every 5 s for up to a minute) · UPDATE x DOWNLOADED + a RESTART TO UPDATE button (Windows) · RESTART THE GAME TO INSTALL (Deck/Linux, the launcher updates on start) · CAN'T CHECK (NO ACCESS) when the private repo has no token · COULDN'T CHECK when offline. `main.js` `update-status` (IPC, `net.fetch`, same `github-token.txt` next to the exe / launcher, cached 1 min) and `restart`; `preload.js` exposes `desktop.updateStatus()` / `desktop.restart()`; UI in `title.js` `checkUpdate()`, styles `.tupd`. The Windows "downloaded" state reads `%APPDATA%\ScrapSurvivors\game-files\pending\VERSION` directly, so the already-shipped Windows build gets it through a normal update. All six states tested in a packaged build against a mock GitHub.
+- **Steam Deck Gaming Mode crash on launch**: `deck/ScrapSurvivors.sh` now unsets `LD_PRELOAD` (Steam's overlay injection, a common Electron crash in Gaming Mode), passes `--ozone-platform=x11`, logs every launch (env + output) to `launch-log.txt` next to it, and if the game dies within 10 s it retries once with `--disable-gpu-sandbox --in-process-gpu`.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
@@ -514,7 +519,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - **Paid (locked) cases:** the prize strip now rolls 1, 2 or 3 **upgrades** instead of parts. The case pops out that many glowing upgrade chips, rarity-coloured with a beam, and walking into one grants a random level-up upgrade. The occasional bonus gem was removed.
 - **0.25.1, Steam Deck self-update:**
   - **Repo layout** (dethdonald/ScrapSurvivors): `app/` holds exactly what the Deck build runs (main.js, preload.js, index.html, package.json, src/, node_modules/three/build/three.min.js, `VERSION`). There's also a root `VERSION`, `deck/ScrapSurvivors.sh`, README and HANDOVER.
-  - **Publishing:** `/home/claude/publish.sh` (session helper) copies the current game in and pushes. **Run it after every delivery** so the Deck picks up the change. The version comes from `VERSION` in title.js.
+  - **Publishing:** `/home/claude/publish.sh` (session helper) copies the current game in and pushes. **Ask Luke before running it** (see the 2026-11-08 publishing rule). The version comes from `VERSION` in title.js.
   - **Launcher** (`deck/ScrapSurvivors.sh`):
     - On each start it fetches `raw.githubusercontent.com/.../main/VERSION`. If that differs from `resources/app/VERSION`, it downloads the codeload tarball of main and swaps `app/` in atomically (app.new → app). It also updates itself.
     - Activity is logged to `update-log.txt`. It skips silently when offline, and `--no-update` skips the check.

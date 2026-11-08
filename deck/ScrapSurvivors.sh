@@ -4,6 +4,7 @@
 #    No internet or GitHub down? It just starts the version it already has.
 #  - --no-sandbox: Chromium's sandbox helper needs root permissions that an extracted folder doesn't have.
 #  - Launched from Steam it goes fullscreen with the Deck layout on its own.
+#  - Every launch is logged to launch-log.txt next to this script (send it to Claude if the game won't start).
 #  - Private repo? Put a read-only GitHub token in github-token.txt next to this script (never share that file).
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP="$HERE/resources/app"
@@ -45,4 +46,21 @@ update() {
 }
 
 [ "$1" = "--no-update" ] && shift || update
-exec "$HERE/ScrapSurvivors" --no-sandbox "$@"
+# Gaming Mode: Steam injects its overlay (LD_PRELOAD=...gameoverlayrenderer.so) into whatever it launches, and
+# Chromium/Electron apps like this one commonly crash on start with it. The game draws its own UI, so drop it.
+unset LD_PRELOAD
+# Gaming Mode runs games under gamescope (Xwayland): ask Electron for plain X11 explicitly.
+FLAGS=(--no-sandbox --ozone-platform=x11)
+LAUNCH_LOG="$HERE/launch-log.txt"
+{ echo "=== $(date) start: $*"; echo "SteamDeck=${SteamDeck:-} SteamAppId=${SteamAppId:-} DISPLAY=${DISPLAY:-} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-}"; } > "$LAUNCH_LOG"
+start=$(date +%s)
+"$HERE/ScrapSurvivors" "${FLAGS[@]}" "$@" >> "$LAUNCH_LOG" 2>&1
+code=$?
+# died within a few seconds (usually the GPU process failing under the compositor)? try once more with the GPU in-process
+if [ $code -ne 0 ] && [ $(( $(date +%s) - start )) -lt 10 ]; then
+  echo "=== exited with $code after $(( $(date +%s) - start ))s, retrying with --disable-gpu-sandbox --in-process-gpu" >> "$LAUNCH_LOG"
+  "$HERE/ScrapSurvivors" "${FLAGS[@]}" --disable-gpu-sandbox --in-process-gpu "$@" >> "$LAUNCH_LOG" 2>&1
+  code=$?
+fi
+echo "=== exit $code" >> "$LAUNCH_LOG"
+exit $code

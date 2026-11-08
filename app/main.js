@@ -1,5 +1,5 @@
 // Electron entry point: one game window, no menu bar.
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -58,6 +58,41 @@ function createWindow() {
     win.setFullScreen(true);
   }
 }
+
+/* ---------- update status for the title screen ----------
+   Compares this copy's VERSION with the one on GitHub (dethdonald/ScrapSurvivors, main). The private repo needs the
+   read-only token in github-token.txt next to the game's exe / ScrapSurvivors.sh. Packaged builds only (the dev copy
+   started with Play.bat shows nothing). The Windows build's starter (tools/bootstrap.js) downloads updates into
+   %APPDATA%\ScrapSurvivors\game-files\pending and switches to them on the next start; the Deck launcher updates on start. */
+const UPD_REPO = 'dethdonald/ScrapSurvivors';
+const verIn = dir => { try { return fs.readFileSync(path.join(dir, 'VERSION'), 'utf8').trim(); } catch (e) { return ''; } };
+const verNewer = (a, b) => { const x = String(a).split('.').map(n => +n || 0), y = String(b).split('.').map(n => +n || 0); for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+let updCache = null;
+async function updateStatus() {
+  const local = verIn(__dirname);
+  if (!app.isPackaged) return { state: 'dev', local };
+  if (updCache && Date.now() - updCache.at < 60000 && updCache.res.state !== 'downloading') return updCache.res;
+  let tok = ''; try { tok = fs.readFileSync(path.join(path.dirname(process.execPath), 'github-token.txt'), 'utf8').trim(); } catch (e) {}
+  let res;
+  try {
+    const url = tok ? `https://api.github.com/repos/${UPD_REPO}/contents/VERSION?ref=main` : `https://raw.githubusercontent.com/${UPD_REPO}/main/VERSION?t=${Date.now()}`;
+    const headers = Object.assign({ 'User-Agent': 'ScrapSurvivors-updater' }, tok ? { Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github.raw' } : {});
+    const r = await net.fetch(url, { headers, signal: AbortSignal.timeout(8000), cache: 'no-store' });
+    if (r.status !== 200) throw new Error(r.status === 404 && !tok ? 'noaccess' : 'HTTP ' + r.status);
+    const remote = (await r.text()).trim();
+    if (!/^[0-9.]{1,32}$/.test(remote)) throw new Error('odd VERSION');
+    if (!verNewer(remote, local)) res = { state: 'current', local, remote };
+    else if (process.platform === 'win32') {
+      const pend = verIn(path.join(app.getPath('appData'), 'ScrapSurvivors', 'game-files', 'pending'));
+      res = { state: pend && !verNewer(remote, pend) ? 'ready' : 'downloading', local, remote };
+    } else res = { state: 'available', local, remote };
+  } catch (e) { res = { state: 'error', local, reason: e.message === 'noaccess' ? 'noaccess' : 'offline' }; log('update status: ' + e.message); }
+  updCache = { at: Date.now(), res };
+  return res;
+}
+ipcMain.handle('update-status', () => updateStatus());
+// restart into the downloaded update (Windows build: the starter switches to it as it boots)
+ipcMain.on('restart', () => { app.relaunch(); app.exit(0); });
 
 ipcMain.on('quit', () => app.quit());
 ipcMain.on('toggle-fullscreen', () => { if (win) win.setFullScreen(!win.isFullScreen()); });

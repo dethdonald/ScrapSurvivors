@@ -355,6 +355,12 @@ em.attr{font-style:normal;font-size:11px;font-weight:600;margin-left:2px}
 .tbtn:hover::after,.tbtn:focus::after{--dx:100%;--dy:100%;transition:--dx .11s cubic-bezier(.2,.7,.3,1),--dy .1s cubic-bezier(.2,.7,.3,1) .09s}
 .tmenu .tbtn:nth-child(1){animation:fadeUp .25s ease-out .25s both}.tmenu .tbtn:nth-child(2){animation:fadeUp .25s ease-out .32s both}.tmenu .tbtn:nth-child(3){animation:fadeUp .25s ease-out .39s both}
 .tver{position:absolute;left:clamp(16px,3vw,36px);bottom:22px;font-size:12px;color:#8b9499;letter-spacing:.06em}
+/* update status after the version number (packaged builds only; see checkUpdate in title.js) */
+.tupd:empty{display:none}
+.tupd .dot{display:inline-block;width:7px;height:7px;margin:0 7px 1px 16px;background:currentColor}
+.tupd .ok{color:#7fbf8a}.tupd .new{color:#ffb347}.tupd .err{color:#6f787d}
+.tupd .updBtn{margin-left:10px;padding:3px 9px;font:inherit;font-size:11px;letter-spacing:.06em;color:#14181b;background:#ffb347;border:0;cursor:pointer}
+.tupd .updBtn:hover{background:#ffc874}
 #title .tip{z-index:5}
 #pause.fromTitle #skipBtn{display:none}
 /* pause: a short list; Options: grouped sections that scroll, Back pinned at the bottom */
