@@ -347,8 +347,7 @@ function spawnBoss(type = pickBoss()) {
   e.maxHp = e.hp = ETYPES[type].hp * (1 + (S.stage - 1) * 0.9) * (1 + Math.max(0, oldT() - 300) / 1200);
   S.boss = e;
   const bn = ((typeof ENEMY_NAMES !== 'undefined' && ENEMY_NAMES[type]) || type).toUpperCase();
-  $('#bossbar').hidden = false;
-  $('#bossName').textContent = `${bn} · STAGE ${S.stage}`;
+  updateBossBars();   // show the bar immediately rather than waiting for the next HUD tick
   if (type === 'pig') { pigStart(e); banner(bn, 'Hit it for bolts · it will escape', '#f2c230', 3.5); }
   else banner(bn, BOSS_HINT[type] || 'Kill it · exit opens', 'var(--hostile)', 3.5);
 }

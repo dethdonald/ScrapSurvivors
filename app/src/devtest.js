@@ -131,7 +131,7 @@ function devSpawn(at) {
       e.pos.y += 30; e.boss = true; e.state = { volley: 4, slam: 8, summon: 12, slamming: true };
       e.maxHp = e.hp = ETYPES.warden.hp * (1 + (S.stage - 1) * 0.9);
       S.boss = e; S.bossSpawned = true;
-      $('#bossbar').hidden = false; $('#bossName').textContent = `THE WARDEN · STAGE ${S.stage}`;
+      updateBossBars();
     } else spawnEnemy(DEV.type, p);
     made++;
   }

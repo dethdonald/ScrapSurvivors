@@ -200,7 +200,7 @@ const BOSS_AI = {
       e.steer = [sx, sz]; e.steerSpd = e.speed;
     } else {
       P.fleeT -= dt; e.steer = [ax, az]; e.steerSpd = e.speed * 3.4;
-      $('#bossName').textContent = `GOLDEN PIG · ${Math.max(0, Math.ceil(P.fleeT))}s`;
+      e.barName = `GOLDEN PIG · ${Math.max(0, Math.ceil(P.fleeT))}s`;   // overrides the generic boss-bar label while fleeing
       if (P.fleeT <= 0) pigLeap(e);
     }
   },

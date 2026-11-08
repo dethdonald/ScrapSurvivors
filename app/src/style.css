@@ -45,9 +45,16 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--ink);color:var(-
 #loadout em.auto{color:var(--xp)}
 #speedo{position:absolute;right:18px;bottom:20px;font-size:12px;color:var(--dim);text-align:right}
 #speedo b{font-size:20px;color:var(--text);font-weight:600}
-#bossbar{position:absolute;top:84px;left:50%;transform:translateX(-50%);width:min(560px,80vw);text-align:center}
-#bossbar .name{font-size:13px;letter-spacing:.2em;color:var(--hostile);margin-bottom:4px;font-weight:700}
-#bossbar .bar{height:10px}#bossbar .bar i{background:var(--hostile)}
+/* holds one .hbar row per active boss/mini-boss: stacked when there's room for 2, side by side beyond that.
+   .hbar reuses .hbox's border/background/padding look but overrides its position:absolute (set below, with
+   .hbox) since these rows are flex children, not independently-placed HUD boxes. */
+#bossbar{position:absolute;left:50%;bottom:80px;transform:translateX(-50%);width:min(640px,70vw);text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}
+#bossbar.row{flex-direction:row;justify-content:center;width:min(760px,92vw)}
+#bossbar.row>.hbar{flex:1;min-width:0}
+#bossbar>.hbar{width:100%}
+#bossbar .hbar{position:relative}   /* takes it out of .hbox's position:absolute so it lays out in the flex column, but keeps its own positioning context so its eyebrow label (position:absolute, top:-9px) still anchors to this box and not some ancestor further up */
+#bossbar .name{font-size:13px;letter-spacing:.2em;color:var(--hostile);margin-bottom:4px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bossbar .bar{height:12px}#bossbar .bar i{background:var(--hostile)}
 #banner{position:absolute;top:24%;left:50%;transform:translateX(-50%);text-align:center;width:min(680px,92vw)}
 #banner .h{font-size:clamp(26px,5vw,46px);font-weight:700;letter-spacing:.12em}
 #banner .s{font-size:15px;opacity:.85;margin-top:4px}
@@ -213,7 +220,6 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);paddin
 #loadoutBox:has(#loadout:empty){display:none}
 #loadout{position:static;font-size:13px}
 #speedo.hbox{right:20px;bottom:20px;min-width:110px;padding:14px 14px 8px}
-#bossbar.hbox{top:112px;padding:14px 14px 10px}
 #bossbar .eyebrow.name{color:var(--hostile);letter-spacing:.24em;margin:0}
 #banner{border:2px solid var(--frame);background:rgba(6,9,12,.8);padding:14px 20px 16px;box-shadow:0 0 0 2px #06090c,0 0 0 4px var(--frame-dim)}
 #banner .h{font-size:clamp(22px,4vw,38px)}
@@ -301,9 +307,6 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);paddin
 #loadout .ammo.rl b{color:var(--orange)}#loadout .ammo.rl>i>i{background:var(--orange)}
 #loadout div{gap:8px}
 #loadoutBox{min-width:300px}
-/* boss bar sits along the bottom of the screen */
-#bossbar.hbox{top:auto;bottom:70px;width:min(640px,70vw)}
-#bossbar .bar{height:12px}
 
 .scrap.recycle{display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;padding:8px 12px}
 .scrap.recycle b{display:block;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
@@ -439,7 +442,6 @@ em.attr{font-style:normal;font-size:11px;font-weight:600;margin-left:2px}
 #xpline.burst{animation:xpBurst .5s ease-out}
 @keyframes xpBurst{0%{box-shadow:0 0 0 0 #fff;background:#fff}100%{box-shadow:0 0 40px 10px transparent}}
 #hud #speedo.hbox,#loadoutBox{bottom:24px}
-#bossbar.hbox{bottom:80px}
 /* damage numbers */
 #dmgLayer{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .dmg{position:absolute;left:0;top:0;font-family:var(--f-mono);font-size:16px;font-weight:700;color:#f2f0e8;text-shadow:0 1px 2px #000,0 0 3px #000;white-space:nowrap}

@@ -201,18 +201,36 @@ function updateRadar() {
   }
   for (; i < radarEls.length; i++) radarEls[i].style.display = 'none';
 }
+/* boss bars (bottom of the screen): the Warden, the brute that turns up every 5 minutes, or any future big
+   fight that adds itself to this list. One row each, kept in sync rather than rebuilt every frame; stacked
+   while there's only one or two (so both are always fully visible at once), side by side beyond that. */
+const bossBarEls = [];
+function updateBossBars() {
+  const list = [S.boss, S.mini && !S.mini.dead ? S.mini : null].filter(Boolean);
+  const wrap = $('#bossbar');
+  wrap.hidden = !list.length;
+  wrap.classList.toggle('row', list.length > 2);
+  while (bossBarEls.length < list.length) {
+    const el = document.createElement('div');
+    el.className = 'hbox hbar';
+    el.innerHTML = '<div class="eyebrow name"></div><div class="bar"><i></i></div>';
+    wrap.appendChild(el);
+    bossBarEls.push(el);
+  }
+  for (let i = 0; i < bossBarEls.length; i++) {
+    const el = bossBarEls[i], e = list[i];
+    el.style.display = e ? '' : 'none';
+    if (!e) continue;
+    el.querySelector('.name').textContent = e.barName || bossLabel(e);
+    el.querySelector('.bar>i').style.transform = `scaleX(${clamp(e.hp / e.maxHp, 0, 1)})`;
+  }
+}
 function updateHUD(dt) {
   const P = player;
   updateDmgNumbers(dt); updateRadar();
   updateAmmo(); updateReloadMarkers(); updateLockMarkers();
-  // boss bar (bottom of the screen): the Warden, or the brute that turns up every 5 minutes
   drawMinimap(dt);
-  const bossE = S.boss || (S.mini && !S.mini.dead ? S.mini : null);
-  $('#bossbar').hidden = !bossE;
-  if (bossE) {
-    $('#bossFill').style.transform = `scaleX(${clamp(bossE.hp / bossE.maxHp, 0, 1)})`;
-    $('#bossName').textContent = bossLabel(bossE);
-  }
+  updateBossBars();
   $('#hpBar').style.transform = `scaleX(${clamp(P.hp / stats.maxHp, 0, 1)})`;
   $('#shBar').style.transform = `scaleX(${stats.maxShield ? clamp(P.shield / stats.maxShield, 0, 1) : 0})`;
   $('#hpTxt').textContent = Math.ceil(Math.max(0, P.hp));
