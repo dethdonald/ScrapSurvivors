@@ -37,16 +37,17 @@ function wdPatch(mat, kind) {
   const u = {
     uH: { value: WD.hTex }, uDetail: { value: SETTINGS.detail ? 1 : 0 }, uHalf: { value: HALF }, uCell: { value: CELL }, uGrid: { value: GRID },
     uHLo: { value: 0 }, uHHi: { value: 20 }, uDirt: { value: new THREE.Color() }, uRust: { value: new THREE.Color() }, uWear: { value: new THREE.Color() },
+    uOff: { value: new THREE.Vector3() },      // where this terrain has been moved to (the title's Inferno scene); zero for the arena
   };
   WD.uniforms.push(u);
   mat.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = 'varying vec3 vWP; varying vec3 vWN;\n' + sh.vertexShader.replace('#include <fog_vertex>', `#include <fog_vertex>
+    sh.vertexShader = 'varying vec3 vWP; varying vec3 vWN; uniform vec3 uOff;\n' + sh.vertexShader.replace('#include <fog_vertex>', `#include <fog_vertex>
       { mat4 im = mat4(1.0);
         #ifdef USE_INSTANCING
           im = instanceMatrix;
         #endif
-        vWP = (modelMatrix * im * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * mat3(im) * objectNormal); }`);
+        vWP = (modelMatrix * im * vec4(transformed, 1.0)).xyz - uOff; vWN = normalize(mat3(modelMatrix) * mat3(im) * objectNormal); }`);
     sh.fragmentShader = WD_GLSL + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       if (uDetail > 0.5) {
         vec3 col = diffuseColor.rgb, n = normalize(vWN);

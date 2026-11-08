@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.43.21 · BUILD NOV 8';
+const VERSION = '0.43.22 · BUILD NOV 8';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -60,50 +60,54 @@ function stepObservers(dt) {
 function setupTitleScene() {
   if (TITLE.scene) return;
   const s = new THREE.Scene();
+  // the Workshop set lives in its own group so Customize > Scene can swap it for the Inferno (inferno.js)
+  const g = new THREE.Group(); s.add(g); TITLE.classic = g;
   s.background = new THREE.Color(0x2c3136);
   s.fog = new THREE.Fog(0x2c3136, 18, 40);
-  s.add(new THREE.HemisphereLight(0xdfe8ee, 0x30282a, 0.8));
-  const sun = new THREE.DirectionalLight(0xfff0d8, 0.9); sun.position.set(-4, 9, 7); s.add(sun); setupShadowLight(sun, 6, 40); s.add(sun.target);
-  const rim = new THREE.DirectionalLight(0xff9a50, 0.35); rim.position.set(6, 3, -6); s.add(rim);
-  const grid = new THREE.GridHelper(60, 30, 0x3a4249, 0x30373d); grid.position.y = 0.01; s.add(grid);
+  g.add(new THREE.HemisphereLight(0xdfe8ee, 0x30282a, 0.8));
+  const sun = new THREE.DirectionalLight(0xfff0d8, 0.9); sun.position.set(-4, 9, 7); g.add(sun); setupShadowLight(sun, 6, 40); g.add(sun.target);
+  const rim = new THREE.DirectionalLight(0xff9a50, 0.35); rim.position.set(6, 3, -6); g.add(rim);
+  const grid = new THREE.GridHelper(60, 30, 0x3a4249, 0x30373d); grid.position.y = 0.01; g.add(grid);
   // the stage floor: one solid surface across the whole view (fog fades it out in the distance), the grid drawn on top of it
-  const stage = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), M(0x2a3036)); stage.rotation.x = -Math.PI / 2; stage.position.y = 0; stage.receiveShadow = true; s.add(stage);
+  const stage = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), M(0x2a3036)); stage.rotation.x = -Math.PI / 2; stage.position.y = 0; stage.receiveShadow = true; g.add(stage);
   // the back wall and its window of onlookers: a frame of dark panels around an opening (not a solid slab),
   // kept narrow (±9) so it never reaches as far left as the 3D logo (which sits well past x=-12, see logoPlace)
   // the wall runs far past the edges of any window (the logo is held in front of it, see logoPlace); bolts/rust sit in a 'panel' round the window
   const wallHW = 70, wallHH = 22, wallY = -1 + wallHH, dHW = 9, dBot = -1, dTop = 14, wallCol = 0x1c1e22, wallDk = 0x16181c, rust = 0x5c3b22;
   const winW = 5.2, winH = 2.6, winY = 2.9, winHW = winW / 2, winHH = winH / 2;
-  const slab = (w, h, x, y, col) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.5), M(col || wallCol)); m.position.set(x, y, TITLE_WALL_Z); s.add(m); return m; };
+  const slab = (w, h, x, y, col) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.5), M(col || wallCol)); m.position.set(x, y, TITLE_WALL_Z); g.add(m); return m; };
   const sideW = wallHW - winHW;
   slab(sideW, wallHH * 2, -(winHW + sideW / 2), wallY);                                     // left
   slab(sideW, wallHH * 2, (winHW + sideW / 2), wallY);                                      // right
   slab(winW, (wallY + wallHH) - (winY + winHH), 0, (winY + winHH + wallY + wallHH) / 2);    // above the window
   slab(winW, (winY - winHH) - (wallY - wallHH), 0, (wallY - wallHH + winY - winHH) / 2, wallDk); // below the window
   // corner brackets + rust streaks so the panel reads as a worn industrial wall, not a flat slab
-  const bolt = (x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), M(0x0e1013)); m.position.set(x, y, z); s.add(m); };
+  const bolt = (x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), M(0x0e1013)); m.position.set(x, y, z); g.add(m); };
   for (const cx of [-dHW + 0.4, dHW - 0.4]) for (const cy of [dBot + 0.5, dTop - 0.5]) bolt(cx, cy, TITLE_WALL_Z + 0.3);
   const streakMat = new THREE.MeshStandardMaterial({ color: rust, roughness: 0.95, transparent: true, opacity: 0.3 });
   for (const sx of [-dHW + 1.1, -dHW + 2.4, dHW - 1.6]) {
     const h = rand(2, 4.5), st = new THREE.Mesh(new THREE.PlaneGeometry(0.22, h), streakMat);
-    st.position.set(sx, dTop - h / 2 - rand(0, 1.5), TITLE_WALL_Z + 0.27); s.add(st);
+    st.position.set(sx, dTop - h / 2 - rand(0, 1.5), TITLE_WALL_Z + 0.27); g.add(st);
   }
   // the window trim itself: four thin bars around the opening, not a filled pane — the opening has to stay
   // genuinely empty so the glass and the onlookers behind it are visible through it, not hidden behind a solid mesh
   const frameT = 0.16, frameCol = M(0x15171a), frameZ = TITLE_WALL_Z + 0.26;
-  const trim = (w, h, x, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.14), frameCol); m.position.set(x, y, frameZ); s.add(m); };
+  const trim = (w, h, x, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.14), frameCol); m.position.set(x, y, frameZ); g.add(m); };
   trim(winW + frameT * 2, frameT, 0, winY + winHH + frameT / 2);                          // top
   trim(winW + frameT * 2, frameT, 0, winY - winHH - frameT / 2);                          // bottom
   trim(frameT, winH, -(winHW + frameT / 2), winY);                                        // left
   trim(frameT, winH, (winHW + frameT / 2), winY);                                         // right
   // a small dim room behind the opening, so the onlookers have somewhere to stand and the window isn't a hole into the fog
   const backRoom = new THREE.Mesh(new THREE.BoxGeometry(winW + 1.2, winH + 1.8, 0.3), new THREE.MeshStandardMaterial({ color: 0x272c33, roughness: 0.95 }));
-  backRoom.position.set(0, winY - 0.1, TITLE_WALL_Z - 2.6); s.add(backRoom);
+  backRoom.position.set(0, winY - 0.1, TITLE_WALL_Z - 2.6); g.add(backRoom);
   const glass = new THREE.Mesh(new THREE.PlaneGeometry(winW, winH), new THREE.MeshBasicMaterial({ color: 0x8fd6ff, transparent: true, opacity: 0.14, depthWrite: false }));
-  glass.position.set(0, winY, TITLE_WALL_Z + 0.08); s.add(glass);
-  const winLight = new THREE.PointLight(0xcfe8ff, 0.35, 9, 1.4); winLight.position.set(0, winY + 1.6, TITLE_WALL_Z - 2.3); s.add(winLight);
-  setupObservers(s);
+  glass.position.set(0, winY, TITLE_WALL_Z + 0.08); g.add(glass);
+  const winLight = new THREE.PointLight(0xcfe8ff, 0.35, 9, 1.4); winLight.position.set(0, winY + 1.6, TITLE_WALL_Z - 2.3); g.add(winLight);
+  setupObservers(g);
   TITLE.scene = s; s.environment = ENV.base; TITLE.lights = [sun]; applyGfx();
+  TITLE.classicLights = [sun]; TITLE.classicBg = s.background; TITLE.classicFog = s.fog;
   TITLE.cam = new THREE.PerspectiveCamera(36, 1, 0.1, 400);  // far was 100: on a big/4K fullscreen window the logo's placement depth (logoPlace, logo3d.js) could land past it and vanish
+  setTitleScene(CUSTOM.titleScene);
 }
 /* A random but valid frame: one or two bodies, two legs, a weapon or three, sometimes extras. */
 function randomTitleLoadout() {
@@ -324,19 +328,56 @@ function titleBurst(p, color, n) {
   for (let i = 0; i < n; i++) {
     const m = new THREE.Mesh(geoBox, M(color)), s = rand(0.1, 0.28); m.scale.setScalar(s); m.position.copy(p);
     const v = new THREE.Vector3(rand(-6, 6), rand(2, 9), rand(-6, 6));
-    TITLE.scene.add(m); titleFx.push({ obj: m, life: rand(0.5, 1), max: 1, upd: (f, dt) => { v.y -= 28 * dt; f.obj.position.addScaledVector(v, dt); f.obj.rotation.x += dt * 8; if (f.obj.position.y < 0.05) { f.obj.position.y = 0.05; v.y *= -0.3; v.x *= 0.7; v.z *= 0.7; } } });
+    TITLE.scene.add(m); titleFx.push({ obj: m, life: rand(0.5, 1), max: 1, upd: (f, dt) => { v.y -= 28 * dt; f.obj.position.addScaledVector(v, dt); f.obj.rotation.x += dt * 8; const fl = titleFloor(f.obj.position.x, f.obj.position.z) + 0.05; if (f.obj.position.y < fl) { f.obj.position.y = fl; v.y *= -0.3; v.x *= 0.7; v.z *= 0.7; } } });
   }
 }
 function stepTitlePieces(dt) {
   for (const pc of TITLE.pieces) {
     pc.vel.y -= 24 * dt; pc.obj.position.addScaledVector(pc.vel, dt);
     pc.obj.rotation.x += pc.w.x * dt; pc.obj.rotation.y += pc.w.y * dt; pc.obj.rotation.z += pc.w.z * dt;
-    if (pc.obj.position.y < pc.r) { pc.obj.position.y = pc.r; pc.vel.y *= -0.35; pc.vel.x *= 0.75; pc.vel.z *= 0.75; pc.w.multiplyScalar(0.7); }
+    const fl = titleFloor(pc.obj.position.x, pc.obj.position.z) + pc.r;
+    if (pc.obj.position.y < fl) { pc.obj.position.y = fl; pc.vel.y *= -0.35; pc.vel.x *= 0.75; pc.vel.z *= 0.75; pc.w.multiplyScalar(0.7); }
   }
   for (const f of titleFx) { f.life -= dt; f.upd(f, dt); }
   for (let i = titleFx.length - 1; i >= 0; i--) if (titleFx[i].life <= 0) { TITLE.scene.remove(titleFx[i].obj); titleFx.splice(i, 1); }
 }
 function clearTitlePieces() { TITLE.pieces.forEach(p => TITLE.scene.remove(p.obj)); TITLE.pieces = []; }
+
+/* ---------- main-menu scene: the Workshop (test bay, onlookers behind glass) or the Inferno (the box-art diorama) ----------
+   Both live in the same TITLE.scene; switching just shows one set and hides the other, so the robot, logo, falling guns,
+   stickers and cosmetics all work the same in either. The Inferno is built the first time it's picked. */
+function setTitleScene(name) {
+  name = name === 'inferno' ? 'inferno' : 'workshop';
+  if (name === 'inferno' && !TITLE.inf) {
+    try { TITLE.inf = makeInferno({ fxScene: TITLE.scene, count: 260 }); TITLE.inf.setFire(0.85, 0.6); TITLE.scene.add(TITLE.inf.group); }      // a calmer blaze behind the menu
+    catch (e) { console.warn('inferno scene', e); TITLE.inf = null; name = 'workshop'; }
+  }
+  TITLE.sceneName = name;
+  const inf = name === 'inferno', s = TITLE.scene;
+  TITLE.classic.visible = !inf; if (TITLE.inf) { TITLE.inf.group.visible = inf; if (!inf) TITLE.inf.clearLive(); }
+  s.background = inf ? TITLE.inf.bg : TITLE.classicBg; s.fog = inf ? TITLE.inf.fog : TITLE.classicFog; s.environment = inf ? TITLE.inf.env : ENV.base;
+  TITLE.lights = inf ? TITLE.inf.lights : TITLE.classicLights; applyGfx();
+}
+TITLE.infCam = { y: 1.4, z: 14, ly: 2.0, k: 1.25 };       // the Inferno's menu camera: a bit lower and further back, looking up at the robot like the box art
+const titleInferno = () => TITLE.sceneName === 'inferno' && TITLE.inf;
+/* the floor under a point: flat in the Workshop; the pillar top, or down among the horde past its edge, in the Inferno */
+function titleFloor(x, z) { return titleInferno() ? TITLE.inf.floorAt(x, z) : 0; }
+/* in the Inferno the robot holds off the horde: each gun fires in bursts, at its own rate (cosmetic only) */
+const TITLE_NO_SHOOT = new Set(['knife', 'katana', 'chainsaw', 'field', 'whirl', 'blades']);
+function titleInfernoGuns(dt) {
+  const R = TITLE.robot; if (!R || !R.userData.landed || S.mode !== 'title' || !R.userData.muzzleOf) return;
+  for (const [it, muz] of R.userData.muzzleOf) {
+    if (TITLE_NO_SHOOT.has(it.type)) continue;
+    const u = muz.userData; u.cd = (u.cd == null ? rand(0.3, 1.5) : u.cd) - dt;
+    if (u.cd > 0) continue;
+    const rate = TITLE.inf.fxOf(it.type).rate;
+    TITLE.inf.fireMuzzle(muz, it.type, 1);
+    // fast guns fire short bursts then pause; slow ones take their time between shots
+    u.burst = (u.burst || 0) + 1;
+    if (rate < 0.2 && u.burst < 4 + ((Math.random() * 6) | 0)) u.cd = rate;
+    else { u.burst = 0; u.cd = rand(0.6, 1.8); }
+  }
+}
 
 /* ---------- update status (title screen) ----------
    Asks the desktop side (main.js update-status) whether GitHub has a newer version. Nothing is shown in the dev copy. */
@@ -381,9 +422,11 @@ function renderTitle(dt) {
   const W = innerWidth, Hh = innerHeight;
   TITLE.cam.aspect = W / Hh; TITLE.cam.updateProjectionMatrix();
   // the frame stands right of centre (about 65% across the screen); the menu sits on the left
-  const off = Math.min(3.2, 1.0 * W / Hh);
-  TITLE.cam.position.set(-off + Math.sin(TITLE.t * 0.15) * 0.3, 3.0, 10.5);
-  TITLE.cam.lookAt(-off, 2.3, 0);
+  const off = Math.min(3.2, 1.0 * W / Hh), inf = titleInferno();
+  // the Inferno is shot from a little lower, looking up at the robot on its pillar like the box art
+  const IC = TITLE.infCam;
+  TITLE.cam.position.set(-off * (inf ? IC.k : 1) + Math.sin(TITLE.t * 0.15) * 0.3, inf ? IC.y : 3.0, inf ? IC.z : 10.5);
+  TITLE.cam.lookAt(-off * (inf ? IC.k : 1), inf ? IC.ly : 2.3, 0);
   if (TITLE.shake > 0) { TITLE.cam.position.x += rand(-1, 1) * TITLE.shake * 0.3; TITLE.cam.position.y += rand(-1, 1) * TITLE.shake * 0.3; TITLE.shake -= dt * 1.5; }
   updateTitleRobot(dt);
   cosmeticTick(TITLE.robot, dt);
@@ -396,10 +439,14 @@ function renderTitle(dt) {
     if (S.mode === 'custom') TITLE.life = 0;          // hold still while you're customising it
     else if (TITLE.life > 15) explodeTitleRobot();
   }
-  if (TITLE.respawnT > 0) { TITLE.respawnT -= dt; if (TITLE.respawnT <= 0) { clearTitlePieces(); spawnTitleRobot(true); } }
+  if (TITLE.respawnT > 0) { TITLE.respawnT -= dt; if (TITLE.respawnT <= 0) { clearTitlePieces(); spawnTitleRobot(!titleInferno()); } }
   thrownTick(dt);
+  if (inf) { TITLE.cam.updateMatrixWorld(); TITLE.inf.tick(dt, TITLE.cam); titleInfernoGuns(dt); }
   if (typeof logoTick === 'function') { TITLE.cam.updateMatrixWorld(); logoTick(dt); }
+  const ex0 = MAT_OUT.uniforms.exposure.value;
+  if (inf) MAT_OUT.uniforms.exposure.value = TITLE.inf.exposure;     // the Inferno is lit for a slightly lower exposure; the game's own is put back straight after
   renderFrame(TITLE.scene, TITLE.cam);
+  MAT_OUT.uniforms.exposure.value = ex0;
   placeTitleTip();
 }
 function leaveTitle() {
@@ -445,7 +492,7 @@ function openCustomize() {
   $('#brushes').innerHTML = BRUSHES.map(c => `<button class="br${c === brush ? ' on' : ''}" data-b="${c || ''}" style="${c ? `background:${c}` : ''}" title="${c ? c : 'Eraser'}">${c ? '' : '✕'}</button>`).join('');
   for (const el of $$('#swatches .sw')) el.addEventListener('click', () => setPaint(el.dataset.c));
   for (const el of $$('#brushes .br')) el.addEventListener('click', () => { brush = el.dataset.b || null; $$('#brushes .br').forEach(b => b.classList.toggle('on', b === el)); });
-  drawPatchEditor(); renderPatchDir(); syncBomb();
+  drawPatchEditor(); renderPatchDir(); syncBomb(); syncScenePick();
   asciiWipe(() => { $('.tmain').hidden = true; $('#custPanel').hidden = false; focusFirst(); });
 }
 /* ---------- drag stickers around on the robot (Customize) ---------- */
@@ -755,6 +802,15 @@ function custTab(name) {
 }
 $$('#custPanel .ctab').forEach(b => b.addEventListener('click', () => { custTab(b.dataset.tab); sfx('tick', 0.3); }));
 
+/* Customize > Scene: which set the main menu stands on */
+function syncScenePick() { $$('#scenePick .scenecard').forEach(b => b.classList.toggle('on', b.dataset.scene === (TITLE.sceneName || 'workshop'))); }
+$$('#scenePick .scenecard').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.scene === TITLE.sceneName) return;
+  CUSTOM.titleScene = b.dataset.scene; saveCustom();
+  setTitleScene(CUSTOM.titleScene); syncScenePick(); sfx('tick', 0.4);
+}));
+
+
 /* ---------- peeled things in your hand, and thrown away ---------- */
 TITLE.thrown = [];
 function startFling(obj, e, cosType) {
@@ -849,8 +905,8 @@ function titleGunTick(dt) {
         }
       }
     }
-    // the floor: one flat grid, ground level everywhere
-    const fy = G.r * 0.5;
+    // the floor: flat in the Workshop; the pillar top (or the ground below it) in the Inferno
+    const fy = titleFloor(p.x, p.z) + G.r * 0.5;
     if (p.y < fy) {
       p.y = fy;
       if (G.v.y < -2.5 && G.bonkT <= 0) { G.bonkT = 0.1; sfx('thud', Math.min(0.5, -G.v.y * 0.04)); }

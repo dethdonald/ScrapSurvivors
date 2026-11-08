@@ -104,7 +104,7 @@
       <div class="custhead">
         <div class="eyebrow">Customize</div>
         <div class="ctabs" role="tablist">
-          <button class="ctab nav on" data-tab="colours">Colours</button><button class="ctab nav" data-tab="stickers">Stickers</button><button class="ctab nav" data-tab="cosmetics">Cosmetics</button>
+          <button class="ctab nav on" data-tab="colours">Colours</button><button class="ctab nav" data-tab="stickers">Stickers</button><button class="ctab nav" data-tab="cosmetics">Cosmetics</button><button class="ctab nav" data-tab="scene">Scene</button>
         </div>
       </div>
       <div class="custbody">
@@ -127,6 +127,13 @@
           <label class="bombrow"><span>Amount</span><input class="nav" id="bombAmt" type="range" min="0" max="12" step="0.01"><b id="bombPeace" title="Maxed out">MAX</b></label>
           <div class="custrow"><button class="btn ghost nav" id="stickerReset">⟳ Reshuffle</button></div>
           <div class="custhint">Drag: slide · Pull off: peel</div>
+        </div>
+        <div class="cpage" data-page="scene" hidden>
+          <h3>Main menu scene</h3>
+          <div class="scenepick" id="scenePick">
+            <button class="scenecard nav" data-scene="workshop"><b>Workshop</b><small>The test bay, with an audience behind the glass.</small></button>
+            <button class="scenecard nav" data-scene="inferno"><b>Inferno</b><small>Last robot standing on a burning world, the horde piled up below. (The box art.)</small></button>
+          </div>
         </div>
         <div class="cpage" data-page="cosmetics" hidden>
           <h3>Cosmetics</h3>
@@ -328,6 +335,7 @@
 <script src="src/physics.js"></script>
 <script src="src/props.js"></script>
 <script src="src/worlddetail.js"></script>
+<script src="src/inferno.js"></script>
 <script src="src/game.js"></script>
 <script src="src/devtest.js"></script>
 <script src="src/windows.js"></script>
