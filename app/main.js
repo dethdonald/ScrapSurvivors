@@ -2,6 +2,7 @@
 const { app, BrowserWindow, Menu, ipcMain, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 
 // Saved settings, customisation and patches live in %APPDATA%\\ScrapSurvivors. The game used to be called Scrapfall:
 // on the first launch under the new name, the old save folder is copied across so nothing is lost.
@@ -91,8 +92,26 @@ async function updateStatus() {
   return res;
 }
 ipcMain.handle('update-status', () => updateStatus());
-// restart into the downloaded update (Windows build: the starter switches to it as it boots)
-ipcMain.on('restart', () => { app.relaunch(); app.exit(0); });
+// restart into the downloaded update.
+// Windows: tools/bootstrap.js (the real entry point) does the download+switch itself, so a plain relaunch
+// of the same exe picks up the new copy.
+// Linux/Deck: the download+swap happens in ScrapSurvivors.sh, which launches this binary and waits for it
+// to exit. app.relaunch() just respawns this binary directly, bypassing the script entirely - the "update"
+// never actually runs and the player gets the same files back every time. So on Linux, re-run the script
+// (sitting right next to this binary) instead, and let IT relaunch the (now updated) binary.
+ipcMain.on('restart', () => {
+  if (process.platform === 'linux') {
+    const script = path.join(path.dirname(process.execPath), 'ScrapSurvivors.sh');
+    if (fs.existsSync(script)) {
+      try {
+        spawn(script, [], { detached: true, stdio: 'ignore', cwd: path.dirname(script) }).unref();
+        app.exit(0);
+        return;
+      } catch (e) { log('restart via script failed: ' + (e && e.message)); }
+    }
+  }
+  app.relaunch(); app.exit(0);
+});
 
 ipcMain.on('quit', () => app.quit());
 ipcMain.on('toggle-fullscreen', () => { if (win) win.setFullScreen(!win.isFullScreen()); });

@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.14 · BUILD NOV 6|
+| **Version** | 0.43.15 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -279,6 +279,18 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ### 2026-11-08: 0.43.14 Steam Deck launcher: keep Steam's overlay
 
 - `deck/ScrapSurvivors.sh`: no longer unsets `LD_PRELOAD`. Gaming Mode needs Steam's overlay library to recognise the game's window; without it Steam showed an endless loading screen. The launcher still logs every start to `launch-log.txt` (now including LD_PRELOAD) and retries once with `--disable-gpu-sandbox --in-process-gpu` if the game dies within 10 s. Version bumped so installed Decks pick the launcher up (they only update when VERSION changes).
+
+### 2026-11-08: fixed - Deck's "restart to update" button didn't actually update
+On Linux/Steam Deck, all the real update logic (checking GitHub, downloading, swapping in the new files)
+lives in `deck/ScrapSurvivors.sh` - it does that *before* launching the game binary, then waits for the
+binary to exit. The in-game "RESTART TO UPDATE" button called `app.relaunch()`, which just respawned the
+raw game binary directly, skipping the wrapper script entirely. So clicking restart never ran an update -
+you got the exact same files back every time, no matter how many times you restarted.
+
+Fixed `main.js`'s restart handler: on Linux it now re-launches `ScrapSurvivors.sh` (sitting next to the
+game binary) instead of the binary itself, so the script's update check actually runs before the game
+comes back up. Windows is unaffected - its updater (`tools/bootstrap.js`) already handles this inside the
+Electron process itself, so a plain relaunch was always correct there.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
