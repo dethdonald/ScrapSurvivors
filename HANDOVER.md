@@ -255,6 +255,12 @@ This file tracks every change, with dates, plus what anyone picking the project 
 
 - **Main menu scene rework**: the raised stage/pedestal under the showcase robot is gone — it now stands on the plain floor grid. A back wall with a lit window went in behind it, with five little onlooker robots watching through the glass. They laugh when the falling pile of weapons bonks the robot, and cheer when it blows up. After an explosion, the replacement robot now walks in from off-screen on the right instead of dropping from the sky (the very first robot on launch still drops in) (`title.js`).
 
+### 2026-11-08: shareable builds + Deck updater fix (0.43.12)
+
+- **Builds** (`Documents\ScrapSurvivors\Builds\`): `ScrapSurvivors-0.43.12-Windows.zip` (portable: Electron 33.2.1 win32-x64, `electron.exe` renamed `ScrapSurvivors.exe`, game in `resources/app`, `default_app.asar` removed; no updater, unsigned so SmartScreen warns) and `ScrapSurvivors-0.43.12-SteamDeck-linux.tar.gz` (same with linux-x64 + `ScrapSurvivors.sh`). Delivered as 20 MB pieces + `Join builds.bat` (copy /b + certutil SHA256 check) + `README-BUILDS.txt`. Built in-session: download `electron-v33.2.1-<plat>.zip` from GitHub releases (checksums verified against SHASUMS256.txt), unzip, drop the app in. The Linux build was smoke-tested under xvfb (loads the game, no errors in its log). electron-builder is not needed.
+- **Deck updater never worked**: the repo dethdonald/ScrapSurvivors is PRIVATE, so the launcher's anonymous `raw.githubusercontent.com` check failed silently and the Deck kept its old version. `deck/ScrapSurvivors.sh` now reads an optional `github-token.txt` next to it (fine-grained, this repo only, Contents read-only) and then uses the GitHub API (`contents/VERSION` raw + `tarball/main`). Tested against the real repo: no token -> starts old version; token -> 0.43.8 updated to 0.43.12. Never ship the token in a shared copy.
+- **Publishing**: run `/home/claude/publish.sh` after EVERY delivery (it had been skipped since 0.43.8). The Deck only needs a rebuilt package when Electron itself changes.
+
 ### 2026-11-08: 0.43.12 title screen polish: window crowd, logo, walking turns
 
 - **Logo visible again**: the 3D logo used to sit 15-30 m deep (depending on window size), behind the new back wall. It's now held in front of the wall (max 12 m) and scaled down by the same ratio, so it covers exactly the same pixels; falling-piece physics scale with it (`logo3d.js`).
