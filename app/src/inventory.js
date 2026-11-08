@@ -862,7 +862,19 @@ function benchPad(dt, pressed, released) {
   if (ax || ay || pressed(0)) c.shown = true;
   c.x = clamp(c.x + ax * 900 * dt, 0, innerWidth); c.y = clamp(c.y + ay * 900 * dt, 0, innerHeight);
   if (ax || ay) { benchMove(c.x, c.y, 0, 0); updateHover(c.x, c.y); }
-  INV.yaw -= gp.axes[2] * 2.2 * dt; INV.pitch = clamp(INV.pitch + gp.axes[3] * 1.5 * dt, -0.25, 1.1);
+  // Over the parts list the right stick scrolls it (anywhere else it still turns the robot), and parking the cursor
+  // at the list's top or bottom edge scrolls it too: faster the closer to the edge (also while carrying a part).
+  const list = $('#partList'), lr = list && list.offsetParent !== null ? list.getBoundingClientRect() : null;
+  const overList = lr && c.shown && c.x >= lr.left && c.x <= lr.right && c.y >= lr.top - 24 && c.y <= lr.bottom + 24;
+  if (overList) {
+    const before = list.scrollTop, EDGE = 48;
+    let v = gp.axes[3] * 1100;
+    if (c.y < lr.top + EDGE) v -= 700 * clamp((lr.top + EDGE - c.y) / EDGE, 0, 1.5);
+    else if (c.y > lr.bottom - EDGE) v += 700 * clamp((c.y - (lr.bottom - EDGE)) / EDGE, 0, 1.5);
+    if (v) list.scrollTop += v * dt;
+    if (list.scrollTop !== before) updateHover(c.x, c.y);      // a different row is under the cursor now
+    INV.yaw -= gp.axes[2] * 2.2 * dt;                          // sideways on the right stick still turns the robot
+  } else { INV.yaw -= gp.axes[2] * 2.2 * dt; INV.pitch = clamp(INV.pitch + gp.axes[3] * 1.5 * dt, -0.25, 1.1); }
   if (pressed(0)) {
     const el = document.elementFromPoint(c.x, c.y);
     const btn = el && el.closest && el.closest('button');
