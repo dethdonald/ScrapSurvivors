@@ -292,6 +292,14 @@ game binary) instead of the binary itself, so the script's update check actually
 comes back up. Windows is unaffected - its updater (`tools/bootstrap.js`) already handles this inside the
 Electron process itself, so a plain relaunch was always correct there.
 
+Also added `deck/Update.sh`: a standalone updater that does the same GitHub check/download as
+`ScrapSurvivors.sh` but **without opening the game**, and prints what happened (up to date / updated to
+X / offline / failed + why) instead of only writing it to `update-log.txt`. Useful both for manually
+forcing an update and for diagnosing a stuck one. The shared logic moved into `deck/update-lib.sh`
+(sourced by both scripts) so there's one copy of the actual update code, not two. All three files
+(`ScrapSurvivors.sh`, `Update.sh`, `update-lib.sh`) now travel together — the self-update step copies all
+three down, and `publish.sh` pushes all three.
+
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
 - **Arm Lifesteal**: heals 1/1.5/2/2.5/3 % of the damage a shot really dealt (`HIT_DEALT`, overkill excluded), shared cap 1/1.5/2/2.5/3 HP per second **per arm** (`arm.ls` one-second window), never overheals. Poison ticks and burn bypass `damage()`, so they never heal; no recursion.
