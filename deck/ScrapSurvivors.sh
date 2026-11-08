@@ -14,20 +14,19 @@ LOG="$HERE/update-log.txt"
 source "$HERE/update-lib.sh"
 
 [ "$1" = "--no-update" ] && shift || update
-# Steam's overlay library (gameoverlayrenderer.so, via LD_PRELOAD) is how Gaming Mode's gamescope compositor
-# recognises the game's window - unsetting it there makes Steam sit on its loading screen forever (tried in
-# 0.43.13). But the opposite showed up in Desktop Mode: Steam just hangs loading WITH the overlay preloaded,
-# and only boots once LD_PRELOAD is cleared. So: keep it under gamescope (Gaming Mode), clear it everywhere
-# else (Desktop Mode, or run outside Steam entirely). Gaming Mode's session reports XDG_CURRENT_DESKTOP (or
-# XDG_SESSION_DESKTOP) as "gamescope"; nothing else is known to set that.
-GAMESCOPE=0
-case "${XDG_CURRENT_DESKTOP:-}${XDG_SESSION_DESKTOP:-}${GAMESCOPE_WAYLAND_DISPLAY:+gamescope}" in *[Gg][Aa][Mm][Ee][Ss][Cc][Oo][Pp][Ee]*) GAMESCOPE=1 ;; esac
-[ "$GAMESCOPE" = 1 ] || unset LD_PRELOAD
+# Steam preloads its overlay (gameoverlayrenderer.so) into every game via LD_PRELOAD. A 0.43.13 Gaming Mode
+# test once suggested keeping it was required there - but real testing on 0.43.15/16 showed the opposite in
+# BOTH Gaming Mode and Desktop Mode: the game only boots once LD_PRELOAD is cleared (confirmed via the
+# LD_PRELOAD="" %command% Launch Option override in both modes; turning the overlay off in Steam's own
+# settings did NOT have the same effect, so clearing it here ourselves is the only thing that reliably works).
+# So: always clear it. If Gaming Mode ever regresses because of this, it was never really about gamescope
+# needing the overlay - something else was going on in that first 0.43.13 test.
+unset LD_PRELOAD
 # Gaming Mode runs games under gamescope (Xwayland): ask Electron for plain X11 explicitly. Desktop Mode is
 # whatever the desktop session actually is (usually also X11 on the Deck's Plasma), so this is harmless there too.
 FLAGS=(--no-sandbox --ozone-platform=x11)
 LAUNCH_LOG="$HERE/launch-log.txt"
-{ echo "=== $(date) start: $*"; echo "SteamDeck=${SteamDeck:-} SteamAppId=${SteamAppId:-} DISPLAY=${DISPLAY:-} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-} XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-} XDG_SESSION_DESKTOP=${XDG_SESSION_DESKTOP:-}"; echo "detected gamescope=$GAMESCOPE -> LD_PRELOAD=${LD_PRELOAD:-<unset>}"; } > "$LAUNCH_LOG"
+{ echo "=== $(date) start: $*"; echo "SteamDeck=${SteamDeck:-} SteamAppId=${SteamAppId:-} DISPLAY=${DISPLAY:-} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-} XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-} XDG_SESSION_DESKTOP=${XDG_SESSION_DESKTOP:-}"; echo "LD_PRELOAD cleared (always, now)"; } > "$LAUNCH_LOG"
 start=$(date +%s)
 "$HERE/ScrapSurvivors" "${FLAGS[@]}" "$@" >> "$LAUNCH_LOG" 2>&1
 code=$?

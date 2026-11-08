@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.43.16 · BUILD NOV 6';
+const VERSION = '0.43.17 · BUILD NOV 6';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -350,9 +350,12 @@ async function checkUpdate() {
   const v = String(r.remote || '').replace(/[^0-9.]/g, '');
   const line = (cls, txt) => `<span class="dot ${cls}"></span><span class="${cls}">${txt}</span>`;
   if (r.state === 'current') el.innerHTML = line('ok', 'UP TO DATE');
-  else if (r.state === 'ready') el.innerHTML = line('new', `UPDATE ${v} DOWNLOADED`) + '<button class="updBtn" id="updRestart">RESTART TO UPDATE</button>';
+  else if (r.state === 'ready') el.innerHTML = line('new', `UPDATE ${v} DOWNLOADED`) + '<button class="updBtn nav" id="updRestart">RESTART TO UPDATE</button>';
   else if (r.state === 'downloading') el.innerHTML = line('new', `UPDATE ${v} AVAILABLE · DOWNLOADING…`);
-  else if (r.state === 'available') el.innerHTML = line('new', `UPDATE ${v} AVAILABLE · RESTART THE GAME TO INSTALL`);
+  // Linux/Deck: the shell launcher does the actual download on the next start, so this button doesn't need
+  // anything "ready" first - clicking it just restarts (main.js re-runs the launcher script instead of the
+  // raw binary on Linux, so the restart itself is what triggers the update).
+  else if (r.state === 'available') el.innerHTML = line('new', `UPDATE ${v} AVAILABLE`) + '<button class="updBtn nav" id="updRestart">RESTART TO UPDATE</button>';
   else el.innerHTML = line('err', r.reason === 'noaccess' ? 'CAN\'T CHECK FOR UPDATES (NO ACCESS)' : 'COULDN\'T CHECK FOR UPDATES');
   const b = $('#updRestart'); if (b) b.addEventListener('click', () => window.desktop.restart());
   // the Windows build downloads in the background: look again until it's ready (a minute at most)

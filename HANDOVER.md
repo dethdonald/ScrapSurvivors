@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.16 · BUILD NOV 6|
+| **Version** | 0.43.17 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -314,6 +314,31 @@ show it.
 Also: confirmed and documented a separate pitfall - a non-Steam-game shortcut pointed at the raw
 `ScrapSurvivors` binary instead of `ScrapSurvivors.sh` skips the launcher (no update check, no logging,
 no launch flags) and can show the same symptom. The Steam shortcut's Target must be `ScrapSurvivors.sh`.
+
+### 2026-11-08: fixed - title menu unusable with a controller, Deck LD_PRELOAD flip, restart button (0.43.17)
+- **Title menu had NO gamepad navigation at all.** `focusables()` only ever looked inside `.overlay`
+  sections, but the title screen (and its Customize/Catalog subpanels) aren't `.overlay` elements - they're
+  the base screen and plain nested panels - so the gamepad code always found zero focusable buttons there.
+  Gave `focusables()` explicit containers for `title`/`custom`/`catalog` so Start/Customize/Catalog/Store/
+  Options/Quit (and the Customize and Catalog panels) are now reachable with a controller.
+- **Found and fixed a second, real bug while verifying that**: `navMove()` scored candidates by
+  center-to-center distance, which breaks for a left-aligned column of variable-width buttons (title's
+  menu) - a longer label drags a button's center further right, which could out-score the very next item
+  below and make Down skip over it entirely (verified: Down from Start jumped straight to Store, skipping
+  Customize and Catalog). Changed the cross-axis penalty to an edge-overlap gap (0 when two elements'
+  ranges overlap on the perpendicular axis) instead of raw center distance - traversal is now a clean
+  Start -> Customize -> Catalog -> Store -> Options -> Quit in order.
+- **The update-restart button was also missing the `nav` class** gamepad focus requires, so even with the
+  above fixes it still wouldn't have been reachable. Added it. Also: Linux/Deck never showed a button at
+  all for its "available" state (only Windows' "ready" state did, since Linux's actual download happens in
+  the shell launcher, not in-app) - it now shows a real RESTART TO UPDATE button there too; clicking it
+  just restarts, since on Linux a restart re-runs the launcher script, which is what does the update.
+- **Steam Deck LD_PRELOAD flip-flop, resolved with real data**: a 0.43.13 Gaming Mode test once suggested
+  keeping Steam's overlay preload was required there. Direct testing on 0.43.15/16 showed the opposite in
+  BOTH Gaming Mode and Desktop Mode - the game only boots once LD_PRELOAD is cleared (confirmed via the
+  LD_PRELOAD="" %command% Launch Option override in both modes; disabling Steam's overlay setting did NOT
+  have the same effect). `ScrapSurvivors.sh` now always clears LD_PRELOAD unconditionally - no more mode
+  detection. The Launch Options override can be removed.
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.

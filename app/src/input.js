@@ -155,8 +155,13 @@ function readMoveAxes() {
 }
 
 /* Menu navigation for keyboard and gamepad */
+// title screen isn't a '.overlay' (it's the base screen, not a dimming layer over gameplay), and its
+// customize/catalog subpanels are plain divs nested inside it rather than their own overlay sections -
+// so the generic '.overlay' lookup below never found any of them. Give those three their own container.
+const NAV_CONTAINER = { title: '#title', custom: '#custPanel', catalog: '#catalog' };
 function focusables() {
-  const ov = [...document.querySelectorAll('.overlay')].find(o => !o.hidden);
+  const sel = NAV_CONTAINER[S.mode];
+  const ov = sel ? document.querySelector(sel) : [...document.querySelectorAll('.overlay')].find(o => !o.hidden);
   return ov ? [...ov.querySelectorAll('.nav')].filter(e => !e.disabled && e.offsetParent !== null) : [];
 }
 function focusFirst() { const f = focusables(); if (f.length) f[0].focus(); }
@@ -176,7 +181,11 @@ function navMove(dx, dy) {
     if (e === cur) continue;
     const q = e.getBoundingClientRect(), vx = q.left + q.width / 2 - cx, vy = q.top + q.height / 2 - cy;
     const along = dx ? vx * dx : vy * dy; if (along <= 4) continue;
-    const sc = along + (dx ? Math.abs(vy) : Math.abs(vx)) * 2.2;
+    // cross-axis penalty: 0 when the two elements' edges overlap on that axis, so a vertical list of
+    // left-aligned, variable-width buttons (title menu) doesn't get its center dragged rightward by a
+    // longer label and skip over the next, shorter one - same idea for a horizontal row of varying height.
+    const gap = dx ? Math.max(0, q.top - r.bottom, r.top - q.bottom) : Math.max(0, q.left - r.right, r.left - q.right);
+    const sc = along + gap * 2.2;
     if (sc < bs) { bs = sc; best = e; }
   }
   if (best) { best.focus(); best.scrollIntoView({ block: 'nearest' }); }
