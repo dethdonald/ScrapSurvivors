@@ -417,6 +417,7 @@ function buildPart(item, out, reg) {
       }
     }
   }
+  if (item.kind === 'arm' || item.kind === 'leg') addArmorPlate(g, item, out);
   g.userData.item = item;
   return g;
 }
@@ -439,7 +440,10 @@ function attachPart(anchor, item, reg) {
   holder.add(p);
   return p;
 }
+/* set while building a single part on its own (the pop-up part viewer): nothing gets mounted into its sockets */
+let PART_SOLO = false;
 function mount(anchor, item, ref, reg) {
+  if (PART_SOLO) return null;
   const p = attachPart(anchor, item, reg);
   if (anchor.userData.accepts === 'arm') anchor.add(maleArm());          // V2: the ball that sits in the ring
   else if (anchor.userData.accepts === 'module') anchor.add(maleModule()); // V2: the cube plug in the square recess

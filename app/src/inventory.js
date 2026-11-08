@@ -225,32 +225,47 @@ const ICONS = {
   gem: '<svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/><path d="M2 9h20M9 3l3 6 3-6M12 9v12"/></svg>',
   box: '<svg viewBox="0 0 24 24"><path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>',
 };
-/* Hangar stock with developer mode off: what you can pick and how many of each kind */
+/* Hangar stock with developer mode off: what you can pick and how many of each kind.
+   Arm, weapon, chest (block) and legs (lower) availability is also gated by UNLOCKS (data.js): dev mode always sees everything,
+   otherwise weaponUnlocked/armUnlocked/partUnlockedFromBosses decide which TYPES show up; weapon has its own per-type copy cap
+   (weaponCap: 1 until mastered, 2 after) instead of the flat per-kind max below. */
 const HANGAR_RULES = BUILD_V2 ? {
   lower:  { max: 1 },
   adapter: { max: 0 },
-  block:  { max: 1, types: ['upper_scout', 'upper_brawler', 'upper_carrier'] },
+  block:  { max: 1 },
   leg:    { max: 0 },
-  arm:    { max: 2, types: ['basic', 'sentry'] },
-  weapon: { max: 2 },
+  arm:    { max: 2 },
+  weapon: { max: 2 },          // fallback only: weapon's real cap is per-type via weaponCap()
   module: { max: 0 },
   gem:    { max: 0 },
 } : {
   adapter: { max: 0 },
   block:  { max: 2, types: ['body'] },
   leg:    { max: 2, types: ['basic'] },
-  arm:    { max: 2, types: ['basic', 'sentry'] },
+  arm:    { max: 2 },
   weapon: { max: 2 },
   module: { max: 0 },
   gem:    { max: 0 },          // gems are found in the field (developer mode can still place them here)
 };
-function hangarCount(kind) {
+function hangarCount(kind, type) {
   const loose = INV.bodies.flatMap(b => [b.item, ...childrenOf(b.item)]);
   // only fresh Lv 1 parts use up the stock: merging two of them hands you back a slot, so you can keep merging up the levels
-  return [...allItems(), ...loose].filter(it => it && it.kind === kind && (it.lvl || 1) <= 1).length;
+  return [...allItems(), ...loose].filter(it => it && it.kind === kind && (type === undefined || it.type === type) && (it.lvl || 1) <= 1).length;
 }
-const hangarAllows = (k, t) => SETTINGS.dev || ((HANGAR_RULES[k].max > 0) && (!HANGAR_RULES[k].types || HANGAR_RULES[k].types.includes(t)));
-function hangarLeft(k) { return SETTINGS.dev ? Infinity : HANGAR_RULES[k].max - hangarCount(k); }
+function hangarAllows(k, t) {
+  if (SETTINGS.dev) return true;
+  if (BUILD_V2) {
+    if (k === 'weapon') return weaponUnlocked(t);
+    if (k === 'arm') return armUnlocked(t);
+    if (k === 'block' || k === 'lower') return partUnlockedFromBosses(k, t);
+  }
+  return (HANGAR_RULES[k].max > 0) && (!HANGAR_RULES[k].types || HANGAR_RULES[k].types.includes(t));
+}
+function hangarLeft(k, t) {
+  if (SETTINGS.dev) return Infinity;
+  if (BUILD_V2 && k === 'weapon') return Math.max(0, weaponCap(t) - hangarCount('weapon', t));
+  return HANGAR_RULES[k].max - hangarCount(k);
+}
 const CAT_LABEL = { adapter: 'Adapters', lower: 'Lower half', block: BUILD_V2 ? 'Torso' : 'Body parts', leg: 'Legs', arm: 'Arms', weapon: 'Weapons', module: 'Modules', gem: 'Gems' };
 function catalog() {
   const rows = [];
@@ -340,9 +355,12 @@ function renderBench() {
   if (INV.hangar) {
     html = CFG.unlimitedParts
       ? catalog().filter(([k, t]) => hangarAllows(k, t)).map(([k, t], i, all) => {
-          const left = hangarLeft(k), head = i === 0 || all[i - 1][0] !== k;
-          const sep = head ? `<div class="psep"><span>${CAT_LABEL[k]}${SETTINGS.dev ? '' : ` · ${Math.max(0, left)}/${HANGAR_RULES[k].max}`}</span></div>` : '';
-          return sep + partRow(mkPreviewItem(k, t), `data-cat="${k}:${t}"${left <= 0 ? ' data-capped="1"' : ''}`, SETTINGS.dev ? '∞' : left > 0 ? '' : 'max').replace('class="prow"', left <= 0 ? 'class="prow capped"' : 'class="prow"');
+          const left = hangarLeft(k, t), head = i === 0 || all[i - 1][0] !== k;
+          // weapon's cap is per-type (1 copy, 2 once mastered): show that type's own count instead of a shared kind total
+          const headCount = k === 'weapon' ? '' : ` · ${Math.max(0, left)}/${HANGAR_RULES[k].max}`;
+          const sep = head ? `<div class="psep"><span>${CAT_LABEL[k]}${SETTINGS.dev ? '' : headCount}</span></div>` : '';
+          const tag = SETTINGS.dev ? '∞' : k === 'weapon' ? `${hangarCount('weapon', t)}/${weaponCap(t)}` : left > 0 ? '' : 'max';
+          return sep + partRow(mkPreviewItem(k, t), `data-cat="${k}:${t}"${left <= 0 ? ' data-capped="1"' : ''}`, tag).replace('class="prow"', left <= 0 ? 'class="prow capped"' : 'class="prow"');
         }).join('')
       : INV.shelf.map((it, i) => partRow(it, `data-shelf="${i}"`)).join('') || '<div class="phint">—</div>';
   } else {
@@ -654,7 +672,10 @@ function benchDown(x, y, button) {
   const cat = el && el.closest && el.closest('[data-cat]');
   if (cat) {
     const [k, t] = cat.dataset.cat.split(':');
-    if (INV.hangar && hangarLeft(k) <= 0) { say(`Hangar limit: ${HANGAR_RULES[k].max} ${CAT_LABEL[k].toLowerCase()}`, true); sfx('deny'); return; }
+    if (INV.hangar && hangarLeft(k, t) <= 0) {
+      say(k === 'weapon' ? `Hangar limit: ${weaponCap(t)} ${itemDef({ kind: k, type: t }).name}${weaponCap(t) === 1 ? ' (level it to max to unlock a 2nd)' : ''}` : `Hangar limit: ${HANGAR_RULES[k].max} ${CAT_LABEL[k].toLowerCase()}`, true);
+      sfx('deny'); return;
+    }
     startDrag(spawnBody(mkItem(k, t), pointOnDragPlane(x, y, BENCH_TARGET)), x, y);
     return;
   }

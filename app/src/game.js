@@ -12,10 +12,10 @@ function freshHangarLoadout() {
   L = newLoadout();
   const F = f => FACE_ORDER.indexOf(f);
   if (BUILD_V2) {
-    // V2 starter: walker legs, a scout torso, two arms with a pistol each
+    // V2 starter: walker legs, a scout torso, two arms; only the first carries a pistol (the hangar allows 1 pistol until it's mastered)
     L.body = mkItem('lower', 'standard');
     const top = mkItem('block', 'upper_scout'); L.body.slots[F('top')] = top;
-    for (let i = 0; i < 2; i++) { const a = mkItem('arm', 'basic'); a.weapon = mkItem('weapon', 'pistol'); top.slots[i] = a; }
+    for (let i = 0; i < 2; i++) { const a = mkItem('arm', 'basic'); if (i === 0) a.weapon = mkItem('weapon', 'pistol'); top.slots[i] = a; }
     INV.shelf = []; stats = null; refreshLoadout(); return;
   }
   L.body = mkItem('block', 'body'); L.body.plug = 'bottom';
@@ -89,10 +89,12 @@ function land() {
     // coming down from a mega jump: the impact wipes out everything nearby (bosses just take a hit)
     S.megaLand = false;
     const R = 16;
+    MASS_KILL = true;
     for (const e of enemies.slice()) {
       if (e.dead || Math.hypot(e.pos.x - P.pos.x, e.pos.z - P.pos.z) > R) continue;
       if (e.boss || e.mini) damage(e, e.maxHp * 0.15); else { damage(e, e.hp + 1); }
     }
+    MASS_KILL = false;
     blast(P.pos.clone().setY(P.pos.y + 1), 6, 0xff5a3a); ring(P.pos, R, 0.8, 0xff3a3a); ring(P.pos, R * 0.6, 0.6, ORANGE); dust(P.pos, 20);
     propsBlast(P.pos.clone(), R, 8); sfx('boom', 1); cam.shake = 1;
     enemies = enemies.filter(e => !e.dead);
@@ -214,7 +216,7 @@ function frame(now) {
     const pulse = 0.5 + 0.5 * Math.sin(now / 300);
     padMeshes.forEach(m => m.material.emissive.setRGB(0.1, 0.35 + 0.25 * pulse, 0.38 + 0.25 * pulse));
     if (S.gate) S.gate.beam.material.opacity = 0.12 + 0.08 * pulse;
-    weaponModelTick(dt); shopTick(dt); caseTick(dt); terminalTick(dt); if (S.inRun) updateSpectators(dt);
+    weaponModelTick(dt); armorTick(dt); shopTick(dt); caseTick(dt); terminalTick(dt); if (S.inRun) updateSpectators(dt);
     if (S.mode === 'countdown') {
       // hanging at the top of the drop: 3, 2, 1...
       S.countT -= dt;

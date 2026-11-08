@@ -10,7 +10,7 @@
 const LOGO = {
   root: null, sway: null, parts: [], ready: false, total: 0, hover: null, t: 0, groundY: -0.3, acc: 0,
   world: null, ground: null, cursor: false, shownH: 0,
-  PER: 5, ALL: 15, LIE: 10, MAXLIE: 22, G: 26, RETURN: 0.9,
+  PER: 5, ALL: 15, LIE: 10, MAXLIE: 22, G: 26, RETURN: 0.9, MAXD: 12, k: 1,
 };
 const _lgV = new THREE.Vector3(), _lgV2 = new THREE.Vector3(), _lgQ = new THREE.Quaternion(), _lgQ2 = new THREE.Quaternion(), _lgRay = new THREE.Raycaster(), _lgM = new THREE.Vector2();
 const _lgB64 = s => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; };
@@ -66,7 +66,11 @@ function logoPlace(cam) {
   const W = innerWidth, H = innerHeight;
   const tanH = Math.tan(cam.fov * Math.PI / 360);
   const targetH = Math.min(r.height * 1.08, (r.width * 1.15) * LOGO.h / LOGO.w);
-  const d = LOGO.h * H / (targetH * 2 * tanH);                                       // depth at which the logo is that many pixels tall
+  const dRaw = Math.min(cam.far * 0.6, LOGO.h * H / (targetH * 2 * tanH));          // depth at which a full-size logo is that many pixels tall
+  // the title scene has a back wall ~17 m from the camera; a full-size logo would sit behind it on most screens.
+  // Keep it in front of the wall and shrink it by the same ratio, so it covers exactly the same pixels.
+  const d = Math.min(dRaw, LOGO.MAXD);
+  LOGO.k = d / dRaw; LOGO.root.scale.setScalar(LOGO.k);
   const nx = ((r.left + targetH * LOGO.w / LOGO.h / 2 + 4) / W) * 2 - 1, ny = -((r.top + r.height * 0.6) / H) * 2 + 1;
   const place = (px, py) => {
     _lgV.set(px, py, 0.5).unproject(cam).sub(cam.position).normalize();
@@ -99,15 +103,17 @@ function logoRelease(p, kick) {
   p.state = 'fall'; p.t = 0; p.rest = 0; p.clicks = 0; p.prevVy = 0; p.wob = 0;
   m.material.emissiveIntensity = p.base;
   const out = _lgV2.copy(p.home).normalize();
-  const v = { x: out.x * 1.6 + rand(-1.2, 1.2), y: rand(1.5, 4.5), z: rand(0.2, 2.2) + (kick || 0) }, a = { x: rand(-5, 5), y: rand(-4, 4), z: rand(-6, 6) };
+  const k = LOGO.k || 1;                                                          // the logo is drawn shrunk (see logoPlace): scale the throw and the collider to match
+  const v = { x: (out.x * 1.6 + rand(-1.2, 1.2)) * k, y: rand(1.5, 4.5) * k, z: (rand(0.2, 2.2) + (kick || 0)) * k }, a = { x: rand(-5, 5), y: rand(-4, 4), z: rand(-6, 6) };
   p.vel = new THREE.Vector3(v.x, v.y, v.z); p.ang = new THREE.Vector3(a.x, a.y, a.z);
   const w = logoWorld();
   if (w) {
     try {
       const b = w.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(_lgV.x, _lgV.y, _lgV.z).setRotation({ x: _lgQ.x, y: _lgQ.y, z: _lgQ.z, w: _lgQ.w })
         .setLinvel(v.x, v.y, v.z).setAngvel(a).setLinearDamping(0.05).setAngularDamping(0.35).setCcdEnabled(true));
-      let cd = RAPIER.ColliderDesc.convexHull(p.hullPts);
-      if (!cd) cd = RAPIER.ColliderDesc.cuboid(p.size.x / 2, p.size.y / 2, Math.max(0.05, p.size.z / 2));
+      const pts = k === 1 ? p.hullPts : p.hullPts.map(n => n * k);
+      let cd = RAPIER.ColliderDesc.convexHull(pts);
+      if (!cd) cd = RAPIER.ColliderDesc.cuboid(p.size.x * k / 2, p.size.y * k / 2, Math.max(0.05, p.size.z * k / 2));
       w.createCollider(cd.setRestitution(0.28).setFriction(0.75).setDensity(1.4), b);
       p.body = b;
     } catch (e) { console.warn('logo body failed', e); p.body = null; }
@@ -184,7 +190,7 @@ function logoTick(dt) {
     } else if (p.state === 'return') {
       p.rt += dt; const k = Math.min(1, p.rt / LOGO.RETURN), e = k * k * (3 - 2 * k);
       LOGO.sway.localToWorld(_lgV.copy(p.home)); LOGO.sway.getWorldQuaternion(_lgQ2);
-      m.position.lerpVectors(p.from, _lgV, e); m.position.y += Math.sin(Math.PI * e) * 0.9;
+      m.position.lerpVectors(p.from, _lgV, e); m.position.y += Math.sin(Math.PI * e) * 0.9 * (LOGO.k || 1);
       m.quaternion.slerpQuaternions(p.fromQ, _lgQ2, e);
       if (k >= 1) { logoHome(p); p.flash = 1; p.wob = 0.6; sfx('slot', 0.6); }
     }

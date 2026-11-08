@@ -665,12 +665,11 @@ svg.picon{width:20px;height:20px;flex:none;fill:currentColor;stroke:none;vertica
 
 /* ---------- hazard stripes: a band of diagonal stripes in your secondary colour on the menus ---------- */
 :root{--sec:#ff7a1a;--hazard:repeating-linear-gradient(-45deg,var(--sec) 0 9px,#0b0e10 9px 18px)}
-.menu,.tmenu,.custpanel,.dpanel{position:relative}
-.menu::before,.parts::before,.tmenu::before,.custpanel::before,.dpanel::before,.bstats::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--hazard);opacity:.95;pointer-events:none;z-index:1}
+.menu,.custpanel,.dpanel{position:relative}
+.menu::before,.parts::before,.custpanel::before,.dpanel::before,.bstats::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--hazard);opacity:.95;pointer-events:none;z-index:1}
 .menu::before{left:-2px;right:-2px;top:-2px}
 .menu{padding-top:30px}
 .hazard-foot{height:6px;background:var(--hazard);margin:2px -24px -22px;opacity:.9}
-.tmenu::before{right:auto;width:min(240px,60vw);top:-16px;height:7px}
 .parts::before,.bstats::before{left:-2px;right:-2px;top:-2px}
 .parts{padding-top:22px}.bstats{padding-top:16px}
 .tagS.auto{background:var(--xp);color:#04181a;margin-left:3px}

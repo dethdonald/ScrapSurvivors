@@ -21,7 +21,7 @@ function termRefusal(it) {
 /* the pool a replacement is drawn from: every type in the five categories (never an adapter) */
 function termPool() {
   const p = [];
-  for (const t of Object.keys(WEAPONS)) p.push(['weapon', t]);
+  for (const t of Object.keys(WEAPONS)) if (weaponLootUnlocked(t)) p.push(['weapon', t]);
   for (const t of Object.keys(ARMS)) p.push(['arm', t]);
   for (const t of Object.keys(LOWERS)) p.push(['lower', t]);
   for (const t of Object.keys(MODULES)) p.push(['module', t]);

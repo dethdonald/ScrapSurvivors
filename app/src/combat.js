@@ -272,6 +272,8 @@ function spawnEnemy(type, p, extra) {
   if (d.fly) e.pos.y = Math.max(p.y + 2, player.pos.y + rand(3, 12));
   // drawn instanced with every other enemy of its kind (see updateEnemyBatches)
   e.color = e.elite ? new THREE.Color(ELITE.color) : d.passive ? new THREE.Color(d.color) : tierColor(d.color);
+  // overtime-buffed enemies drain toward black or white (picked per-enemy, so the swarm is a mix of the two), deeper the longer overtime runs
+  if (!e.elite && !d.passive && overtime() > 0) e.color.lerp(new THREE.Color(Math.random() < 0.5 ? 0x000000 : 0xffffff), Math.min(0.75, 0.25 + overtime() / 120));
   e.tpl = enemyTemplate(type, shape);
   e.mesh = enemyProxy(type, shape); e.mesh.userData.mat.color.copy(e.color);
   if (e.elite) { e.mesh.scale.setScalar(ELITE.sizeMul); e.bar = makeHealthBar(); }
@@ -733,6 +735,16 @@ function hurt(a, from) {
   if (S.st) S.st.taken += Math.min(a, Math.max(0, player.hp) + Math.max(0, player.shield));
   if (player.shield > 0) { const s = Math.min(player.shield, a); player.shield -= s; a -= s; if (S.st) S.st.shielded += s; }
   player.hp -= a; cam.shake = Math.max(cam.shake, 0.25); sfx('hurt', 0.6);
+  // the frame flinches and flails its arms for a beat: a hard kick into the existing body-sway spring (away
+  // from whatever hit you, when we know where that was) plus a short window where the arms thrash instead of aiming
+  {
+    const dx = from ? player.pos.x - from.x : rand(-1, 1), dz = from ? player.pos.z - from.z : rand(-1, 1);
+    const l = Math.hypot(dx, dz) || 1, cy = Math.cos(player.legYaw || 0), sy = Math.sin(player.legYaw || 0);
+    const kx = dx / l, kz = dz / l, fwdK = kx * sy + kz * cy, sideK = kx * cy - kz * sy;
+    const kick = clamp(2.5 + a * 0.12, 2.5, 7);
+    player.swayV.x += fwdK * kick; player.swayV.y -= sideK * kick;
+    player.flailT = Math.max(player.flailT || 0, clamp(0.22 + a * 0.01, 0.22, 0.55));
+  }
   const v = $('#vignette');
   v.style.boxShadow = 'inset 0 0 140px 40px rgba(226,70,92,.55)';
   setTimeout(() => { v.style.boxShadow = 'inset 0 0 120px 30px rgba(226,70,92,0)'; }, 120);
@@ -787,11 +799,15 @@ function wipeStains(x, z, r) {
   if (n) stainMesh.instanceMatrix.needsUpdate = true;
   return n;
 }
+// set around a loop that kills many enemies in the same tick (nuke, mega-jump landing): trims the heaviest
+// per-kill VFX/SFX (lots of new particle meshes + simultaneous sounds) so a mass-kill doesn't spike the frame.
+let MASS_KILL = false;
 function killEnemy(e) {
   if (e.dead) return;
   e.dead = true; e.hp = 0;
+  if (e.elite) creditEliteKill();
   gemKill(e);
-  if (!e.d.fly || e.pos.y - groundAt(e.pos.x, e.pos.z) < 6) splatter(e, 5 + (Math.random() * 5 | 0), 0.6 + e.r * 1.6);
+  if (!MASS_KILL && (!e.d.fly || e.pos.y - groundAt(e.pos.x, e.pos.z) < 6)) splatter(e, 5 + (Math.random() * 5 | 0), 0.6 + e.r * 1.6);
   scene.remove(e.mesh); S.kills++; runStatKill(e); if (!ENV_DMG) streakKill(e); discoverEnemy(e.type);
   if (e.d.fly && !e.boss) droneCrash(e);
   if (e.d.bomb) bomberBlast(e);
@@ -807,7 +823,7 @@ function killEnemy(e) {
     }
     burst(ecenter(e).clone(), e.d.color, 10); burst(ecenter(e).clone(), 0xffffff, 6); ring(e.pos, 2.2, 0.25, e.d.color); sfx('pop2', 0.6);
   }
-  burst(e.pos.clone().setY(e.pos.y + 0.6), e.d.color, e.boss ? 40 : e.mini ? 20 : 6);
+  burst(e.pos.clone().setY(e.pos.y + 0.6), e.d.color, MASS_KILL ? (e.boss || e.mini ? 6 : 1) : e.boss ? 40 : e.mini ? 20 : 6);
   if (L.perks.has('leech')) player.hp = Math.min(stats.maxHp, player.hp + 1);
   if (e.bar) { scene.remove(e.bar); e.bar = null; }
   const luck = stats.luck || 0;
@@ -826,7 +842,7 @@ function killEnemy(e) {
   }
   if (e.elite) { for (let i = 0; i < 3; i++) dropBolt(e.pos, 1); for (let i = 0; i < 3; i++) dropGem(e.pos, 2); }   // tough enemies pay out, but no parts
   if (e.mini) { for (let i = 0; i < 6; i++) dropGem(e.pos, 3); for (let i = 0; i < 5; i++) dropBolt(e.pos, 1); }
-  sfx('kill', 0.35);
+  if (!MASS_KILL || Math.random() < 0.08) sfx('kill', 0.35);
   if (e.type === 'pig') pigDown(e);
   else if (e.boss) onBossDown(e);
 }
@@ -1195,7 +1211,7 @@ function damage(e, amt, manual) {
   HIT_E = e; HIT_DEALT = Math.min(amt, Math.max(0, e.hp));       // what really lands: overkill is not counted
   e.hp -= amt; e.flash = 0.08;
   if (manual) { hitMarker(); sfx('hit', 0.3); }
-  if (e.hp <= 0) killEnemy(e);
+  if (e.hp <= 0) { creditWeaponKill(DMG_SRC); killEnemy(e); }
 }
 /* Pickup budget: shards and bolts nobody collected used to pile up without limit (600+ separate meshes after a few minutes). Past GEM_CAP a new
    one is folded into the nearest loose one of its kind (the value is kept, it just grows) instead of becoming another mesh. */
@@ -1294,7 +1310,7 @@ function usePower(kind) {
   }
   if (kind === 'vacuum') {
     // every scrap on the field lifts gently into the air, hangs a moment, then drifts in to you from above
-    for (const g of gems) if ((g.kind === 'xp' || g.kind === 'bolt') && !g.sky) { g.pull = false; g.vac = false; g.float = { t: 0, delay: rand(0.6, 1.4), y0: g.pos.y, lift: rand(3, 6), ph: Math.random() * 6 }; }
+    for (const g of gems) if (g.kind === 'xp' && !g.sky) { g.pull = false; g.vac = false; g.float = { t: 0, delay: rand(0.6, 1.4), y0: g.pos.y, lift: rand(3, 6), ph: Math.random() * 6 }; }
     banner('MAGNET', '', 'var(--xp)', 1.8);
     sfx('vacuum', 0.7); ring(player.pos, 14, 0.7, COL.cyan); ring(player.pos, 8, 0.5, 0x9feaff);
   } else {
@@ -1320,7 +1336,9 @@ function nukeTick(dt) {
   scene.remove(N.obj); S.nuke = null;
   const fl = $('#flash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
   sfx('boom', 1.4); setTimeout(() => sfx('boom', 0.8), 120); cam.shake = 1.6;
+  MASS_KILL = true;
   for (const e of enemies) { if (e.dead) continue; if (e.boss || e.mini) damage(e, e.maxHp * 0.25); else killEnemy(e); }
+  MASS_KILL = false;
   blast(N.at.clone().setY(N.at.y + 2), 12, 0xffe2a0); ring(N.at, 60, 1.4, 0xf2c230); ring(N.at, 30, 1, ORANGE); dust(N.at, 24);
   for (let i = 0; i < 10; i++) smokePuff(N.at.clone().add(new THREE.Vector3(rand(-4, 4), rand(1, 8), rand(-4, 4))), rand(2, 3.5));
   propsBlast(N.at.clone(), 40, 10);
@@ -1359,6 +1377,7 @@ function makeHealthBar() {
 const CULL = { q: [] }, CULL_PER_STEP = 12;
 function cullTick() { const q = CULL.q; if (!q.length) return; for (let n = 0; n < CULL_PER_STEP && q.length; n++) { const o = q.pop(); if (!o.dead) killEnemy(o); } }
 function onBossDown(e) {
+  creditBossKill(e.type);
   S.bossDead = true; S.boss = null; $('#bossbar').hidden = true; cam.shake = 1;
   // the swarm falls with its boss, but not all in one call: 600 kills at once (particles, drops, sounds, gem effects) froze the game for seconds.
   // They go down in a quick wave, CULL_PER_STEP a step, harmless meanwhile.
@@ -1660,6 +1679,17 @@ function fieldTick(dt) {
     const w = s.userData.field; if (!w) continue;
     const W = WEAPONS.field, R = W.radius(w.lvl) * ((stats && stats.range) || 1), t = S.t;
     s.position.set(player.pos.x, player.pos.y + 1.2, player.pos.z);
+    // on-for-a-while, then a cooldown: fieldOnT counts down while active; on hitting zero, fieldCoolT counts down with the field off
+    if (w.fieldCoolT > 0) {
+      w.fieldCoolT -= dt;
+      s.visible = false;
+      if (w.fieldCoolT <= 0) { w.fieldCoolT = 0; w.fieldOnT = W.onDur(w.lvl); sfx('reloaded', 0.3); }
+      continue;
+    }
+    if (!(w.fieldOnT > 0)) w.fieldOnT = W.onDur(w.lvl);
+    s.visible = true;
+    w.fieldOnT -= dt;
+    if (w.fieldOnT <= 0) { w.fieldCoolT = W.reload(w.lvl) / (stats.reload || 1); sfx('reload', 0.3); continue; }
     w.fieldT = (w.fieldT || 0) - dt;
     const ping = Math.max(0, w.fieldPing || 0); w.fieldPing = ping - dt * 1.4;
     s.scale.setScalar(R * (1 + 0.03 * Math.sin(t * 9) + 0.06 * ping));
@@ -1715,7 +1745,7 @@ function bullet(o, tgt, speed, dmg, opt = {}) {
   const A = CUR_ATTRS;
   if (A.size) {
     const col = ATTRS[[...A.keys()][0]].color, T = k => A.get(k) || 0;
-    if (!rocket) { m.material = B(new THREE.Color(col).getHex()); m.scale.setScalar(1.3); }
+    m.material = B(new THREE.Color(col).getHex()); if (!rocket) m.scale.setScalar(1.3);
     if (A.has('bounce')) { s.grav = 22; s.bounces = 2 + T('bounce'); s.life = Math.max(s.life, 2 + 0.4 * T('bounce')); s.vel.y += 3; }
     if (A.has('homing')) { s.target = opt.target || aim.enemy; s.homing = true; s.homeRate = 2.5 + 1.2 * T('homing'); s.life = Math.max(s.life, 2 + 0.4 * T('homing')); s.vel.multiplyScalar(0.7); s.speed = speed * 0.7; if (!opt.child) { s.vel.y += s.speed * 0.75; s.climb = 0.14; } }
     if (A.has('orbit')) { s.orbit = { a: Math.atan2(dir.z, dir.x), r: (2.2 + 0.4 * T('orbit') + Math.random() * 0.8) * CUR_RANGE, y: rand(0.8, 1.8) }; s.r *= Math.sqrt(CUR_RANGE); s.life = 2.4 + 0.8 * T('orbit'); s.pierce = 99; s.hitCd = new Map(); }
@@ -1857,7 +1887,7 @@ function updateShots_(dt) {
         damage(e, s.dmg, s.manual); s.hit.add(e);
         if (!s.flame) flinch(e, s.vel, 0.12 + (s.wt || 1) * 0.12);
         if (s.wk) wfxHitEnemy(s, e, wasAlive);
-        if (s.flame) { ignite(e, s.dmg * 2.2); continue; } else spark(s.pos, ORANGE);
+        if (s.flame) { ignite(e, s.dmg * 2.2); continue; } else spark(s.pos, e.color ? e.color.getHex() : ORANGE);
         // heavy rounds (shotgun pellets, sniper) also pop the enemy up off the ground
         if (s.knock) { const heavy = s.knock >= 2; knock(e, s.vel.clone().normalize(), s.knock, heavy ? s.knock * (s.knock >= 4 ? 1.3 : 0.35) : s.knock * 0.25); if (heavy) { e.onGround = false; e.sqV = (e.sqV || 0) + 0.8; } }
         if (s.orbit) s.hitCd.set(e, performance.now());

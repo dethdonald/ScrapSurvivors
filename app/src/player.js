@@ -9,7 +9,7 @@ const player = {
   dashCharges: 0, dashT: 0, dashCd: 0, slideT: 0, slideCd: 0, mantleT: 0, fuel: 0, jetting: false, jetHold: false,
   hp: 50, shield: 0, shieldT: 0, iframes: 0,
   model: null, visY: 0, camY: 0, legYaw: 0, legYawV: 0, torsoYawV: 0, flipT: 0, backpedal: false, walk: 0, peak: 0, props: [],
-  dip: 0, dipV: 0, sway: new THREE.Vector2(), swayV: new THREE.Vector2(), lastVel: new THREE.Vector3(),
+  dip: 0, dipV: 0, sway: new THREE.Vector2(), swayV: new THREE.Vector2(), lastVel: new THREE.Vector3(), flailT: 0,
 };
 const SQUASH = { y: 1, xz: 1, foot: 0 };   // the player's squash & stretch, shared with the physics body
 const cam = { yaw: 0.6, pitch: 0.2, dist: CFG.camDist, dip: 0, shake: 0, bob: 0, bobV: 0, rumble: 0, side: 1, sideT: 1, sideCheck: 0, kick: new THREE.Vector3(), kickV: new THREE.Vector3(), lag: 0, lagV: 0, lagDelay: 0, lagImp: 0 };
@@ -544,12 +544,18 @@ function updatePlayerVisual(dt, alpha) {
   });
 
   // arms swing toward their target at their own speed, with a little lag from body motion
-  mountedArms().forEach(it => {
+  if (P.flailT > 0) P.flailT -= dt;
+  mountedArms().forEach((it, ii) => {
     const ag = ud.partOf.get(it); if (!ag) return;
     const A = ARMS[it.type];
-    const rate = armTurn(it);
+    const rate = P.flailT > 0 ? armTurn(it) * 2.4 : armTurn(it);
     let t = it.aimT;
-    if (P.scampering || (P.scampT2 || 0) > 0) {
+    if (P.flailT > 0) {
+      // hit reaction: arms thrash out and up instead of aiming, each on its own wild phase, easing back to normal as it fades
+      ag.parent.getWorldQuaternion(_q1);
+      const k = Math.min(1, P.flailT / 0.22), ph = ii * 2.4 + S.t * 26;
+      t = ag.getWorldPosition(_w).clone().add(new THREE.Vector3(Math.sin(ph) * 1.6, 1.2 + Math.sin(ph * 1.3) * 1.1, 0.6 + Math.cos(ph * 0.9) * 1.4).applyQuaternion(_q1).multiplyScalar(k * 2.2 + 0.3));
+    } else if (P.scampering || (P.scampT2 || 0) > 0) {
       // scampering: arms reach up the wall, hand over hand
       const wl = Math.hypot(P.wallX || 0, P.wallZ || 0) || 1, inX = -(P.wallX || 0) / wl, inZ = -(P.wallZ || 0) / wl;
       const ap = ag.getWorldPosition(_w).clone(), k = mountedArms().indexOf(it);

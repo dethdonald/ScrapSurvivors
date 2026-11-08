@@ -65,9 +65,14 @@ CFG.unlimitedParts = true;
 
 const SETTINGS = { sens: 1, invertY: false, aimAssist: true, dev: false, xhStyle: 'square', xhColor: 'white', xhSize: 1, xhParts: true, uiScale: 1, autoUpMods: true };      // autoUpMods: new modules start with auto-upgrade on (a saved choice overrides this)
 try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem('scrapsurvivors.settings') || localStorage.getItem('scrapfall.settings') || '{}')); } catch (e) {}
-/* circuits: the second currency, kept between runs */
-const META = { circuits: 0 };
+/* circuits: the second currency, kept between runs.
+   unlock: lifetime progress toward build-bench/drop unlocks (weapons, chests, legs, arms). See data.js "UNLOCKS". */
+function defaultUnlockState() { return { weaponKills: {}, weaponMastered: {}, eliteKills: 0, limbMaxed: false, bosses: {} }; }
+const META = { circuits: 0, unlock: defaultUnlockState() };
 try { Object.assign(META, JSON.parse(localStorage.getItem('scrapsurvivors.meta') || '{}')); } catch (e) {}
+// back-fill any unlock fields an older save never had (new fields added after that save was written)
+if (!META.unlock || typeof META.unlock !== 'object') META.unlock = defaultUnlockState();
+else { const d = defaultUnlockState(); for (const k in d) if (!(k in META.unlock)) META.unlock[k] = d[k]; }
 // Pogo Spring was removed (0.30.0): drop its discovery key so old saves stay clean
 try { if (META.disc && META.disc['module:pogo']) { delete META.disc['module:pogo']; localStorage.setItem('scrapsurvivors.meta', JSON.stringify(META)); } } catch (e) {}
 function saveMeta() { try { localStorage.setItem('scrapsurvivors.meta', JSON.stringify(META)); } catch (e) {} }

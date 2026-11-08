@@ -66,16 +66,24 @@ const STAT_UPGRADES = {
    Targets and elite enemies can drop a part. Its Mk (rarity) is rolled with your luck. */
 function rollLootOf(kinds, luck = 0) { let it; for (let i = 0; i < 40; i++) { it = rollLoot(luck); if (kinds.includes(it.kind)) break; } return it; }
 const isLimb = kind => kind === 'arm' || kind === 'leg';
-/* Loot lying around the world is never a leveled module: a module found out in the field is always Lv 1 (store, case and terminal rewards may be higher). */
-function rollWorldLoot(luck = 0) { const it = rollLoot(luck); return it.kind === 'module' ? mkItem('module', it.type, 1) : it; }
+/* Loot lying around the world rolls a rarity-based level like everything else, luck-scaled, same as store/case/terminal rewards. */
+function rollWorldLoot(luck = 0) { return rollLoot(luck); }
+// types the player currently has mounted ("kind:type" set) — equipped loadout gets a modest weight bump in rollLoot
+function equippedTypeSet() {
+  const set = new Set();
+  try { if (typeof mountedItems === 'function') for (const it of mountedItems()) if (it && it.kind && it.type) set.add(it.kind + ':' + it.type); } catch (e) {}
+  return set;
+}
+const EQUIPPED_LOOT_BUMP = 1.35;                       // slightly more likely to find parts matching what you already have on
 function rollLoot(luck = 0) {
+  const eq = equippedTypeSet();
   const pool = [];
-  for (const t of Object.keys(WEAPONS)) pool.push(['weapon', t, 3 * (WEAPONS[t].lootWeight ?? 1)]);
-  for (const t of Object.keys(ARMS)) pool.push(['arm', t, 1.5]);
-  if (!BUILD_V2) for (const t of Object.keys(LEGS)) pool.push(['leg', t, 1]);       // V2: the lower half never drops
-  for (const t of Object.keys(MODULES)) pool.push(['module', t, 1.2]);
-  if (BUILD_V2) for (const t of Object.keys(ADAPTERS)) pool.push(['adapter', t, 0.5]);
-  if (!BUILD_V2) for (const t of Object.keys(BLOCKS)) if (!BLOCKS[t].body) pool.push(['block', t, 0.8]);    // V2: no free sockets for bricks
+  for (const t of Object.keys(WEAPONS)) if (weaponLootUnlocked(t)) pool.push(['weapon', t, 3 * (WEAPONS[t].lootWeight ?? 1) * (eq.has('weapon:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);
+  for (const t of Object.keys(ARMS)) pool.push(['arm', t, 1.5 * (eq.has('arm:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);
+  if (!BUILD_V2) for (const t of Object.keys(LEGS)) pool.push(['leg', t, 1 * (eq.has('leg:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);       // V2: the lower half never drops
+  for (const t of Object.keys(MODULES)) pool.push(['module', t, 1.2 * (eq.has('module:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);
+  if (BUILD_V2) for (const t of Object.keys(ADAPTERS)) pool.push(['adapter', t, 0.5 * (eq.has('adapter:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);
+  if (!BUILD_V2) for (const t of Object.keys(BLOCKS)) if (!BLOCKS[t].body) pool.push(['block', t, 0.8 * (eq.has('block:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);    // V2: no free sockets for bricks
   let x = Math.random() * pool.reduce((a, p) => a + p[2], 0), pickd = pool[0];
   for (const p of pool) { x -= p[2]; if (x <= 0) { pickd = p; break; } }
   // a rolled rarity gives exactly the first level of that rarity
@@ -99,8 +107,8 @@ const BLOCKS = {
   // ---- BUILD V2 upper halves: one sits on the lower half. 'arm' sockets (sphere) take arms, 'module' sockets (cube) take modules.
   upper_scout: {
     name: 'Scout Torso', body: true, upper: true, mass: 0.7, hp: 30, shield: 15, speed: 0.3, size: [1.1, 0.95, 0.95], faces: 'none', color: 0x4b5661, neck: 0.28,
-    sockets: [{ face: 'right', at: [0, 0.08], accepts: 'arm' }, { face: 'left', at: [0, 0.08], accepts: 'arm' }, { face: 'top', at: [0, 0], accepts: 'module' }],
-    desc: 'Light and quick. Two arms and one module on top.',
+    sockets: [{ face: 'right', at: [0, 0.08], accepts: 'arm' }, { face: 'left', at: [0, 0.08], accepts: 'arm' }, { face: 'top', at: [0, 0], accepts: 'module' }, { face: 'back', at: [0, 0.1], accepts: 'module' }],
+    desc: 'Light and quick. Two arms and two modules (top and back).',
   },
   upper_brawler: {
     name: 'Brawler Torso', body: true, upper: true, mass: 1.1, hp: 50, shield: 10, speed: 0, size: [1.25, 1.2, 1.05], faces: 'none', color: 0x4b5661, neck: 0.28,
@@ -576,7 +584,8 @@ const WEAPONS = {
   field: {
     name: 'Forcefield', range: 0, sound: null, mass: 0.6, push: 0, kick: 0, lootWeight: 0.6,
     dmg: lvl => 5 * (1 + 0.1 * (lvl - 1)), radius: lvl => 3.5 + 4.5 * lvlCurve(lvl, 40), pulse: 0.35,
-    info(lvl) { return [['Damage', `${this.dmg(lvl).toFixed(1)} per pulse`], ['Pulse', `${(1 / this.pulse).toFixed(1)} /s`], ['Radius', `${this.radius(lvl).toFixed(1)} m (grows with level)`], ['Ammo', 'none, always on'], ['Hits', 'everything inside the field']]; },
+    onDur: lvl => 5 + 3 * lvlCurve(lvl, 30), reload: lvl => 3.5 / (1 + 0.6 * lvlCurve(lvl, 30)),
+    info(lvl) { return [['Damage', `${this.dmg(lvl).toFixed(1)} per pulse`], ['Pulse', `${(1 / this.pulse).toFixed(1)} /s`], ['Radius', `${this.radius(lvl).toFixed(1)} m (grows with level)`], ['Active', `${this.onDur(lvl).toFixed(1)} s`], ['Cooldown', `${this.reload(lvl).toFixed(1)} s`], ['Hits', 'everything inside the field']]; },
     desc: 'Wraps the robot in a crackling sphere that burns anything inside it. Its radius grows as it levels up.',
     model(g, { out }) {
       joint(g, [0, 0, 0], 0.12, COL.dark);
@@ -1077,6 +1086,7 @@ function upgradeItem(it, by = 1) {
   it.prevLvl = it.lvl || 1; it.lvl = c.to;
   c.added = syncGemSlots(it);
   if (c.added && typeof gemSlotDialog === 'function') gemSlotDialog(it, c.added);
+  creditUnlockProgress(it);
   return c;
 }
 /* Same kind, same type, same level, below the cap: the rule for merging two parts. */
@@ -1207,3 +1217,99 @@ function partMass(it) { const d = itemDef(it); return (d.mass ?? 0.3) * ((it.kin
   };
   wrapAll(WEAPONS); wrapAll(MODULES); wrapAll(BLOCKS);
 })();
+
+/* ---------- UNLOCKS ----------
+   Everything is unlocked from the start in developer mode. Otherwise: Pistol, the Scout chest, Walker legs and the
+   Frame Arm are the only things you start with; everything else opens up by playing. Progress lives in META.unlock
+   (config.js), persists across runs, and is flipped by the dev panel's "Unlock all" / "Reset all unlocks" buttons. */
+// each weapon in the chain unlocks for the hangar bench once you've landed this many kills with the one before it
+// (pistol is the start of the chain and needs no kills of its own)
+const WEAPON_CHAIN = ['pistol', 'shotgun', 'autogun', 'knife', 'flamer', 'lightning', 'sniper', 'katana', 'chainsaw', 'gatling', 'gravity', 'field', 'rocket'];
+const UNLOCK_KILL_GOAL = 100;
+// these also can't drop in the world, the store, a case or the terminal until their hangar unlock is met (everything
+// else in the chain drops freely from the very start, even while it's still locked for the hangar bench)
+const LOOT_GATED_WEAPONS = new Set(['katana', 'chainsaw', 'gatling', 'gravity', 'field', 'rocket']);
+// each real boss (the Golden Pig is a rare event, not a boss) unlocks a chest and/or legs, once, forever
+const BOSS_UNLOCKS = {
+  warden: { block: 'upper_brawler', lower: 'spider' },
+  magnetron: { block: 'upper_carrier' },
+  smelter: { lower: 'treads' },
+  hivemother: { lower: 'wheels' },
+};
+const ELITE_KILLS_FOR_TWIN_ARM = 50;
+
+const weaponPrevInChain = type => { const i = WEAPON_CHAIN.indexOf(type); return i > 0 ? WEAPON_CHAIN[i - 1] : null; };
+/* true once this weapon type can be put on the hangar bench */
+function weaponUnlocked(type) {
+  if (SETTINGS.dev) return true;
+  const prev = weaponPrevInChain(type);
+  if (!prev) return true;                                         // pistol, or anything not in the chain
+  return (META.unlock.weaponKills[prev] || 0) >= UNLOCK_KILL_GOAL;
+}
+/* true once this weapon has been taken to its max level in some run, ever: that's what opens its 2nd hangar copy */
+const weaponMastered = type => SETTINGS.dev || !!META.unlock.weaponMastered[type];
+/* how many of this weapon the hangar will let you hold at Lv 1: 0 locked, 1 unlocked, 2 once mastered */
+function weaponCap(type) { if (SETTINGS.dev) return 2; if (!weaponUnlocked(type)) return 0; return weaponMastered(type) ? 2 : 1; }
+/* true if this weapon can currently show up in the world, the store, a case or the terminal */
+function weaponLootUnlocked(type) { return SETTINGS.dev || !LOOT_GATED_WEAPONS.has(type) || weaponUnlocked(type); }
+function armUnlocked(type) {
+  if (SETTINGS.dev || type === 'basic') return true;
+  if (type === 'sentry') return !!META.unlock.limbMaxed;
+  if (type === 'double') return (META.unlock.eliteKills || 0) >= ELITE_KILLS_FOR_TWIN_ARM;
+  return true;
+}
+/* which chest (block) / legs (lower) types are open right now, from the boss flags */
+function partUnlockedFromBosses(kind, type) {
+  if (SETTINGS.dev) return true;
+  if (kind === 'block' && type === 'upper_scout') return true;
+  if (kind === 'lower' && type === 'standard') return true;
+  for (const boss in BOSS_UNLOCKS) { const u = BOSS_UNLOCKS[boss]; if (u[kind] === type) return !!META.unlock.bosses[boss]; }
+  return true;                                                      // nothing to gate it on: stays open
+}
+/* a small heads-up during a run; falls back to the toast line outside one (e.g. the dev panel) */
+function unlockToast(msg) { if (typeof rewardPop === 'function' && typeof S !== 'undefined' && S.inRun) rewardPop([{ css: '#ffd24a', icon: typeof sym === 'function' ? sym('stage', '') : '', text: msg, sub: 'Unlocked' }], 'UNLOCK'); else if (typeof say === 'function') say(msg); }
+/* called from upgradeItem() the moment a part reaches a new level: flags the lifetime "firsts" that open new build options */
+function creditUnlockProgress(it) {
+  if (it.kind === 'weapon' && it.lvl >= maxLvlOf(it) && !META.unlock.weaponMastered[it.type]) {
+    META.unlock.weaponMastered[it.type] = true; saveMeta();
+    unlockToast(`${itemDef(it).name} mastered — 2nd hangar copy unlocked`);
+  }
+  if ((it.kind === 'arm' || it.kind === 'lower') && it.lvl >= LIMB_MAX_LVL && !META.unlock.limbMaxed) {
+    META.unlock.limbMaxed = true; saveMeta();
+    unlockToast('Limb fully upgraded — Sentry Arm unlocked');
+  }
+}
+/* called from damage() on a killing blow: w is whatever weapon item dealt it (or null for an environmental kill) */
+function creditWeaponKill(w) {
+  if (!w || w.kind !== 'weapon') return;
+  const i = WEAPON_CHAIN.indexOf(w.type);
+  if (i < 0 || i === WEAPON_CHAIN.length - 1) return;                // not in the chain, or nothing left for it to unlock
+  const next = WEAPON_CHAIN[i + 1];
+  if (weaponUnlocked(next)) return;
+  META.unlock.weaponKills[w.type] = (META.unlock.weaponKills[w.type] || 0) + 1;
+  if (META.unlock.weaponKills[w.type] >= UNLOCK_KILL_GOAL) unlockToast(`${WEAPONS[next].name} unlocked for the hangar`);
+  saveMeta();
+}
+/* called from killEnemy() on every elite kill, whatever killed it */
+function creditEliteKill() {
+  if ((META.unlock.eliteKills || 0) >= ELITE_KILLS_FOR_TWIN_ARM) return;
+  META.unlock.eliteKills = (META.unlock.eliteKills || 0) + 1;
+  if (META.unlock.eliteKills >= ELITE_KILLS_FOR_TWIN_ARM) unlockToast('Twin Arm unlocked for the hangar');
+  saveMeta();
+}
+/* called from onBossDown(): type is the boss's own type key */
+function creditBossKill(type) {
+  const u = BOSS_UNLOCKS[type]; if (!u || META.unlock.bosses[type]) return;
+  META.unlock.bosses[type] = true;
+  const names = []; if (u.block) names.push(BLOCKS[u.block].name); if (u.lower) names.push(LOWERS[u.lower].name);
+  if (names.length) unlockToast(`${names.join(' + ')} unlocked for the hangar`);
+  saveMeta();
+}
+/* dev panel: flip everything open, or back to the starting set */
+function unlockAll() {
+  for (const t of WEAPON_CHAIN) { META.unlock.weaponKills[t] = UNLOCK_KILL_GOAL; META.unlock.weaponMastered[t] = true; }
+  META.unlock.eliteKills = ELITE_KILLS_FOR_TWIN_ARM; META.unlock.limbMaxed = true;
+  for (const b in BOSS_UNLOCKS) META.unlock.bosses[b] = true;
+  saveMeta();
+}
+function resetUnlocks() { META.unlock = defaultUnlockState(); saveMeta(); }

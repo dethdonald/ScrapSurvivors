@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.8 · BUILD NOV 6|
+| **Version** | 0.43.12 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -215,6 +215,54 @@ This file tracks every change, with dates, plus what anyone picking the project 
 - Health, shield, XP, boss, berserk, kill-streak and death-screen stat bars all draw with the same ASCII block-segment texture
 - Added an ASCII "glyph wipe" transition between menus (Options and its Graphics/Developer Tools submenus, Customize, Catalog) -- gameplay pause/resume stays instant, unaffected
 - Tightened row spacing in the Options menu and its submenus so everything still fits on screen with the new, slightly taller font
+
+### 2026-11-07: 0.43.9 playtest batch: loot leveling, mass-kill lag, forcefield reload, gem colors, armor reveal, GLB export, fullscreen logo fix, hit reactions
+
+- **World-dropped modules roll a rarity-based level** like everything else, luck-scaled, instead of always landing at Lv 1 (`rollWorldLoot`, data.js). Store, case and terminal modules already did this — now the field drops match.
+- **Equipped parts are a little more likely to drop**: `rollLoot`'s pool now gives a part type a modest weight bump (×1.35) when you currently have that same part equipped (data.js).
+- **Big lag spike fixed on the red launch pad's landing and on the Nuke power-up.** Both kill a whole crowd of enemies in one tick; each kill used to spawn full particle bursts, debris stains and a kill sound, which could mean hundreds of new effect meshes in a single frame. A `MASS_KILL` flag (combat.js) now trims those per-kill effects during a mass-kill loop — the big flash/ring/blast at the impact point still plays, loot still drops, kills still count.
+- **Forcefield now reloads**: on for a few seconds, then a cooldown before it switches back on, both scaling with level (`WEAPONS.field.onDur`/`.reload`, data.js; cycle in `fieldTick`, combat.js). It used to just run forever.
+- **Magnet power-up no longer pulls in bolts/coins** — only XP. Coins still have to be walked over (`usePower('vacuum')`, combat.js). The passive Magnet Coil stat was already correct (bolts never used its range) and is unchanged.
+- **Rocket projectiles now recolor to match an equipped attribute gem**, same as every other bullet — they were the one shot type excluded from the gem recolor (`bullet()`, combat.js).
+- **Hit sparks now match the enemy they hit** instead of always being orange, so stage 2's blue-tinted enemies no longer throw orange/red sparks (`spark(s.pos, e.color...)`, combat.js).
+- **Overtime-buffed enemies drain toward black or white** (picked per enemy, so the swarm is a mix of both), deeper the longer overtime runs (`spawnEnemy`, combat.js).
+- Confirmed already correct, no change needed: opening a weapon case with full storage already drops the pick on the ground with a "storage full" banner.
+
+- **Armor reveal is back**, reimplemented on the *current* arms and legs (the original modeled-part files that first had this are gone from the project). Every arm gets a shoulder plate, every leg gets thigh + shin plates, built automatically from the part's own shape — folded away until the part hits its max level (Lv 3), then bolts on with a spark and a sound, the same idea as the weapons' MK III reveal (new `src/armorplate.js`).
+- **Exported a GLB part library** for remodeling: every current Limb, Chest, Waist and Leg as its own `.glb`, with a README on scale, origin/pivot and facing direction. Delivered separately (see message) and dropped into `art/export/` alongside the other source art.
+
+- **Fixed: the title screen's 3D logo could vanish entirely on a large/4K fullscreen window.** Its on-screen size is capped by the UI font size, but the window's pixel height isn't — on a big enough window the math placed it past the title camera's far clip plane. Raised the title camera's far plane and capped the logo's placement depth so this can't happen at any resolution (`title.js`, `logo3d.js`).
+- **Player now flinches and flails when hit**: taking damage kicks the existing body-sway spring (so the frame snaps back and wobbles, same system that reacts to acceleration) and throws the arms into a brief thrash instead of their normal aim, easing back out over a third of a second or so (`hurt()` in combat.js, arm-aim loop in player.js).
+
+### 2026-11-08: 0.43.10 music variety, smoother track transitions, pause muffle filter, dire boss/elite track
+
+- **Three distinct music tracks now exist** — calm, drive (busier/faster, kicks in once the fight gets hot) and dire (tense, minor, for boss/elite fights) — instead of one progression used everywhere. Each has its own chord progression and tempo (`TRACKS`, `PROG_CALM`/`PROG_DRIVE`/`PROG_DIRE` in `music.js`).
+- **Smoother transitions**: the game now only switches which track is playing on a 2-bar phrase boundary (the same point the harmony was already changing at), so a track swap always lands cleanly instead of cutting in mid-phrase.
+- **Dire track kicks in near a boss or elite**: gets held for 2.5s after the threat leaves range/dies so it doesn't flicker in and out as you dodge around; falls back to the busier "drive" track while the fight's still hot, or calm otherwise.
+- **Pause/build menu now muffles the music** — a lowpass filter gradually closes when you open pause, inventory, the shop, or a terminal (same screens that already ducked the volume), and opens back up smoothly when you return to the game, like music heard through a door.
+
+### 2026-11-08: 0.43.11 unlock system, back-wall window crowd, title-screen entrance
+
+- **Basic chest now has a 2nd module socket on its back** (Scout Torso: 2 arms + top module + back module, up from 1 module) (`data.js`).
+
+- **New unlock system.** You start with only the basics: Pistol, Frame Arm, Walker Legs and the Scout Torso. Everything else opens up by playing:
+  - **Weapons unlock in a chain**, each after 100 kills with the one before it: Pistol → Shotgun → Autogun → Knife → Flamethrower → Arc Caster → Sniper Rifle → Katana → Chainsaw → Gatling Gun → Gravity Gun → Forcefield → Rocket Launcher.
+  - **Katana, Chainsaw, Gatling, Gravity Gun, Forcefield and the Rocket Launcher** also can't drop in the world, the store, a case or the terminal until they're unlocked for the hangar — every other weapon in the chain drops freely from the start even while still locked for building.
+  - **Each weapon starts with a 1-copy hangar limit**; take it to max level in any run and it's mastered forever, raising its limit to 2.
+  - **Sentry Arm** unlocks the first time any arm or lower half is taken to its max level (Lv 3) in any run. **Twin Arm** unlocks after 50 lifetime elite kills.
+  - **Chests and legs unlock from bosses**, once each, forever: Warden → Brawler Torso + Spider Legs, Magnetron → Carrier Torso, Smelter → Tread Base, Hive Mother → Wheel Base. (The Golden Pig is a rare event, not a boss — it doesn't gate anything.)
+  - All of it is saved between runs (alongside circuits). The dev panel (F1) has new **Unlock all** / **Reset all unlocks** buttons for testing, plus a status line showing current progress.
+
+- **Main menu scene rework**: the raised stage/pedestal under the showcase robot is gone — it now stands on the plain floor grid. A back wall with a lit window went in behind it, with five little onlooker robots watching through the glass. They laugh when the falling pile of weapons bonks the robot, and cheer when it blows up. After an explosion, the replacement robot now walks in from off-screen on the right instead of dropping from the sky (the very first robot on launch still drops in) (`title.js`).
+
+### 2026-11-08: 0.43.12 title screen polish: window crowd, logo, walking turns
+
+- **Logo visible again**: the 3D logo used to sit 15-30 m deep (depending on window size), behind the new back wall. It's now held in front of the wall (max 12 m) and scaled down by the same ratio, so it covers exactly the same pixels; falling-piece physics scale with it (`logo3d.js`).
+- **Window crowd fixed**: the onlookers were standing in front of the window and floating above it (their idle bob doubled the group's height offset). The window is now a real opening (four trim bars instead of a solid pane) with a small dim room behind it, and the crowd stands behind the glass.
+- **Back wall**: darker grey, narrower, rivet corner brackets and faint rust streaks.
+- **Stage floor back, flat**: one solid floor surface across the whole view (fading into the fog), with the grid drawn on it; no raised pedestal.
+- **Robot turns on its feet**: no more turntable glide. It turns in bursts and the legs step it round (alternating, planted feet, step thumps); walk-ins step too, wheels roll; the walked-in robot keeps its heading instead of snapping forward.
+- Removed the hazard-stripe bar above the title menu (`style.css`).
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.

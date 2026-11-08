@@ -64,6 +64,13 @@ function devRender() {
         <button class="btn ghost nav dbtn" data-act="resetparts">Reset my parts to Mk I</button>
       </div>
     </div>
+    <div class="dsec"><h3>Unlocks</h3>
+      <div class="dgrid two">
+        <button class="btn ghost nav dbtn" data-act="unlockall">Unlock all (weapons, chests, legs, arms)</button>
+        <button class="btn ghost nav dbtn" data-act="resetunlocks">Reset all unlocks</button>
+      </div>
+      <small>${devUnlockStatus()}</small>
+    </div>
     <div class="dsec"><h3>Drop next to you</h3>
       <div class="dgrid three">
         ${[['weapon', 'Weapon'], ['arm', 'Arm'], ['leg', 'Leg'], ['module', 'Module'], ['gem', 'Gem'], ['health', 'Health'], ['vacuum', 'Magnet'], ['nuke', 'Nuke'], ['frenzy', 'Coin frenzy'], ['xp', 'XP pile']]
@@ -77,6 +84,13 @@ function devRender() {
     </div>
   </div>`;
   if (typeof makeWin === 'function') makeWin(devPanel.querySelector('.dpanel'), 'devpanel', { minW: 320, minH: 240 });
+}
+/* a quick line in the dev panel showing where real (non-dev) unlock progress stands */
+function devUnlockStatus() {
+  const nextI = WEAPON_CHAIN.findIndex(t => !weaponUnlocked(t));
+  const nextW = nextI > 0 ? `${WEAPONS[WEAPON_CHAIN[nextI]].name}: ${META.unlock.weaponKills[WEAPON_CHAIN[nextI - 1]] || 0}/${UNLOCK_KILL_GOAL} ${WEAPONS[WEAPON_CHAIN[nextI - 1]].name} kills` : 'all weapons unlocked';
+  const bosses = Object.keys(BOSS_UNLOCKS).filter(b => META.unlock.bosses[b]).length;
+  return `Next weapon: ${nextW} · Bosses defeated: ${bosses}/${Object.keys(BOSS_UNLOCKS).length} · Elite kills: ${Math.min(META.unlock.eliteKills || 0, ELITE_KILLS_FOR_TWIN_ARM)}/${ELITE_KILLS_FOR_TWIN_ARM} (Twin Arm) · Limb maxed: ${META.unlock.limbMaxed ? 'yes (Sentry Arm)' : 'no'}`;
 }
 function devPanelToggle() { if (S.mode === 'devpanel') devPanelClose(); else devPanelOpen(); }
 function devPanelOpen() {
@@ -165,6 +179,8 @@ devPanel.addEventListener('click', e => {
     case 'stains': clearStains(); break;
     case 'maxparts': devSetLevels(true); say('All parts maxed'); break;
     case 'resetparts': devSetLevels(false); say('All parts Lv 1'); break;
+    case 'unlockall': unlockAll(); say('Everything unlocked'); break;
+    case 'resetunlocks': resetUnlocks(); say('All unlocks reset'); break;
     case 'close': devPanelClose(); return;
     case 'build': devPanelClose(true); $('#devHint').hidden = false; S.mode = 'play'; openInventory(false); return;
     case 'hangar': devPanelClose(true); toHangar(); return;

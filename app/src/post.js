@@ -203,7 +203,8 @@ function partView(el, item) {
   if (!item || !el) return;
   if (PV.canvas.parentNode !== el) el.appendChild(PV.canvas);
   const out = item.kind === 'block' || item.kind === 'gem' ? new THREE.Vector3(0, 1, 0) : item.kind === 'weapon' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
-  const g = buildPart(item, out, null);
+  let g; PART_SOLO = true;
+  try { g = buildPart(item, out, null); } finally { PART_SOLO = false; }   // just this part: no arms, guns, gems or modules that are plugged into it
   const holder = new THREE.Group(); holder.add(g); holder.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(g), c = box.getCenter(new THREE.Vector3()), r = Math.max(0.15, box.getSize(new THREE.Vector3()).length() / 2);
   g.position.sub(c);

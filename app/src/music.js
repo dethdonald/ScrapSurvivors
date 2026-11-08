@@ -9,17 +9,40 @@
    ============================================================ */
 const MUSIC = {
   ready: false, step: 0, nextT: 0, bpm: 84, I: 0, D: 0, targetI: 0, targetD: 0, chord: 0, vol: 1,
-  out: null, comp: null, verb: null, delay: null, bus: {}, padVoices: [],
+  out: null, comp: null, verb: null, delay: null, muffle: null, bus: {}, padVoices: [],
+  track: 'calm', pendingTrack: 'calm', direHoldT: 0, muffleOn: false,
 };
 if (typeof SETTINGS.music !== 'number') SETTINGS.music = 0.6;
 
-/* A minor-ish, slowly turning progression: Am9 · Fmaj9 · Cmaj9 · Em9 (two bars each) */
-const PROG = [
+/* Three "songs" built from the same generative palette (same instruments below), picked by what's
+   happening and crossfaded in at the next two-bar phrase boundary so the harmony never clashes mid-bar.
+   - calm:  default exploration pad, slow and spacious (Am9 · Fmaj9 · Cmaj9 · Em9)
+   - drive: regular combat once it gets busy -- same key, reordered into a punchier i-VII-VI-v push
+   - dire:  a boss or elite is near -- lower, slower-turning and dissonant (built on tritones, not 9ths) */
+const PROG_CALM = [
   { root: 45, tones: [0, 7, 10, 14, 15] },
   { root: 41, tones: [0, 7, 11, 14, 16] },
   { root: 48, tones: [0, 7, 11, 14, 16] },
   { root: 40, tones: [0, 7, 10, 14, 15] },
 ];
+const PROG_DRIVE = [
+  { root: 45, tones: [0, 7, 10, 14, 19] },
+  { root: 43, tones: [0, 7, 10, 14, 17] },
+  { root: 41, tones: [0, 7, 11, 14, 16] },
+  { root: 40, tones: [0, 7, 10, 14, 17] },
+];
+const PROG_DIRE = [
+  { root: 33, tones: [0, 6, 10, 13, 18] },
+  { root: 31, tones: [0, 6, 11, 13, 18] },
+  { root: 28, tones: [0, 7, 10, 13, 15] },
+  { root: 33, tones: [0, 6, 10, 15, 18] },
+];
+const TRACKS = {
+  calm: { prog: PROG_CALM, bpm: 84 },
+  drive: { prog: PROG_DRIVE, bpm: 96 },
+  dire: { prog: PROG_DIRE, bpm: 80 },
+};
+let PROG = PROG_CALM;   // the progression actually being read by the sequencer right now
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
@@ -28,7 +51,9 @@ function musicInit() {
   const A = actx;
   MUSIC.out = A.createGain(); MUSIC.out.gain.value = 0;
   MUSIC.comp = A.createDynamicsCompressor(); MUSIC.comp.threshold.value = -18; MUSIC.comp.ratio.value = 3;
-  MUSIC.out.connect(MUSIC.comp); MUSIC.comp.connect(A.destination);
+  // a lowpass that closes down to a muffled, through-the-wall tone while the pause/build menu is open
+  MUSIC.muffle = A.createBiquadFilter(); MUSIC.muffle.type = 'lowpass'; MUSIC.muffle.frequency.value = 20000; MUSIC.muffle.Q.value = 0.7;
+  MUSIC.out.connect(MUSIC.muffle); MUSIC.muffle.connect(MUSIC.comp); MUSIC.comp.connect(A.destination);
   // a long, soft reverb (generated impulse) and a dotted-eighth echo
   MUSIC.verb = A.createConvolver();
   const len = A.sampleRate * 3.2, ir = A.createBuffer(2, len, A.sampleRate);
@@ -173,6 +198,8 @@ function frenzyStep(st, t) {
 }
 function scheduleStep(st, t) {
   if (MUSIC.fz) { frenzyStep(st, t); return; }
+  // only swap to a different song at a two-bar phrase boundary, so the harmony never cuts across a held chord
+  if (st % 32 === 0 && MUSIC.track !== MUSIC.pendingTrack) { MUSIC.track = MUSIC.pendingTrack; PROG = TRACKS[MUSIC.track].prog; }
   const I = MUSIC.I, D = MUSIC.D, s16 = st % 16, bar = Math.floor(st / 16);
   const ch = PROG[Math.floor(bar / 2) % PROG.length], beat = s16 % 4 === 0;
   if (st % 32 === 0) padChord(t, ch, 60 / MUSIC.bpm * 8);
@@ -202,13 +229,17 @@ function musicTick(dt) {
   const inRun = S.inRun && ['play', 'drop', 'levelup', 'perk', 'pause', 'inv', 'shop', 'terminal', 'countdown', 'dying'].includes(S.mode);
   let ti = 0.05, td = 0;
   if (inRun && player && player.pos) {
-    let near = 0, close = 0;
-    for (const e of enemies) { if (e.dead) continue; const d2 = (e.pos.x - player.pos.x) ** 2 + (e.pos.z - player.pos.z) ** 2; if (d2 < 35 * 35) near++; if (d2 < 12 * 12) close++; }
+    let near = 0, close = 0, eliteNear = false;
+    for (const e of enemies) { if (e.dead) continue; const d2 = (e.pos.x - player.pos.x) ** 2 + (e.pos.z - player.pos.z) ** 2; if (d2 < 35 * 35) near++; if (d2 < 12 * 12) close++; if (e.elite && d2 < 40 * 40) eliteNear = true; }
     ti = clamp(0.12 + near / 70 + close / 25, 0, 1);
-    if ((S.boss && !S.boss.dead) || (S.mini && !S.mini.dead)) ti = Math.max(ti, 0.82);
+    const bossNear = (S.boss && !S.boss.dead) || (S.mini && !S.mini.dead);
+    if (bossNear) ti = Math.max(ti, 0.82);
     if (S.mode === 'drop') ti = Math.max(ti, 0.45);
     if (S.mode === 'countdown') ti = 0.2;
     if (stats && stats.maxHp) td = clamp((0.6 - player.hp / stats.maxHp) / 0.45, 0, 1);
+    // a boss or elite nearby swaps the song to something more dire; once triggered it holds for a few
+    // seconds after they're gone so it doesn't flicker as you dodge in and out of range
+    MUSIC.direHoldT = bossNear || eliteNear ? 2.5 : Math.max(0, MUSIC.direHoldT - dt);
   }
   // death: the music falls silent the moment the frame goes down and stays silent on the game over screen;
   // it comes back in calm from the hangar
@@ -223,21 +254,29 @@ function musicTick(dt) {
   MUSIC.I += (ti - MUSIC.I) * Math.min(1, dt * (ti > MUSIC.I ? 0.35 : 0.15));
   MUSIC.D += (td - MUSIC.D) * Math.min(1, dt * (td > MUSIC.D ? 1.2 : S.mode === 'dying' ? 3 : 0.4));
   MUSIC.fz = inRun && !dead && (S.frenzyT || 0) > 0;
-  MUSIC.bpm = MUSIC.fz ? 148 : 84 + 22 * MUSIC.I;
+  // which song should be playing: dire (boss/elite) beats drive (a busy fight) beats calm (everything else);
+  // the actual swap happens at the next phrase boundary in scheduleStep, so this just sets where we're headed
+  MUSIC.pendingTrack = MUSIC.direHoldT > 0 ? 'dire' : MUSIC.I > 0.45 ? 'drive' : 'calm';
+  const tense = MUSIC.track === 'dire' ? 1 : 0;
+  MUSIC.bpm = MUSIC.fz ? 148 : TRACKS[MUSIC.track].bpm + 16 * MUSIC.I;
   const now = actx.currentTime, I = MUSIC.I, D = MUSIC.D, B = MUSIC.bus, k = 0.4;
   const set = (g, v) => g.gain.setTargetAtTime(v, now, k);
   set(B.fz, MUSIC.fz ? 1 : 0);
   if (MUSIC.fz) { for (const n of ['pad', 'arp', 'bass', 'heart', 'drone']) B[n].gain.setTargetAtTime(0, now, 0.15); for (const n of ['hat', 'kick', 'snare']) B[n].gain.setTargetAtTime(0.9, now, 0.1); MUSIC.out.gain.setTargetAtTime(SETTINGS.music * 0.9, now, 0.3); musicPump(); return; }
   set(B.pad, 1 - 0.25 * I);
-  set(B.arp, smooth(0.1, 0.35, I));
+  set(B.arp, smooth(0.1, 0.35, I) * (tense ? 0.6 : 1));
   set(B.bass, smooth(0.28, 0.5, I));
   set(B.hat, smooth(0.4, 0.6, I));
   set(B.kick, smooth(0.55, 0.75, I));
   set(B.snare, smooth(0.75, 0.9, I));
   set(B.heart, smooth(0.1, 0.5, D));
-  set(B.drone, 0.9 * D * D);
-  const duck = S.mode === 'cine' ? 0.12 : S.mode === 'pause' || S.mode === 'inv' || S.mode === 'shop' || S.mode === 'terminal' ? 0.45 : 1;
+  set(B.drone, Math.max(0.9 * D * D, tense ? 0.3 : 0));            // the tension drone also creeps in for a dire boss fight, not just low health
+  const paused = S.mode === 'pause' || S.mode === 'inv' || S.mode === 'shop' || S.mode === 'terminal';
+  const duck = S.mode === 'cine' ? 0.12 : paused ? 0.45 : 1;
   MUSIC.out.gain.setTargetAtTime(dead ? 0 : SETTINGS.music * duck * 0.9, now, dead ? 0.08 : 0.6);
+  // muffled, through-the-wall tone while that menu is open, cleared the moment you're back in control
+  MUSIC.muffle.frequency.setTargetAtTime(paused ? 650 : 20000, now, paused ? 0.5 : 0.35);
+  MUSIC.muffle.Q.setTargetAtTime(paused ? 1.1 : 0.7, now, 0.4);
   musicPump();
 }
 /* the sequencer runs on its own timer as well, so a slow or hidden frame never makes the music stutter */

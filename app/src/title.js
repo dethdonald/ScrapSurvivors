@@ -5,7 +5,57 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.43.8 · BUILD NOV 6';
+const VERSION = '0.43.12 · BUILD NOV 6';
+
+/* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
+const TITLE_WALL_Z = -6.5;
+function makeObserverFigure(tint) {
+  const g = new THREE.Group();
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.75, 0.35), M(tint)); torso.position.y = 0.9; g.add(torso);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.34), M(tint)); head.position.y = 1.5; g.add(head);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x9fe8ff });
+  for (const sx of [-0.08, 0.08]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), eyeMat); e.position.set(sx, 1.5, 0.18); g.add(e); }
+  const mkArm = side => {
+    const piv = new THREE.Group(); piv.position.set(side * 0.3, 1.22, 0);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.5, 0.14), M(tint)); arm.position.y = -0.25; piv.add(arm);
+    g.add(piv); return piv;
+  };
+  g.userData = { torso, head, armL: mkArm(-1), armR: mkArm(1), phase: Math.random() * 10, reactT: 0, kind: null };
+  return g;
+}
+function setupObservers(s) {
+  const group = new THREE.Group();
+  const tints = [0x454e55, 0x3d4650, 0x4a535a, 0x414a52, 0x485158];
+  const figs = [];
+  for (let i = 0; i < 5; i++) {
+    const f = makeObserverFigure(tints[i % tints.length]);
+    f.position.x = (i - 2) * 0.82; f.scale.setScalar(rand(0.82, 1.05));
+    group.add(f); figs.push(f);
+  }
+  group.position.set(0, 1.55, TITLE_WALL_Z - 1.6);   // behind the glass (more negative z = deeper into the room), not out in front of it
+  s.add(group);
+  TITLE.observers = { group, figs };
+}
+/* laugh (debris bonks the frame) or cheer (it blows up): every onlooker reacts, each slightly out of phase */
+function observersReact(kind) { if (TITLE.observers) for (const f of TITLE.observers.figs) { f.userData.kind = kind; f.userData.reactT = kind === 'laugh' ? 1.1 : 1.5; } }
+function stepObservers(dt) {
+  if (!TITLE.observers) return;
+  for (const f of TITLE.observers.figs) {
+    const ud = f.userData; ud.phase += dt;
+    if (ud.reactT > 0) {
+      ud.reactT -= dt;
+      if (ud.kind === 'laugh') {
+        const s = Math.sin(ud.phase * 18);
+        ud.torso.rotation.z = s * 0.18; ud.head.rotation.z = s * 0.22; ud.torso.position.y = 0.9 + Math.abs(s) * 0.05;
+      } else if (ud.kind === 'cheer') {
+        const up = Math.min(1, (1.5 - ud.reactT) / 0.25);
+        ud.armL.rotation.x = -2.6 * up; ud.armR.rotation.x = -2.6 * up;
+        f.position.y = Math.abs(Math.sin(ud.phase * 10)) * 0.12 * Math.min(1, ud.reactT * 2);   // relative to the group's own y — it already sits at window height
+      }
+      if (ud.reactT <= 0) { ud.torso.rotation.set(0, 0, 0); ud.head.rotation.set(0, 0, 0); ud.armL.rotation.x = 0; ud.armR.rotation.x = 0; f.position.y = 0; ud.kind = null; }
+    } else { f.rotation.y = Math.sin(ud.phase * 0.5) * 0.08; f.position.y = Math.sin(ud.phase * 1.4) * 0.03; }
+  }
+}
 
 function setupTitleScene() {
   if (TITLE.scene) return;
@@ -15,12 +65,45 @@ function setupTitleScene() {
   s.add(new THREE.HemisphereLight(0xdfe8ee, 0x30282a, 0.8));
   const sun = new THREE.DirectionalLight(0xfff0d8, 0.9); sun.position.set(-4, 9, 7); s.add(sun); setupShadowLight(sun, 6, 40); s.add(sun.target);
   const rim = new THREE.DirectionalLight(0xff9a50, 0.35); rim.position.set(6, 3, -6); s.add(rim);
-  const floor = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.6, 0.3, 8), M(0x262b30)); floor.position.y = -0.15; s.add(floor);
-  const ringM = new THREE.Mesh(geoRing, new THREE.MeshBasicMaterial({ color: ORANGE, transparent: true, opacity: 0.35, side: THREE.DoubleSide }));
-  ringM.scale.setScalar(3); ringM.position.y = 0.01; s.add(ringM);
-  const grid = new THREE.GridHelper(60, 30, 0x3a4249, 0x30373d); grid.position.y = -0.3; s.add(grid);
+  const grid = new THREE.GridHelper(60, 30, 0x3a4249, 0x30373d); grid.position.y = 0.01; s.add(grid);
+  // the stage floor: one solid surface across the whole view (fog fades it out in the distance), the grid drawn on top of it
+  const stage = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), M(0x2a3036)); stage.rotation.x = -Math.PI / 2; stage.position.y = 0; stage.receiveShadow = true; s.add(stage);
+  // the back wall and its window of onlookers: a frame of dark panels around an opening (not a solid slab),
+  // kept narrow (±9) so it never reaches as far left as the 3D logo (which sits well past x=-12, see logoPlace)
+  // the wall runs far past the edges of any window (the logo is held in front of it, see logoPlace); bolts/rust sit in a 'panel' round the window
+  const wallHW = 70, wallHH = 22, wallY = -1 + wallHH, dHW = 9, dBot = -1, dTop = 14, wallCol = 0x1c1e22, wallDk = 0x16181c, rust = 0x5c3b22;
+  const winW = 5.2, winH = 2.6, winY = 2.9, winHW = winW / 2, winHH = winH / 2;
+  const slab = (w, h, x, y, col) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.5), M(col || wallCol)); m.position.set(x, y, TITLE_WALL_Z); s.add(m); return m; };
+  const sideW = wallHW - winHW;
+  slab(sideW, wallHH * 2, -(winHW + sideW / 2), wallY);                                     // left
+  slab(sideW, wallHH * 2, (winHW + sideW / 2), wallY);                                      // right
+  slab(winW, (wallY + wallHH) - (winY + winHH), 0, (winY + winHH + wallY + wallHH) / 2);    // above the window
+  slab(winW, (winY - winHH) - (wallY - wallHH), 0, (wallY - wallHH + winY - winHH) / 2, wallDk); // below the window
+  // corner brackets + rust streaks so the panel reads as a worn industrial wall, not a flat slab
+  const bolt = (x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), M(0x0e1013)); m.position.set(x, y, z); s.add(m); };
+  for (const cx of [-dHW + 0.4, dHW - 0.4]) for (const cy of [dBot + 0.5, dTop - 0.5]) bolt(cx, cy, TITLE_WALL_Z + 0.3);
+  const streakMat = new THREE.MeshStandardMaterial({ color: rust, roughness: 0.95, transparent: true, opacity: 0.3 });
+  for (const sx of [-dHW + 1.1, -dHW + 2.4, dHW - 1.6]) {
+    const h = rand(2, 4.5), st = new THREE.Mesh(new THREE.PlaneGeometry(0.22, h), streakMat);
+    st.position.set(sx, dTop - h / 2 - rand(0, 1.5), TITLE_WALL_Z + 0.27); s.add(st);
+  }
+  // the window trim itself: four thin bars around the opening, not a filled pane — the opening has to stay
+  // genuinely empty so the glass and the onlookers behind it are visible through it, not hidden behind a solid mesh
+  const frameT = 0.16, frameCol = M(0x15171a), frameZ = TITLE_WALL_Z + 0.26;
+  const trim = (w, h, x, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.14), frameCol); m.position.set(x, y, frameZ); s.add(m); };
+  trim(winW + frameT * 2, frameT, 0, winY + winHH + frameT / 2);                          // top
+  trim(winW + frameT * 2, frameT, 0, winY - winHH - frameT / 2);                          // bottom
+  trim(frameT, winH, -(winHW + frameT / 2), winY);                                        // left
+  trim(frameT, winH, (winHW + frameT / 2), winY);                                         // right
+  // a small dim room behind the opening, so the onlookers have somewhere to stand and the window isn't a hole into the fog
+  const backRoom = new THREE.Mesh(new THREE.BoxGeometry(winW + 1.2, winH + 1.8, 0.3), new THREE.MeshStandardMaterial({ color: 0x272c33, roughness: 0.95 }));
+  backRoom.position.set(0, winY - 0.1, TITLE_WALL_Z - 2.6); s.add(backRoom);
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(winW, winH), new THREE.MeshBasicMaterial({ color: 0x8fd6ff, transparent: true, opacity: 0.14, depthWrite: false }));
+  glass.position.set(0, winY, TITLE_WALL_Z + 0.08); s.add(glass);
+  const winLight = new THREE.PointLight(0xcfe8ff, 0.35, 9, 1.4); winLight.position.set(0, winY + 1.6, TITLE_WALL_Z - 2.3); s.add(winLight);
+  setupObservers(s);
   TITLE.scene = s; s.environment = ENV.base; TITLE.lights = [sun]; applyGfx();
-  TITLE.cam = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
+  TITLE.cam = new THREE.PerspectiveCamera(36, 1, 0.1, 400);  // far was 100: on a big/4K fullscreen window the logo's placement depth (logoPlace, logo3d.js) could land past it and vanish
 }
 /* A random but valid frame: one or two bodies, two legs, a weapon or three, sometimes extras. */
 function randomTitleLoadout() {
@@ -58,11 +141,16 @@ function randomTitleLoadout() {
   if (top !== TL.body && Math.random() < 0.5) top.slots[F('top')] = gun();
   return TL;
 }
-function spawnTitleRobot() {
+function spawnTitleRobot(walkIn) {
   if (TITLE.robot) TITLE.scene.remove(TITLE.robot);
   TITLE.L = randomTitleLoadout();
   const m = buildRobot(TITLE.L);
-  m.position.set(0, 7, 0); m.userData.vy = 0; m.userData.landed = false;
+  if (walkIn) {
+    // after an explosion, the next one walks in from off-screen right rather than dropping from the sky
+    m.position.set(9, 0, 0); m.rotation.y = -Math.PI / 2; m.userData.vy = 0; m.userData.landed = false; m.userData.walkIn = true; m.userData.walkT = 0;
+  } else {
+    m.position.set(0, 7, 0); m.userData.vy = 0; m.userData.landed = false;
+  }
   TITLE.scene.add(m); TITLE.robot = m;
   TITLE.life = 0; TITLE.tipT = 1.6; TITLE.tipPart = null; hideTitleTip();
   // arms aim at points that change with each pose
@@ -79,10 +167,21 @@ const TITLE_POSES = [
 function updateTitleRobot(dt) {
   const m = TITLE.robot; if (!m) return;
   const ud = m.userData;
-  // drop in, land with a bounce
+  // drop in from the sky (first robot) or walk in from off-screen right (every respawn after an explosion), then land with a bounce
   if (!ud.landed) {
-    ud.vy -= 30 * dt; m.position.y += ud.vy * dt;
-    if (m.position.y <= 0) { m.position.y = 0; ud.landed = true; ud.dip = -0.35; ud.dipV = 0; titleBurst(new THREE.Vector3(0, 0.1, 0), 0x8a8270, 10); sfx('thud', 0.3); }
+    if (ud.walkIn) {
+      ud.walkT += dt; m.position.x -= 3.6 * dt;
+      m.position.y = Math.abs(Math.sin(ud.walkT * 10)) * 0.05;               // light stride bob; the legs themselves step (below)
+      m.rotation.z = Math.sin(ud.walkT * 10) * 0.03;
+      if (m.position.x <= 0) {
+        m.position.x = 0; m.position.y = 0; m.rotation.z = 0;              // keeps facing the way it walked in; the feet turn it from there
+        ud.landed = true; ud.dip = -0.2; ud.dipV = 0;
+        titleBurst(new THREE.Vector3(0, 0.1, 0), 0x8a8270, 6); sfx('thud', 0.22);
+      }
+    } else {
+      ud.vy -= 30 * dt; m.position.y += ud.vy * dt;
+      if (m.position.y <= 0) { m.position.y = 0; ud.landed = true; ud.dip = -0.35; ud.dipV = 0; titleBurst(new THREE.Vector3(0, 0.1, 0), 0x8a8270, 10); sfx('thud', 0.3); }
+    }
   }
   ud.dipV = (ud.dipV || 0) + (-120 * (ud.dip || 0) - 9 * (ud.dipV || 0)) * dt; ud.dip = (ud.dip || 0) + ud.dipV * dt;
   TITLE.poseT -= dt;
@@ -93,7 +192,14 @@ function updateTitleRobot(dt) {
   TITLE.hurtT = Math.max(0, (TITLE.hurtT || 0) - dt);
   const hurt = Math.min(1, TITLE.hurtT / 0.9);
   if (hurt > 0.05) P = { aims: [[-1.1, 4.6, 0.9], [1.1, 4.6, 0.9]], crouch: 0.3, twist: Math.sin(TITLE.t * 9) * 0.35 };
-  if (S.mode !== 'custom') m.rotation.y += dt * 0.35;      // slow turntable (in Customize you turn it yourself)
+  // turning: in bursts (turn ~a quarter, stand a moment), and the feet step it round (see the stepping below) rather than gliding
+  ud.turnV = 0;
+  if (S.mode !== 'custom' && ud.landed) {
+    ud.turnT = (ud.turnT || 0) + dt;
+    const cyc = ud.turnT % 4.2, turning = cyc < 2.2;
+    ud.turnV = turning ? 0.7 * Math.sin(cyc / 2.2 * Math.PI) : 0;     // eases in and out of each turn
+    m.rotation.y += ud.turnV * dt;
+  }
   const tw = (ud.twist || 0) + (P.twist - (ud.twist || 0)) * Math.min(1, dt * 5); ud.twist = tw;
   const cr = (ud.crouch || 0) + (P.crouch - (ud.crouch || 0)) * Math.min(1, dt * 5); ud.crouch = cr;
   const breathe = still ? 0 : Math.sin(TITLE.t * 2.2) * 0.03;
@@ -102,14 +208,40 @@ function updateTitleRobot(dt) {
   if (ud.torso) ud.torso.rotation.set(Math.sin(TITLE.t * 1.3) * 0.04 * sway + Math.sin(TITLE.t * 31) * 0.14 * hurt, tw, Math.sin(TITLE.t * 0.9) * 0.05 * sway + Math.sin(TITLE.t * 23) * 0.18 * hurt);
   for (const sp of ud.spinners) sp.anchor.rotation.z += dt * BLOCKS[sp.item.type].spinRate(sp.item.lvl);
   m.updateMatrixWorld(true);
-  // feet stay planted on the floor whatever the hips do
-  for (const lg of ud.legs) {
-    const ik = lg.userData.ik;
-    if (ik) {
-      const rest = lg.localToWorld(ik.restV.clone()); rest.y = ik.footH;
-      legPose(ik, lg.worldToLocal(rest));
+  // feet: planted on the floor until the body has turned / walked far enough, then they step (alternating), like in the game
+  const ikLegs = ud.legs.filter(l => l.userData.ik), walking = ud.walkIn && !ud.landed, falling = !ud.landed && !ud.walkIn;
+  let stepping = ikLegs.filter(l => l.userData.tStep && l.userData.tStep.t < 1).length;
+  ikLegs.forEach((lg, idx) => {
+    const ik = lg.userData.ik, len = ik.a + ik.b;
+    const want = lg.localToWorld(ik.restV.clone()); want.y = ik.footH;
+    if (falling) { lg.userData.tStep = null; legPose(ik, lg.worldToLocal(want)); return; }
+    const maxHoriz = Math.sqrt(Math.max(0.01, (len * 0.97) ** 2 - ik.restV.y ** 2));
+    if (walking) want.x -= Math.min(maxHoriz * 0.6, 0.85);                 // reach ahead in the walking direction (-x)
+    let st = lg.userData.tStep;
+    if (!st) st = lg.userData.tStep = { foot: want.clone(), from: want.clone(), to: want.clone(), t: 1 };
+    if (st.t < 1) {
+      st.to.copy(want);
+      st.t = Math.min(1, st.t + dt / (walking ? 0.15 : 0.24));
+      const e = st.t * st.t * (3 - 2 * st.t);
+      st.foot.lerpVectors(st.from, st.to, e); st.foot.y += Math.sin(st.t * Math.PI) * (walking ? 0.22 : 0.16);
+      if (st.t >= 1) { st.foot.copy(st.to); ud.dipV = (ud.dipV || 0) - 0.45; sfx('step', 0.12); }
+    } else {
+      const off = Math.hypot(st.foot.x - want.x, st.foot.z - want.z);
+      const stretched = lg.worldToLocal(st.foot.clone()).length() > len * 0.985;
+      const partnerBusy = ikLegs.some((o, j) => j !== idx && (j % 2) !== (idx % 2) && o.userData.tStep && o.userData.tStep.t < 1);
+      const reach = walking ? maxHoriz * 0.5 : Math.min(maxHoriz * 0.6, 0.2);
+      if (stretched || (off > reach && !partnerBusy && stepping < Math.ceil(ikLegs.length / 2))) { st.from.copy(st.foot); st.to.copy(want); st.t = 0; stepping++; }
     }
-    const sh = lg.userData.shock; if (sh) setShock(sh, clamp(cr * 0.6 - (ud.dip || 0) * 0.5, -0.2, 0.28));
+    legPose(ik, lg.worldToLocal(st.foot.clone()));
+  });
+  for (const lg of ud.legs) {
+    const sh = lg.userData.shock; if (!sh) continue;
+    setShock(sh, clamp(cr * 0.6 - (ud.dip || 0) * 0.5, -0.2, 0.28));
+    // wheels roll as it drives in or turns on the spot (opposite sides roll opposite ways)
+    if (sh.wheel) {
+      const side = Math.sign((lg.userData.out && lg.userData.out.x) || lg.position.x || 1);
+      sh.wheel.rotation.x += ((walking ? 3.6 : 0) + ud.turnV * 1.4 * side) * dt / (sh.wheelR || 0.4);
+    }
   }
   // arms swing to the pose's aim points (in the robot's own frame, so they turn with it)
   const arms = [];
@@ -163,6 +295,7 @@ function placeTitleTip() {
 /* ---------- blow it apart ---------- */
 function explodeTitleRobot() {
   const m = TITLE.robot; if (!m) return;
+  observersReact('cheer');     // the crowd loves a good explosion
   TITLE.tipPart = null; hideTitleTip();
   m.updateMatrixWorld(true);
   const parts = m.userData.parts.slice(), set = new Set(parts);
@@ -229,13 +362,14 @@ function renderTitle(dt) {
   cosmeticTick(TITLE.robot, dt);
   titleGunTick(dt);
   stepTitlePieces(dt);
+  stepObservers(dt);
   if (TITLE.robot && TITLE.robot.userData.landed) {
     TITLE.tipT -= dt;
     if (TITLE.tipT <= 0 && S.mode === 'title') { TITLE.tipT = 2.8; titleTipPick(); }
     if (S.mode === 'custom') TITLE.life = 0;          // hold still while you're customising it
     else if (TITLE.life > 15) explodeTitleRobot();
   }
-  if (TITLE.respawnT > 0) { TITLE.respawnT -= dt; if (TITLE.respawnT <= 0) { clearTitlePieces(); spawnTitleRobot(); } }
+  if (TITLE.respawnT > 0) { TITLE.respawnT -= dt; if (TITLE.respawnT <= 0) { clearTitlePieces(); spawnTitleRobot(true); } }
   thrownTick(dt);
   if (typeof logoTick === 'function') { TITLE.cam.updateMatrixWorld(); logoTick(dt); }
   renderFrame(TITLE.scene, TITLE.cam);
@@ -683,12 +817,13 @@ function titleGunTick(dt) {
           if (-vn > 2 && G.bonkT <= 0) {
             G.bonkT = 0.12; sfx('bonk', Math.min(0.8, 0.25 + -vn * 0.05));
             TITLE.hurtT = 0.9; R.userData.dipV = (R.userData.dipV || 0) - Math.min(3, -vn * 0.25);
+            observersReact('laugh');     // the crowd in the window gets a kick out of it getting bonked
           }
         }
       }
     }
-    // the floor: the round stage, then the grid below it
-    const fy = (Math.hypot(p.x, p.z) < 3.4 ? 0 : -0.3) + G.r * 0.5;
+    // the floor: one flat grid, ground level everywhere
+    const fy = G.r * 0.5;
     if (p.y < fy) {
       p.y = fy;
       if (G.v.y < -2.5 && G.bonkT <= 0) { G.bonkT = 0.1; sfx('thud', Math.min(0.5, -G.v.y * 0.04)); }
