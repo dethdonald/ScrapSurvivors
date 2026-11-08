@@ -103,12 +103,18 @@ ipcMain.on('restart', () => {
   if (process.platform === 'linux') {
     const script = path.join(path.dirname(process.execPath), 'ScrapSurvivors.sh');
     if (fs.existsSync(script)) {
+      log('restart: re-launching ' + script + ' (via /bin/bash, not relying on exec bit)');
       try {
-        spawn(script, [], { detached: true, stdio: 'ignore', cwd: path.dirname(script) }).unref();
+        // Explicit /bin/bash instead of exec'ing the script directly: skips any issue with the shebang or
+        // the file's executable bit not surviving however it got here, which exec'ing it as a "binary"
+        // would silently depend on.
+        const child = spawn('/bin/bash', [script], { detached: true, stdio: 'ignore', cwd: path.dirname(script) });
+        child.on('error', e => log('restart: spawn error: ' + (e && e.message)));
+        child.unref();
         app.exit(0);
         return;
       } catch (e) { log('restart via script failed: ' + (e && e.message)); }
-    }
+    } else log('restart: ' + script + ' not found, falling back to app.relaunch()');
   }
   app.relaunch(); app.exit(0);
 });

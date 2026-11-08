@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.17 · BUILD NOV 6|
+| **Version** | 0.43.18 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -339,6 +339,17 @@ no launch flags) and can show the same symptom. The Steam shortcut's Target must
   LD_PRELOAD="" %command% Launch Option override in both modes; disabling Steam's overlay setting did NOT
   have the same effect). `ScrapSurvivors.sh` now always clears LD_PRELOAD unconditionally - no more mode
   detection. The Launch Options override can be removed.
+
+### 2026-11-08: hardened restart-to-update, awaiting diagnosis (0.43.18)
+In-game restart-to-update on Linux still isn't landing the update even though running `Update.sh` by hand
+does - same `update()` logic either way, so something about going through the game/Steam specifically is
+different. Hardened `main.js`'s restart handler in the meantime: it now runs `ScrapSurvivors.sh` via an
+explicit `/bin/bash <script>` instead of exec'ing the script file directly (removes any dependency on the
+executable bit surviving however the file got there), and logs the attempt/any spawn error to
+`scrapsurvivors-log.txt`. Not a confirmed fix - gathering `update-log.txt` from a real restart attempt vs.
+a manual `Update.sh` run to find the actual cause (leading theory: Steam may run non-Steam games inside a
+sandboxed runtime container whose filesystem writes don't persist, which a manually-run script would be
+outside of).
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.
