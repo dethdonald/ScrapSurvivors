@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.13 · BUILD NOV 6|
+| **Version** | 0.43.14 · BUILD NOV 6|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -274,7 +274,11 @@ This file tracks every change, with dates, plus what anyone picking the project 
 ### 2026-11-08: 0.43.13 update status on the title screen, Steam Deck Gaming Mode launch fix
 
 - **Update status on the title screen** (after the version number; packaged builds only, the Play.bat dev copy shows nothing): UP TO DATE · UPDATE x AVAILABLE · DOWNLOADING… (Windows, polls every 5 s for up to a minute) · UPDATE x DOWNLOADED + a RESTART TO UPDATE button (Windows) · RESTART THE GAME TO INSTALL (Deck/Linux, the launcher updates on start) · CAN'T CHECK (NO ACCESS) when the private repo has no token · COULDN'T CHECK when offline. `main.js` `update-status` (IPC, `net.fetch`, same `github-token.txt` next to the exe / launcher, cached 1 min) and `restart`; `preload.js` exposes `desktop.updateStatus()` / `desktop.restart()`; UI in `title.js` `checkUpdate()`, styles `.tupd`. The Windows "downloaded" state reads `%APPDATA%\ScrapSurvivors\game-files\pending\VERSION` directly, so the already-shipped Windows build gets it through a normal update. All six states tested in a packaged build against a mock GitHub.
-- **Steam Deck Gaming Mode crash on launch**: `deck/ScrapSurvivors.sh` now unsets `LD_PRELOAD` (Steam's overlay injection, a common Electron crash in Gaming Mode), passes `--ozone-platform=x11`, logs every launch (env + output) to `launch-log.txt` next to it, and if the game dies within 10 s it retries once with `--disable-gpu-sandbox --in-process-gpu`.
+- **Steam Deck Gaming Mode crash on launch** (still open): first try unset `LD_PRELOAD` (Steam's overlay) -> the game then sat on Steam's endless loading screen in Gaming Mode, because the overlay library is how gamescope recognises the game's window. REVERTED: keep the overlay. The launcher still passes `--ozone-platform=x11`, logs every launch (env + output) to `launch-log.txt` next to it, and if the game dies within 10 s it retries once with `--disable-gpu-sandbox --in-process-gpu`.
+
+### 2026-11-08: 0.43.14 Steam Deck launcher: keep Steam's overlay
+
+- `deck/ScrapSurvivors.sh`: no longer unsets `LD_PRELOAD`. Gaming Mode needs Steam's overlay library to recognise the game's window; without it Steam showed an endless loading screen. The launcher still logs every start to `launch-log.txt` (now including LD_PRELOAD) and retries once with `--disable-gpu-sandbox --in-process-gpu` if the game dies within 10 s. Version bumped so installed Decks pick the launcher up (they only update when VERSION changes).
 
 ### 2026-11-06: 0.34.0 — Chunk 09/16, Lifesteal and Poison gems (src/gemfx.js)
 - Two new gems, **Lifesteal** (crimson `#d6204a`) and **Poison** (green `#58d62a`), levels I-V. They are normal `ATTRS` entries so they appear in gem drops, cases, the store, the terminal pool and the catalog. The original eight gems and all 36 combos are untouched; **no new combos yet** (Chunk 10), so a pair with a new gem just gives both plain effects.

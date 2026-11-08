@@ -46,13 +46,12 @@ update() {
 }
 
 [ "$1" = "--no-update" ] && shift || update
-# Gaming Mode: Steam injects its overlay (LD_PRELOAD=...gameoverlayrenderer.so) into whatever it launches, and
-# Chromium/Electron apps like this one commonly crash on start with it. The game draws its own UI, so drop it.
-unset LD_PRELOAD
+# NOTE: don't unset LD_PRELOAD here. Steam's overlay library (gameoverlayrenderer.so) is how Gaming Mode's compositor
+# recognises the game's window; without it Steam sits on its loading screen forever (tried in 0.43.13).
 # Gaming Mode runs games under gamescope (Xwayland): ask Electron for plain X11 explicitly.
 FLAGS=(--no-sandbox --ozone-platform=x11)
 LAUNCH_LOG="$HERE/launch-log.txt"
-{ echo "=== $(date) start: $*"; echo "SteamDeck=${SteamDeck:-} SteamAppId=${SteamAppId:-} DISPLAY=${DISPLAY:-} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-}"; } > "$LAUNCH_LOG"
+{ echo "=== $(date) start: $*"; echo "SteamDeck=${SteamDeck:-} SteamAppId=${SteamAppId:-} DISPLAY=${DISPLAY:-} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-}"; echo "LD_PRELOAD=${LD_PRELOAD:-}"; } > "$LAUNCH_LOG"
 start=$(date +%s)
 "$HERE/ScrapSurvivors" "${FLAGS[@]}" "$@" >> "$LAUNCH_LOG" 2>&1
 code=$?
