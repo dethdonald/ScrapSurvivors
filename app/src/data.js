@@ -968,6 +968,13 @@ const ETYPES = {
   // not a boss: a Hive Mother's glowing egg sac. Shoot it to stop its spawns.
   sac:        { hp: 700,   speed: 0,   dmg: 0,  r: 0.9, mass: 5,  xp: 0, color: 0xb6e040, size: 1.4 },
 };
+/* Give every enemy type the same set of fields in the same order (missing ones read as undefined, exactly as before).
+   The hot loops ask e.d.fly / e.d.npc / e.d.bomb for every enemy every step; with a dozen differently-shaped type
+   records each of those was a slow generic lookup. With one shape it is a single memory load. */
+(function () {
+  const keys = []; for (const d of Object.values(ETYPES)) for (const k of Object.keys(d)) if (!keys.includes(k)) keys.push(k);
+  for (const t of Object.keys(ETYPES)) { const src = ETYPES[t], o = {}; for (const k of keys) o[k] = src[k]; ETYPES[t] = o; }
+})();
 const CRAWLER_SHAPES = ['cube', 'sphere', 'dome'];
 /* Elite crawlers: an occasional pack leader. Bigger, tougher, health bar overhead, always drops a part. */
 const ELITE = { chance: 0.12, hpMul: 7, sizeMul: 1.55, massMul: 4, dmgMul: 1.6, xp: 8, color: 0xe8b23a };

@@ -829,7 +829,7 @@ body.win-sizing,body.win-sizing *{cursor:nwse-resize!important;user-select:none}
 #killMul{position:absolute;right:28px;top:42%;transform:translateY(-50%);display:grid;justify-items:end;gap:4px;pointer-events:none;z-index:4;--kc:#e6e9ea;--ks:1;--kg:4px;--kshake:0px}
 #killMul .km{display:flex;align-items:baseline;gap:2px;color:var(--kc);font:800 calc(34px * var(--ks)) var(--f-display);line-height:1;text-shadow:0 0 var(--kg) var(--kc),0 3px 0 rgba(0,0,0,.6);transform-origin:right center;animation:kmShake .09s steps(2) infinite}
 #killMul .km small{font-size:.55em;opacity:.85}
-#killMul.bump .km b{display:inline-block;animation:kmBump .22s cubic-bezier(.2,1.8,.4,1)}
+#killMul .km b{display:inline-block}
 @keyframes kmBump{0%{transform:scale(1.45)}100%{transform:scale(1)}}
 @keyframes kmShake{0%{transform:translate(var(--kshake),0) rotate(-1deg)}50%{transform:translate(calc(var(--kshake) * -1),calc(var(--kshake) * .6)) rotate(1deg)}100%{transform:translate(0,calc(var(--kshake) * -.6))}}
 #killMul .kmBar{display:block;width:calc(90px * var(--ks));height:4px;background:rgba(0,0,0,.5);border:1px solid color-mix(in srgb,var(--kc) 60%,transparent)}
@@ -996,3 +996,6 @@ body.berserk #vignette{box-shadow:inset 0 0 160px 30px rgba(255,20,20,.45);anima
 .scenecard:hover,.scenecard:focus-visible{border-color:var(--text)}
 .scenecard.on{border-color:var(--sec);box-shadow:inset 4px 0 0 var(--sec)}
 .scenecard.on b{color:var(--sec)}
+
+#stressHud{position:absolute;left:50%;top:70px;transform:translateX(-50%);z-index:30;font:12px/1.5 ui-monospace,Consolas,monospace;color:#cfe;background:rgba(5,8,10,.82);border:1px solid #2a3a40;padding:8px 12px;pointer-events:none;text-align:center}
+#stressHud b{color:var(--orange);font-size:13px}#stressHud table{margin:6px auto;border-collapse:collapse}#stressHud td{padding:1px 8px;text-align:right}#stressHud small{opacity:.7}

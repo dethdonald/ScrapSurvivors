@@ -10,7 +10,7 @@ const DEV_ENEMIES = [
   ['crawler', 'Crawler'], ['elite', 'Elite crawler'], ['drone', 'Drone'], ['spitter', 'Spitter'], ['bomber', 'Bomber'],
   ['splitter', 'Splitter'], ['splitling', 'Splitling'], ['brute', 'Brute · mini-boss'], ['warden', 'Warden · boss'],
 ];
-const DEV_COUNTS = [1, 5, 10, 25, 50, 100, 250];
+const DEV_COUNTS = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
 
 function startTestRange() {
   if (INV.drag) endDrag(INV.cursor.x, INV.cursor.y, true);
@@ -63,6 +63,10 @@ function devRender() {
         <button class="btn ghost nav dbtn" data-act="maxparts">Max out my parts</button>
         <button class="btn ghost nav dbtn" data-act="resetparts">Reset my parts to Mk I</button>
       </div>
+    </div>
+    <div class="dsec"><h3>Stress test</h3>
+      <button class="btn nav" data-act="stress">Run the horde stress test</button>
+      <small>Fills the range with a bigger and bigger horde while your guns fire, and reports how many enemies this machine holds at 60 and at 30 frames a second. Takes a minute or two.${STRESS.last ? '<br><b>Last run:</b> ' + stressLine(STRESS.last) : ''}</small>
     </div>
     <div class="dsec"><h3>Unlocks</h3>
       <div class="dgrid two">
@@ -181,6 +185,7 @@ devPanel.addEventListener('click', e => {
     case 'resetparts': devSetLevels(false); say('All parts Lv 1'); break;
     case 'unlockall': unlockAll(); say('Everything unlocked'); break;
     case 'resetunlocks': resetUnlocks(); say('All unlocks reset'); break;
+    case 'stress': devPanelClose(); stressStart(); return;
     case 'close': devPanelClose(); return;
     case 'build': devPanelClose(true); $('#devHint').hidden = false; S.mode = 'play'; openInventory(false); return;
     case 'hangar': devPanelClose(true); toHangar(); return;
@@ -208,3 +213,75 @@ function perfTick(dt, total, sim, ren) {
   PERF.el.className = col;
   PERF.el.innerHTML = `<b>${PERF.fps.toFixed(0)} fps</b> · worst ${PERF.worst.toFixed(0)} ms<br>game logic ${PERF.sim.toFixed(1)} ms · draw ${PERF.ren.toFixed(1)} ms<br>${alive} enemies · ${I.calls} draw calls · ${(I.triangles / 1000).toFixed(0)}k tris`;
 }
+
+
+/* ---------- horde stress test: how many enemies does THIS machine hold at 60 and at 30 frames a second? ----------
+   Runs in the test range with the real renderer, your real build firing non-stop, and a mixed horde (the same blend a
+   late run throws at you) kept topped up at each size: 200, 400 ... up to 4,000. Each size settles for 1.5 s, then 3 s of
+   frames are timed. It stops at the first size that falls under 24 fps. The 60 and 30 figures are read off the curve
+   between the two sizes either side of the line. Screens faster than 60 Hz are fine (we look at frame time, and a
+   60 Hz screen simply shows "60+" for everything it keeps up with).
+   Also runs unattended: launch with --stress and the result is written to stress-result.json next to the game. */
+const STRESS = { on: false, steps: [200, 400, 600, 800, 1000, 1300, 1600, 2000, 2500, 3000, 4000], i: 0, t: 0, ft: [], rows: [], last: null, el: null, lastNow: 0, auto: false };
+const STRESS_MIX = [['crawler', 0.74], ['drone', 0.12], ['spitter', 0.08], ['bomber', 0.03], ['splitter', 0.03]];
+function stressLine(r) { return `60 fps up to ~${r.at60 ?? '?'} enemies · 30 fps up to ~${r.at30 ?? '?'}${r.capped ? ' (hit the top of the test)' : ''}`; }
+function stressFill(n) {
+  let guard = 0;
+  while (enemies.length < n && guard++ < 600) {
+    let r = Math.random(), type = 'crawler'; for (const [t, w] of STRESS_MIX) { if ((r -= w) < 0) { type = t; break; } }
+    const p = spawnPoint(10, 46);
+    if (type === 'crawler') spawnPack(p, Math.min(6, n - enemies.length)); else spawnEnemy(type, p);
+  }
+}
+function stressStart(auto) {
+  if (!S.test || STRESS.on) return;
+  devClearEnemies(); DEV.god = true; DEV.hold = false;
+  Object.assign(STRESS, { on: true, i: 0, t: 0, ft: [], rows: [], lastNow: 0, auto: !!auto });
+  if (!STRESS.el) { STRESS.el = document.createElement('div'); STRESS.el.id = 'stressHud'; document.body.appendChild(STRESS.el); }
+  STRESS.el.hidden = false; STRESS.el.textContent = 'Stress test…';
+}
+function stressStop(why) {
+  STRESS.on = false; mouseFire = false;
+  const rows = STRESS.rows, ms = r => r.ms;
+  // where the frame-time curve crosses a line (16.9 ms = 59 fps, 33.9 ms = 29.5 fps: a hair of slack for timer jitter)
+  const cross = lim => {
+    if (!rows.length) return null;
+    if (ms(rows[0]) > lim) return 0;
+    for (let k = 1; k < rows.length; k++) if (ms(rows[k]) > lim) { const a = rows[k - 1], b = rows[k]; return Math.round((a.n + (b.n - a.n) * (lim - a.ms) / Math.max(0.01, b.ms - a.ms)) / 10) * 10; }
+    return rows[rows.length - 1].n;
+  };
+  const top = rows.length ? rows[rows.length - 1] : null;
+  const res = { why, at60: cross(16.9), at30: cross(33.9), capped: !!top && top.ms <= 33.9, rows, gfx: SETTINGS.gfx, w: innerWidth, h: innerHeight, dpr: devicePixelRatio, when: new Date().toISOString(), version: typeof VERSION === 'string' ? VERSION : '' };
+  STRESS.last = res;
+  devClearEnemies();
+  STRESS.el.innerHTML = `<b>Stress test done</b><br>${stressLine(res)}<br><table>${rows.map(r => `<tr><td>${r.n}</td><td>${r.fps.toFixed(0)} fps</td><td>low ${r.low.toFixed(0)}</td><td>${r.ms.toFixed(1)} ms</td></tr>`).join('')}</table><small>graphics: ${res.gfx} · ${res.w}×${res.h} · click to close</small>`;
+  STRESS.el.style.pointerEvents = 'auto'; STRESS.el.onclick = () => { STRESS.el.hidden = true; STRESS.el.style.pointerEvents = ''; };
+  console.log('STRESS_RESULT ' + JSON.stringify(res));
+}
+/* called once per drawn frame (game.js) */
+function stressTick(now) {
+  if (!STRESS.on) return;
+  if (!S.test || S.mode !== 'play') { if (S.mode === 'levelup' || S.mode === 'perk' || S.mode === 'countdown') return; stressStop('left the test range'); return; }
+  const dtMs = STRESS.lastNow ? now - STRESS.lastNow : 0; STRESS.lastNow = now;
+  const n = STRESS.steps[STRESS.i];
+  mouseFire = true; S.pendingLv = 0;                  // every gun firing; no level-up screens in the way
+  player.hp = stats.maxHp;
+  stressFill(n);
+  STRESS.t += dtMs / 1000;
+  if (STRESS.t > 1.5 && dtMs > 0) STRESS.ft.push(dtMs);
+  STRESS.el.textContent = `Stress test · ${n} enemies · ${dtMs > 0 ? (1000 / dtMs).toFixed(0) : '–'} fps · step ${STRESS.i + 1}/${STRESS.steps.length}`;
+  // a step ends after 3 s of timed frames (longer only if the machine is crawling and has barely drawn any)
+  if (STRESS.t < 4.5 || (STRESS.ft.length < 4 && STRESS.t < 12)) return;
+  const f = STRESS.ft.slice().sort((a, b) => a - b), med = f[f.length >> 1] || 999, p95 = f[Math.min(f.length - 1, Math.floor(f.length * 0.95))] || 999;
+  STRESS.rows.push({ n, ms: +med.toFixed(2), fps: +(1000 / med).toFixed(1), low: +(1000 / p95).toFixed(1), alive: enemies.length });
+  STRESS.i++; STRESS.t = 0; STRESS.ft = [];
+  if (1000 / med < 24) stressStop('under 24 fps'); else if (STRESS.i >= STRESS.steps.length) stressStop('finished every size');
+}
+/* unattended run: `electron . --stress` (main.js adds ?stress=1, saves the STRESS_RESULT line to stress-result.json and quits) */
+if (location.search.includes('stress=1')) addEventListener('load', () => setTimeout(() => {
+  try {
+    startTestRange();
+    if (!S.test) { console.log('STRESS_RESULT ' + JSON.stringify({ why: 'could not start the test range (the saved build is missing something)', rows: [] })); return; }
+    setTimeout(() => stressStart(true), 2500);
+  } catch (e) { console.log('STRESS_RESULT ' + JSON.stringify({ why: 'error: ' + (e && e.message), rows: [] })); }
+}, 4000));

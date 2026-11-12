@@ -75,7 +75,18 @@ if (!META.unlock || typeof META.unlock !== 'object') META.unlock = defaultUnlock
 else { const d = defaultUnlockState(); for (const k in d) if (!(k in META.unlock)) META.unlock[k] = d[k]; }
 // Pogo Spring was removed (0.30.0): drop its discovery key so old saves stay clean
 try { if (META.disc && META.disc['module:pogo']) { delete META.disc['module:pogo']; localStorage.setItem('scrapsurvivors.meta', JSON.stringify(META)); } } catch (e) {}
-function saveMeta() { try { localStorage.setItem('scrapsurvivors.meta', JSON.stringify(META)); } catch (e) {} }
+/* Saving META is a synchronous disk write of the whole save, and it used to happen on every counted kill (weapon-unlock
+   progress, elite kills, catalog discoveries): a hitch per kill in a big fight. Now a save just marks it dirty and it is
+   written at most once every 1.5 s, and straight away whenever the game is paused, hidden, closed or restarted. */
+let _metaDirty = false, _metaTimer = 0;
+function flushMeta() {
+  if (_metaTimer) { clearTimeout(_metaTimer); _metaTimer = 0; }
+  if (!_metaDirty) return; _metaDirty = false;
+  try { localStorage.setItem('scrapsurvivors.meta', JSON.stringify(META)); } catch (e) {}
+}
+function saveMeta() { _metaDirty = true; if (!_metaTimer) _metaTimer = setTimeout(flushMeta, 1500); }
+addEventListener('pagehide', flushMeta); addEventListener('beforeunload', flushMeta);
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushMeta(); });
 function saveSettings() { try { localStorage.setItem('scrapsurvivors.settings', JSON.stringify(SETTINGS)); } catch (e) {} }
 
 /* Player customisation (title screen > Customize): robot paint colour and a 20x20 pixel patch. */

@@ -43,7 +43,9 @@ function drawMinimap(dt) {
   if (S.terminal) dot(S.terminal.x, S.terminal.z, 5, '#7dff9a');
   g.restore();
   // you: a small arrow, always pointing up
-  g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--orange') || '#ff7a1a';
+  // (asking the page for the theme colour forces a full style pass: look it up once a second, not 15 times)
+  if (!MM.col || (MM.colT = (MM.colT || 0) + 1) > 15) { MM.colT = 0; MM.col = getComputedStyle(document.documentElement).getPropertyValue('--orange') || '#ff7a1a'; }
+  g.fillStyle = MM.col;
   g.beginPath(); g.moveTo(cx, cy - 6); g.lineTo(cx + 4.5, cy + 4.5); g.lineTo(cx, cy + 2); g.lineTo(cx - 4.5, cy + 4.5); g.closePath(); g.fill();
   g.fillStyle = '#9fb0ba'; g.font = '9px monospace'; g.fillText('N', ...to(P.x + (-0) , P.z - MM.range * 0.93).map((v, i) => clamp(v - (i ? -3 : 3), 4, W - 10)));
   const k = $('#mmKey'); if (k && !k.dataset.set) { k.dataset.set = 1; k.innerHTML = '<i style="background:#e2465c"></i>foe <i style="background:#e8c35a"></i>store <i style="background:#58cfd6"></i>exit'; }

@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.43.22 · BUILD NOV 8';
+const VERSION = '0.44.0 · BUILD NOV 11';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -399,7 +399,7 @@ async function checkUpdate() {
   // raw binary on Linux, so the restart itself is what triggers the update).
   else if (r.state === 'available') el.innerHTML = line('new', `UPDATE ${v} AVAILABLE`) + '<button class="updBtn nav" id="updRestart">RESTART TO UPDATE</button>';
   else el.innerHTML = line('err', r.reason === 'noaccess' ? 'CAN\'T CHECK FOR UPDATES (NO ACCESS)' : 'COULDN\'T CHECK FOR UPDATES');
-  const b = $('#updRestart'); if (b) b.addEventListener('click', () => window.desktop.restart());
+  const b = $('#updRestart'); if (b) b.addEventListener('click', () => { flushMeta(); window.desktop.restart(); });
   // the Windows build downloads in the background: look again until it's ready (a minute at most)
   if (r.state === 'downloading' && UPD.polls++ < 12) setTimeout(checkUpdate, 5000);
 }
@@ -463,7 +463,7 @@ $('#tOptions').addEventListener('click', () => {
     $('#pause').classList.add('fromTitle'); $('#pause').hidden = false; showOptionsRaw(true);
   });
 });
-$('#tQuit').addEventListener('click', () => { if (window.desktop) window.desktop.quit(); else window.close(); });
+$('#tQuit').addEventListener('click', () => { flushMeta(); if (window.desktop) window.desktop.quit(); else window.close(); });
 
 /* ---------- Customize: paint colour + 20x20 patch, previewed live on the title robot ---------- */
 const PAINTS = ['#4b5661', '#6b7680', '#2e3640', '#8a3a2e', '#c0562a', '#d89a2a', '#5f7a3a', '#2f6a5a', '#2f5a8a', '#4a3f7a', '#7a3a6a', '#d8d4c8'];

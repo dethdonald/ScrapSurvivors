@@ -834,9 +834,9 @@ function updateAim() {
   const tt = rayTerrain(o, d, minT, 160); if (tt > 0) best = tt;
   for (const e of enemies) {
     if (e.dead) continue;
-    const c = aimPtT(e), r = e.r + 0.35 + (e.boss ? 1.4 : 0);
-    const ox = c.x - o.x, oy = c.y - o.y, oz = c.z - o.z, tc = ox * d.x + oy * d.y + oz * d.z;
+    const ep = e.pos, ox = ep.x - o.x, oz = ep.z - o.z, oy = ep.y + (e.d.fly ? 0 : e.r * 0.9 + (e.boss ? 2 : 0)) - o.y, tc = ox * d.x + oy * d.y + oz * d.z;
     if (tc < minT || tc > best) continue;
+    const r = e.r + 0.35 + (e.boss ? 1.4 : 0);
     if (ox * ox + oy * oy + oz * oz - tc * tc <= r * r) { best = tc; hitE = e; }
   }
   for (const t of targets) {

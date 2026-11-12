@@ -230,7 +230,12 @@ function musicTick(dt) {
   let ti = 0.05, td = 0;
   if (inRun && player && player.pos) {
     let near = 0, close = 0, eliteNear = false;
-    for (const e of enemies) { if (e.dead) continue; const d2 = (e.pos.x - player.pos.x) ** 2 + (e.pos.z - player.pos.z) ** 2; if (d2 < 35 * 35) near++; if (d2 < 12 * 12) close++; if (e.elite && d2 < 40 * 40) eliteNear = true; }
+    // the crowd count only needs refreshing a few times a second
+    if ((MUSIC.scanT = (MUSIC.scanT || 0) - dt) <= 0) {
+      MUSIC.scanT = 0.25; near = 0; close = 0; eliteNear = false;
+      for (const e of enemies) { if (e.dead) continue; const d2 = (e.pos.x - player.pos.x) ** 2 + (e.pos.z - player.pos.z) ** 2; if (d2 < 35 * 35) near++; if (d2 < 12 * 12) close++; if (e.elite && d2 < 40 * 40) eliteNear = true; }
+      MUSIC.scan = [near, close, eliteNear];
+    } else if (MUSIC.scan) { near = MUSIC.scan[0]; close = MUSIC.scan[1]; eliteNear = MUSIC.scan[2]; }
     ti = clamp(0.12 + near / 70 + close / 25, 0, 1);
     const bossNear = (S.boss && !S.boss.dead) || (S.mini && !S.mini.dead);
     if (bossNear) ti = Math.max(ti, 0.82);

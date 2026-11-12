@@ -37,7 +37,18 @@ function createWindow() {
   Menu.setApplicationMenu(null);
   // the page picks its Steam Deck layout from ?deck=1 (it also spots a 1280x800 screen on its own)
   const deck = process.env.SteamDeck === '1' || process.argv.includes('--deck');
-  win.loadFile(path.join(__dirname, 'index.html'), deck ? { query: { deck: '1' } } : {});
+  // --stress: run the horde stress test unattended, save the result next to the game, and quit
+  const stress = process.argv.includes('--stress');
+  const query = {}; if (deck) query.deck = '1'; if (stress) query.stress = '1';
+  win.loadFile(path.join(__dirname, 'index.html'), Object.keys(query).length ? { query } : {});
+  if (stress) {
+    const out = path.join(app.isPackaged ? app.getPath('userData') : __dirname, 'stress-result.json');
+    win.webContents.on('console-message', (e, level, message) => {
+      const msg = e && e.message !== undefined ? e.message : message;
+      if (typeof msg === 'string' && msg.startsWith('STRESS_RESULT ')) { try { fs.writeFileSync(out, msg.slice(14)); } catch (err) {} setTimeout(() => app.quit(), 300); }
+    });
+    setTimeout(() => { try { if (!fs.existsSync(out)) fs.writeFileSync(out, JSON.stringify({ why: 'timed out', rows: [] })); } catch (err) {} app.quit(); }, 240000);
+  }
 
   win.webContents.on('console-message', (e, level, message, line, sourceId) => {
     const lv = e && e.level !== undefined ? e.level : level;

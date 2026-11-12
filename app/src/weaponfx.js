@@ -26,13 +26,15 @@ const WM = {
 };
 /* a cube of smoke that grows, drifts and shrinks away (opaque + shared so hundreds cost one draw call) */
 function puff(p, s, life = 1.1, drift) {
-  const m = new THREE.Mesh(geoBox, WM.smoke[(Math.random() * 3) | 0]); m.position.copy(p); m.rotation.set(rand(0, 3), rand(0, 3), 0);
-  const v = drift ? drift.clone() : new THREE.Vector3(rand(-0.6, 0.6), rand(0.8, 1.8), rand(-0.6, 0.6)); const w = rand(-2, 2);
-  addFx(m, life * rand(0.8, 1.2), (f, dt) => { const k = 1 - f.life / f.max; f.obj.position.addScaledVector(v, dt); v.multiplyScalar(1 - dt * 1.5); f.obj.rotation.y += w * dt; f.obj.scale.setScalar(s * Math.sin(Math.min(1, k * 1.6 + 0.15) * Math.PI) * (0.6 + k * 0.6)); });
+  pfxInit(); if (PFX.glow.n > 10500) return;
+  const hex = WM.smoke[(Math.random() * 3) | 0].color.getHex();
+  if (drift) PFX.glow.add(p.x, p.y, p.z, drift.x, drift.y, drift.z, life * rand(0.8, 1.2), s, hex, 0, 1.5, 2, rand(0, 3), rand(0, 3), 0, rand(-2, 2));
+  else PFX.glow.add(p.x, p.y, p.z, rand(-0.6, 0.6), rand(0.8, 1.8), rand(-0.6, 0.6), life * rand(0.8, 1.2), s, hex, 0, 1.5, 2, rand(0, 3), rand(0, 3), 0, rand(-2, 2));
 }
 function mote(p, mat, v, life, s = 0.08, grav = 0) {
-  const m = new THREE.Mesh(geoBox, mat); m.position.copy(p); m.scale.setScalar(s);
-  addFx(m, life, (f, dt) => { v.y -= grav * dt; f.obj.position.addScaledVector(v, dt); f.obj.scale.setScalar(s * Math.max(0.1, f.life / f.max)); });
+  pfxInit();
+  const add = mat.blending === THREE.AdditiveBlending, pool = add ? PFX.add : PFX.glow;
+  pool.add(p.x, p.y, p.z, v.x, v.y, v.z, life, s, mat.color.getHex(), grav, 0, 3, 0, 0, 0, 0, add ? (mat.opacity ?? 1) : 1);
 }
 /* a second pooled light for heavy impacts (explosions, sniper hits) */
 const IMPACT_LIGHT = new THREE.PointLight(0xffb060, 0, 16, 2); scene.add(IMPACT_LIGHT);

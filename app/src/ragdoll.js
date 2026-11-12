@@ -71,10 +71,9 @@ function explodeFrame() {
       const q = pp.com.clone().applyQuaternion(pp.q).add(pp.pos); blast(q, 1.6 - i * 0.3, ORANGE); burst(q, 0xffd27a, 4); sfx('pop2', 0.8); cam.shake = Math.max(cam.shake, 0.3); } }); });
 }
 function smokePuff(p, s) {
-  const m = new THREE.Mesh(geoBox, new THREE.MeshBasicMaterial({ color: 0x2b2f33, transparent: true, opacity: 0.7 }));
-  m.position.copy(p); m.scale.setScalar(s * 0.4); m.rotation.set(rand(0, 3), rand(0, 3), 0);
-  const v = new THREE.Vector3(rand(-1, 1), rand(1.5, 3), rand(-1, 1));
-  addFx(m, rand(0.9, 1.6), (f, dt) => { const k = 1 - f.life / f.max; f.obj.position.addScaledVector(v, dt); f.obj.scale.setScalar(s * (0.4 + 0.9 * k)); f.obj.material.opacity = 0.7 * (1 - k); });
+  // pooled (see ParticlePool in combat.js): a wreck trails one of these every 50 ms, and each used to be its own see-through draw call
+  pfxInit(); if (PFX.glow.n > 10500) return;
+  PFX.glow.add(p.x, p.y, p.z, rand(-1, 1), rand(1.5, 3), rand(-1, 1), rand(0.9, 1.6), s * 1.35, 0x2b2f33, 0, 0, 2, rand(0, 3), rand(0, 3), 0, rand(-1, 1));
 }
 const _rq = new THREE.Quaternion(), _rv = new THREE.Vector3(), _ra = new THREE.Vector3();
 function stepRagdoll(dt) {

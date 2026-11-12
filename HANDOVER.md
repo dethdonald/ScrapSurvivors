@@ -712,3 +712,14 @@ to the highlighted part still follows the part as the robot turns.
 - Online co-op (host-authoritative) or local co-op first.
 - A 30-second trailer (rendered offline, or an in-game trailer mode recorded on the owner's PC).
 - Circuits store (the button exists and is under construction).
+
+## 0.44.0 — performance pass (Nov 11)
+Goal: 2–3× the enemies. Measured on the headless bench (`/home/claude/bench`, software GL, slow 2-core VM — compare runs relative to each other only).
+- **Enemy object shape** (`spawnEnemy`): every per-enemy field is declared up front in one fixed order. Before, ~100 different hidden layouts made every `e.x` in the hot loops a slow lookup and churned hundreds of MB of garbage. **Add any new per-enemy field there.** `ETYPES` records are normalised to one shape too (end of the table in data.js).
+- **Enemy grid** `EG` (`egBuild/egBox/egNear`) for shots, explosions, `nearestEnemy`. **Collision grid** `CG` 1.4 m cells, each pair found from its bigger member; one pass above 300 enemies; far enemies collide every 2nd (or 3rd, past 45 m in a 900+ crowd) step.
+- **Sim LOD**: full rate inside 14–30 m (shrinks with crowd size), then every 2nd / 3rd / 4th step, with per-enemy phase and drawn-position extrapolation (`lodAcc`). `poseEnemy` skips facing/squash for enemies off screen last frame (`e.seen`).
+- **Drawing**: frustum culling, box LOD for heavy hulls past 20 m, shadow-only box proxy, shadow reach and eye/trim distance shrink with crowd size. Player model instanced by `rigbatch.js`.
+- **Particles**: `ParticlePool` (`PFX.glow/lit/add`) for sparks, bursts, dust, smoke, motes.
+- **DOM/HUD**: diffed HUD writes, kill-streak UI once per frame, cached `$('#id')`, minimap colour cached, META saves debounced (`flushMeta` on quit/pause/game over).
+- **Caps raised**: run spawn cap `ENEMY_CAP` 640 → 1300; shot caps 160/280 → 320/560; dev counts 500 and 1000.
+- **Stress test**: dev panel → “Run the horde stress test” (or `electron . --stress`, writes `stress-result.json`). Mixed horde 200 → 4000, reports enemies held at 60 and 30 fps on that machine.

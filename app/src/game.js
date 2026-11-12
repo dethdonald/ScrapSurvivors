@@ -41,7 +41,7 @@ function newRun() {
 function clearWorld() {
   enemies.forEach(e => { scene.remove(e.mesh); if (e.bar) scene.remove(e.bar); });
   targets.forEach(t => scene.remove(t.mesh)); targets = []; shots.forEach(s => scene.remove(s.mesh)); gems.forEach(g => scene.remove(g.mesh)); fx.forEach(f => scene.remove(f.obj));
-  CULL.q = []; enemies = []; shots = []; gems = []; fx = []; WRECKS = 0; clearSkyRings(); wdClear(); wfxClear(); S.streak = 0; S.streakT = 0; $('#killMul').hidden = true; S.frenzyT = 0; $('#fzBar').hidden = true;
+  CULL.q = []; enemies = []; shots = []; gems = []; fx = []; egReset(); pfxClear(); WRECKS = 0; clearSkyRings(); wdClear(); wfxClear(); S.streak = 0; S.streakT = 0; $('#killMul').hidden = true; S.frenzyT = 0; $('#fzBar').hidden = true;
   if (S.gate) { scene.remove(S.gate.group); S.gate = null; }
   clearSpectators(); clearShop(); clearTerminal(); clearHazards(); TERM.nextAt = 0; TERM.checkT = 0; clearCases(); clearLegTrail(); clearStains();
   if (S.nuke) { scene.remove(S.nuke.obj); S.nuke = null; }
@@ -108,6 +108,7 @@ function land() {
   banner('TOUCHDOWN', S.t < 1 ? 'Boss at 8:30' : '', 'var(--orange)', 2.2);
 }
 function toHangar() {
+  flushMeta();
   ['#over', '#pause', '#levelup', '#perk'].forEach(s => { $(s).hidden = true; });
   $('#hud').hidden = true;
   clearWorld();
@@ -260,10 +261,12 @@ function frame(now) {
       updateHUD(dt);
     }
     if (SETTINGS.dev) { renderer.info.autoReset = false; renderer.info.reset(); }
+    rigBatchSync(RAG.active || DR.active ? null : player.model);      // (the ragdolls move the pieces themselves: those draw as plain meshes)
     updateEnemyBatches(); batchFx();
     const rt0 = performance.now();
     renderFrame(scene, camera);
     if (SETTINGS.dev) perfTick(dt, performance.now() - perfT0, perfSim, performance.now() - rt0);
+    if (STRESS.on) stressTick(now);
   }
   requestAnimationFrame(frame);
 }

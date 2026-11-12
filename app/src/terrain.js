@@ -125,7 +125,10 @@ function buildTerrainMesh() {
   tiles.instanceMatrix.needsUpdate = true; if (tiles.instanceColor) tiles.instanceColor.needsUpdate = true;
   if (typeof wdApplyTerrain === 'function') wdApplyTerrain(im.material, tiles.material);     // weathering (see worlddetail.js)
   scene.add(im); terrainMesh = im;
-  scene.add(tiles); tileMesh = tiles;
+  // the cap tiles sit flush on top of their columns, and the columns already cast the very same shadow:
+  // keeping the 7,056 bevelled caps out of the shadow map saves ~200k triangles a frame for no visible change
+  tiles.userData.noShadow = true;
+  scene.add(tiles); tiles.castShadow = false; tileMesh = tiles;
   redPadMeshes.forEach(m => scene.remove(m)); redPadMeshes.clear();
   for (const k of redPads) {
     const g = new THREE.Group();

@@ -145,56 +145,115 @@ function enemyBatch(part) {
   if (part.role === 'body') mat = SM(0xffffff, 0, { roughness: 0.5, metalness: 0.3 });
   else { mat = part.mat.clone(); mat.color = new THREE.Color(0xffffff); }
   const fmat = mat.clone(); fmat.transparent = true; fmat.opacity = 0.22; fmat.depthWrite = false;
-  b = { part, mat, fmat, cap: 0, mesh: null, fade: null, ns: null, n: 0, nf: 0, nn: 0 };
+  const tris = part.geo.index ? part.geo.index.count / 3 : part.geo.attributes.position.count / 3;
+  b = { part, mat, fmat, cap: 0, mesh: null, fade: null, ns: null, lo: null, sh: null, n: 0, nf: 0, nn: 0, nl: 0, nsh: 0, heavy: part.role === 'body' && tris > HEAVY_TRIS };
   ENEMY_BATCH.set(part.bkey, b);
   growBatch(b, 128);
   return b;
 }
+/* The hull body (cube crawlers, drones, spitters, brutes) is 2,384 triangles, and anything near you was drawn twice
+   (once more into the shadow map): a 640-strong horde was over a million triangles a frame. Heavy bodies now get:
+     mesh  the full model, only within LOD_NEAR of the camera
+     lo    a plain box of the same size beyond that (the grooves are sub-pixel there)
+     sh    a box drawn only into the shadow map (never on screen), so no heavy body is ever rendered twice
+   Light bodies (balls, domes) keep the old trio: mesh (casts a shadow), ns (out of shadow range), fade (see-through). */
+const HEAVY_TRIS = 400, LOD_NEAR = 20;
+const _loGeo = new Map();
+function lowGeoFor(geo) {
+  let g = _loGeo.get(geo.uuid); if (g) return g;
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  const bb = geo.boundingBox, sx = bb.max.x - bb.min.x, sy = bb.max.y - bb.min.y, sz = bb.max.z - bb.min.z;
+  g = new THREE.BoxGeometry(sx * 0.94, sy * 0.94, sz * 0.94);       // a touch smaller: the real hull's corners are cut
+  g.translate((bb.max.x + bb.min.x) / 2, (bb.max.y + bb.min.y) / 2, (bb.max.z + bb.min.z) / 2);
+  _loGeo.set(geo.uuid, g); return g;
+}
+const _shadowOnlyMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
 function growBatch(b, cap) {
-  for (const k of ['mesh', 'fade', 'ns']) if (b[k]) { scene.remove(b[k]); b[k].dispose && b[k].dispose(); }
-  const mk = (m, shadow) => {
-    const im = new THREE.InstancedMesh(b.part.geo, m, cap);
+  const old = {};
+  for (const k of ['mesh', 'fade', 'ns', 'lo', 'sh']) if (b[k]) { old[k] = b[k]; scene.remove(b[k]); }
+  const mk = (geo, m, shadow, key) => {
+    const im = new THREE.InstancedMesh(geo, m, cap);
     im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     im.setColorAt(0, new THREE.Color()); im.instanceColor.setUsage(THREE.DynamicDrawUsage);
     im.frustumCulled = false; im.count = 0;
+    // growing mid-frame keeps what has already been written this frame
+    const o = old[key]; if (o) { im.instanceMatrix.array.set(o.instanceMatrix.array); im.instanceColor.array.set(o.instanceColor.array); o.dispose && o.dispose(); }
     scene.add(im);
     im.castShadow = shadow; im.receiveShadow = !m.isMeshBasicMaterial;
     return im;
   };
+  const geo = b.part.geo, body = b.part.role === 'body';
   b.cap = cap;
-  b.mesh = mk(b.mat, b.part.role === 'body');     // only bodies cast shadows: trim and eyes would double the shadow pass for nothing
-  b.fade = mk(b.fmat, false);
-  b.ns = b.part.role === 'body' ? mk(b.mat, false) : null;
+  if (b.heavy) {
+    b.mesh = mk(geo, b.mat, false, 'mesh');
+    b.lo = mk(lowGeoFor(geo), b.mat, false, 'lo');
+    b.sh = mk(lowGeoFor(geo), _shadowOnlyMat, true, 'sh'); b.sh.receiveShadow = false;
+    b.fade = mk(geo, b.fmat, false, 'fade'); b.ns = null;
+  } else {
+    b.mesh = mk(geo, b.mat, body, 'mesh');     // only bodies cast shadows: trim and eyes would double the shadow pass for nothing
+    b.fade = mk(geo, b.fmat, false, 'fade');
+    b.ns = body ? mk(geo, b.mat, false, 'ns') : null;
+  }
 }
 const SHADOW_REACH = 38;     // a bit past the sun's shadow box (34 m each way round the player)
 const _em4 = new THREE.Matrix4(), _ec = new THREE.Color(), _eWhite = new THREE.Color(1, 1, 1), _eIce = new THREE.Color(0.62, 0.86, 1);
+const _frustum = new THREE.Frustum(), _fpm = new THREE.Matrix4(), _fsph = new THREE.Sphere();
+const EB_KEYS = ['mesh', 'fade', 'ns', 'lo', 'sh'], EB_CNT = ['n', 'nf', 'nn', 'nl', 'nsh'];
+const ebPut = (b, key, cnt, m, c) => {
+  if (b[cnt] >= b.cap) growBatch(b, b.cap * 2);
+  const im = b[key], i = b[cnt]++;
+  im.instanceMatrix.array.set(m.elements, i * 16);
+  const ca = im.instanceColor.array, o = i * 3; ca[o] = c.r; ca[o + 1] = c.g; ca[o + 2] = c.b;
+};
 function updateEnemyBatches() {
-  for (const b of ENEMY_BATCH.values()) { b.n = 0; b.nf = 0; b.nn = 0; }
-  for (const e of enemies) {
+  for (const b of ENEMY_BATCH.values()) { b.n = 0; b.nf = 0; b.nn = 0; b.nl = 0; b.nsh = 0; }
+  camera.updateMatrixWorld();
+  _frustum.setFromProjectionMatrix(_fpm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  const cp = camera.position, pp = player.pos;
+  // in a huge crowd only the enemies fairly close to you cast shadows (further out they are a few dark pixels under a sea of bodies)
+  const trim2 = enemies.length > 900 ? 42 * 42 : enemies.length > 450 ? 58 * 58 : 75 * 75;     // eyes and trim are dropped sooner in a big crowd
+  const shReach = enemies.length > 1100 ? 20 : enemies.length > 700 ? 26 : SHADOW_REACH;
+  for (let q = 0; q < enemies.length; q++) {
+    const e = enemies[q];
     if (e.dead || !e.tpl) continue;
-    const px = e.mesh; px.updateMatrix();
+    const px = e.mesh, P = px.position;
+    const inShadow = Math.abs(P.x - pp.x) <= shReach && Math.abs(P.z - pp.z) <= shReach;
+    // off screen: nothing to draw (its shadow can still fall into view, so that stays while it's in shadow range)
+    _fsph.center.copy(P); _fsph.radius = e.r * 2.2 + 0.6;
+    const seen = e.boss || _frustum.intersectsSphere(_fsph);
+    e.seen = seen;
+    if (!seen && !inShadow) continue;
+    px.updateMatrix();
+    // between its own (staggered) thinking steps a distant enemy keeps gliding the way it was going
+    if (e.lodAcc > 0) { const te = px.matrix.elements; te[12] += e.vel.x * e.lodAcc; te[14] += e.vel.z * e.lodAcc; }
     const ud = px.userData, flash = ud.mat.emissive.r > 0.3, chill = !flash && ud.mat.emissive.b > 0.3;
-    // far away: just the body (eyes and trim are a few pixels at that range)
-    const far = px.position.distanceToSquared(camera.position) > 75 * 75 && !e.boss;
-    const noShadow = Math.abs(px.position.x - player.pos.x) > SHADOW_REACH || Math.abs(px.position.z - player.pos.z) > SHADOW_REACH;
-    for (const part of e.tpl) {
-      if (far && part.role === 'fixed') continue;
-      const b = enemyBatch(part);
-      const faded = !!e.faded, ns = !faded && noShadow && b.ns;      // outside the sun's shadow box: draw it without a shadow
-      if ((faded ? b.nf : ns ? b.nn : b.n) >= b.cap) growBatch(b, b.cap * 2);
-      const im = faded ? b.fade : ns ? b.ns : b.mesh, i = faded ? b.nf++ : ns ? b.nn++ : b.n++;
-      _em4.multiplyMatrices(px.matrix, part.local); im.setMatrixAt(i, _em4);
-      if (part.role === 'body') { _ec.copy(e.color); if (flash) _ec.lerp(_eWhite, 0.6); else if (chill) _ec.lerp(_eIce, 0.45); }
-      else if (part.role === 'light') _ec.copy(ud.light.material.color);
+    const cd2 = P.distanceToSquared(cp), far = cd2 > trim2 && !e.boss, faded = !!e.faded;
+    const tpl = e.tpl;
+    for (let t = 0; t < tpl.length; t++) {
+      const part = tpl[t], role = part.role;
+      if (role !== 'body' && (far || !seen)) continue;          // eyes and trim: a few pixels at range, and they cast no shadow
+      const b = part.batch || (part.batch = enemyBatch(part));
+      _em4.multiplyMatrices(px.matrix, part.local);
+      if (role === 'body') { _ec.copy(e.color); if (flash) _ec.lerp(_eWhite, 0.6); else if (chill) _ec.lerp(_eIce, 0.45); }
+      else if (role === 'light') _ec.copy(ud.light.material.color);
       else { _ec.copy(part.color); if (flash) _ec.lerp(_eWhite, 0.4); }
-      im.setColorAt(i, _ec);
+      if (b.heavy) {
+        if (seen) { if (faded) ebPut(b, 'fade', 'nf', _em4, _ec); else if (cd2 > LOD_NEAR * LOD_NEAR && !e.boss && !e.mini) ebPut(b, 'lo', 'nl', _em4, _ec); else ebPut(b, 'mesh', 'n', _em4, _ec); }
+        if (inShadow && !faded) ebPut(b, 'sh', 'nsh', _em4, _ec);
+      } else if (faded) { if (seen) ebPut(b, 'fade', 'nf', _em4, _ec); }
+      else if (b.ns && !inShadow) ebPut(b, 'ns', 'nn', _em4, _ec);
+      else if (seen || role === 'body') ebPut(b, 'mesh', 'n', _em4, _ec);
     }
   }
   for (const b of ENEMY_BATCH.values()) {
-    for (const [im, n] of [[b.mesh, b.n], [b.fade, b.nf], [b.ns, b.nn]]) {
-      if (!im) continue;
+    for (let k = 0; k < 5; k++) {
+      const im = b[EB_KEYS[k]]; if (!im) continue;
+      const n = b[EB_CNT[k]];
       im.count = n; im.visible = n > 0;
-      if (n) { im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; }
+      if (n) {
+        im.instanceMatrix.updateRange.offset = 0; im.instanceMatrix.updateRange.count = n * 16; im.instanceMatrix.needsUpdate = true;
+        im.instanceColor.updateRange.offset = 0; im.instanceColor.updateRange.count = n * 3; im.instanceColor.needsUpdate = true;
+      }
     }
   }
 }
@@ -264,6 +323,18 @@ function spawnEnemy(type, p, extra) {
     hitCd: 0, flash: 0, cd: rand(1, 2.5), sawCd: 0, bob: Math.random() * 6, state: {},
     q: new THREE.Quaternion(), spin: new THREE.Vector3(), stun: 0, roll: shape === 'sphere',
     direct: Math.random() < 0.85,       // most come straight at you (climbing anything in the way); the rest follow the paths
+    /* Every field an enemy can ever carry is declared here, in one fixed order. It looks like bookkeeping but it is the
+       single biggest speed-up in the enemy code: fields that were added later, on whichever enemy happened to climb, burn
+       or get shoved first, gave the engine ~100 different object layouts for 'an enemy', so every e.something in the hot
+       loops was a slow dictionary-style lookup that also allocated memory (hundreds of MB a minute at 1,300 enemies,
+       and the garbage collector pauses that go with it). With one layout those reads are a single memory load.
+       If you add a new per-enemy field anywhere, add it here too. */
+    maxHp: 0, elite: false, mini: false, boss: false, dead: false, color: null, tpl: null, mesh: null, bar: null, barName: null, sBase: 1,
+    lodPh: (Math.random() * 12) | 0, lodAcc: 0, ldt: 0, shoved: false, cgI: 0, cgJ: 0, seen: true, faded: false,
+    chillT: 0, chillMul: 0, freezeT: 0, burnT: 0, burnDps: 0, pois: null, zapT: 0, pullT: 0, vacT: 0, flT: 0, flx: 0, flz: 0,
+    wantX: 0, wantZ: 0, landed: false, bumped: false, sq: 0, sqV: 0, climbT: 0, wnx: undefined, wnz: 0, bouncy: false,
+    stand: false, steer: null, steerSpd: 0, goal: null, thrown: null, held: null, attach: null, leap: null, cele: null, fuse: undefined,
+    yawLast: 0, noSpawn: false, hidden: false, sacT: 0, toxBlast: false, shockCd: 0, sawT: null, patchCd: 0, neuroCd: 0, meleeT: null, haloCd: 0, ate: 0,
   };
   if (extra && extra.elite) {
     e.elite = true; e.hp *= ELITE.hpMul; e.r *= ELITE.sizeMul; e.mass *= ELITE.massMul; e.dmg *= ELITE.dmgMul; e.speed *= 0.9;
@@ -292,8 +363,10 @@ function spawnPack(p, n, extra) {
     spawnEnemy('crawler', { x, z, y: H[k] + i * 0.3 }, Object.assign({ shape, elite: i === eliteAt }, extra || {}));
   }
 }
+/* the most enemies alive at once in a run. It was 640; the horde now costs well under half of what it did per enemy. */
+const ENEMY_CAP = 1300;
 function spawnTick(dt) {
-  if (S.test || enemies.length >= 640) return;      // the test range only spawns what you ask for
+  if (S.test || enemies.length >= ENEMY_CAP) return;      // the test range only spawns what you ask for
   // twice the swarm of the original tuning (each enemy just as tough)
   let rate = 2 * 2.2 * (0.75 + oldT() / 60 * 0.33 + (S.stage - 1) * 0.5) * (1 + 0.35 * (S.stage - 1)) * densityMul();
   const ot = overtimeMul();
@@ -302,7 +375,7 @@ function spawnTick(dt) {
   S.spawnAcc += rate * dt;
   const oT = oldT();
   while (S.spawnAcc >= 1) {
-    if (enemies.length >= 640) { S.spawnAcc = 0; break; }      // at the cap: don't bank spawns for a burst later
+    if (enemies.length >= ENEMY_CAP) { S.spawnAcc = 0; break; }      // at the cap: don't bank spawns for a burst later
     const r = Math.random();
     if (oT > 40 && r < 0.035) { S.spawnAcc -= 1; spawnEnemy('bomber', spawnPoint(28, 55)); }
     else if (oT > 75 && r < 0.085) { S.spawnAcc -= 1; spawnEnemy('splitter', spawnPoint(28, 55)); }
@@ -376,7 +449,7 @@ function droneCrash(e) {
   WRECKS++;
   const g = makeEnemyMesh(e.type, e.color ? e.color.clone().multiplyScalar(0.55) : new THREE.Color(0x553355), e.shape);
   g.position.copy(e.mesh.position); g.quaternion.copy(e.mesh.quaternion); g.scale.copy(e.mesh.scale);
-  g.traverse(o => { if (o.isMesh) o.castShadow = false; });
+  g.traverse(o => { o.userData.noShadow = true; if (o.isMesh) o.castShadow = false; });      // (noShadow: adding it to the scene would switch shadows back on)
   const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(g.quaternion);
   const v = e.vel.clone().multiplyScalar(0.7).addScaledVector(fwd, rand(4, 8)); v.y += rand(1, 4);
   const w = new THREE.Vector3(rand(-5, 5), rand(-9, 9), rand(-5, 5));
@@ -413,9 +486,10 @@ function knock(e, dir, strength, lift = 0) {
   if (k + lift / e.mass > 3) { e.stun = Math.min(1.2, 0.25 + k * 0.05); e.onGround = false; }
   e.spin.add(new THREE.Vector3(dir.z, rand(-1, 1), -dir.x).multiplyScalar(k * 1.2));
 }
+const _steer = [0, 0];
 function enemySteer(e, dx, dz, hd) {
   const k = idxOf(e.pos.x, e.pos.z);
-  if (hd < 5 || k < 0 || flow[k] <= 1 || flow[k] >= 1e8) return [dx / (hd || 1), dz / (hd || 1)];
+  if (hd < 5 || k < 0 || flow[k] <= 1 || flow[k] >= 1e8) { _steer[0] = dx / (hd || 1); _steer[1] = dz / (hd || 1); return _steer; }
   let best = k, bv = flow[k];
   const i = k % GRID, j = (k / GRID) | 0;
   for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
@@ -426,23 +500,72 @@ function enemySteer(e, dx, dz, hd) {
     if (flow[n] < bv) { bv = flow[n]; best = n; }
   }
   let mx = cellX(best) - e.pos.x, mz = cellZ(best) - e.pos.z; const l = Math.hypot(mx, mz) || 1;
-  return [mx / l, mz / l];
+  _steer[0] = mx / l; _steer[1] = mz / l; return _steer;
 }
+/* ---------- the enemy grid: who is near a point, without walking the whole horde ----------
+   Rebuilt once a step (end of updateEnemies) into 4 m cells. Shots, explosions and target searches ask it for the
+   handful of enemies around them: with 640 enemies and 150 bullets that was ~100,000 distance tests a step, and it grew
+   with shots x enemies. egBox() fills (and returns) `out` with every living enemy in the cells touching the box, grown
+   by the biggest enemy radius so nothing straddling a cell edge is missed. Anything spawned since the last rebuild is
+   picked up next step. Callers that can run inside each other (explosions) pass their own array. */
+const EG = { cell: 4, n: 0, cells: null, used: [], maxR: 1, ok: false };
+function egReset() { if (EG.cells) for (const k of EG.used) EG.cells[k].length = 0; EG.used.length = 0; EG.ok = false; }
+function egBuild() {
+  const n = Math.ceil(HALF * 2 / EG.cell) + 2, inv = 1 / EG.cell;
+  if (EG.n !== n) { EG.n = n; EG.cells = Array.from({ length: n * n }, () => []); EG.used.length = 0; }
+  const cells = EG.cells, used = EG.used;
+  for (let u = 0; u < used.length; u++) cells[used[u]].length = 0;
+  used.length = 0;
+  let mr = 0.7;
+  for (let q = 0; q < enemies.length; q++) {
+    const e = enemies[q]; if (e.dead) continue;
+    const x = e.pos.x, z = e.pos.z; if (!(x === x && z === z)) continue;
+    let i = ((x + HALF) * inv | 0) + 1, j = ((z + HALF) * inv | 0) + 1;
+    i = i < 0 ? 0 : i >= n ? n - 1 : i; j = j < 0 ? 0 : j >= n ? n - 1 : j;
+    const k = j * n + i, c = cells[k]; if (!c.length) used.push(k); c.push(e);
+    const r = e.r + (e.boss ? 1.6 : 0); if (r > mr) mr = r;
+  }
+  EG.maxR = mr; EG.ok = true;
+}
+const _egOut = [];
+function egBox(x0, x1, z0, z1, out = _egOut) {
+  out.length = 0;
+  if (!EG.ok) { for (let q = 0; q < enemies.length; q++) if (!enemies[q].dead) out.push(enemies[q]); return out; }
+  const n = EG.n, inv = 1 / EG.cell, pad = EG.maxR + 1, cells = EG.cells;
+  let i0 = ((x0 - pad + HALF) * inv | 0), i1 = ((x1 + pad + HALF) * inv | 0) + 2, j0 = ((z0 - pad + HALF) * inv | 0), j1 = ((z1 + pad + HALF) * inv | 0) + 2;
+  if (i0 < 0) i0 = 0; if (j0 < 0) j0 = 0; if (i1 > n - 1) i1 = n - 1; if (j1 > n - 1) j1 = n - 1;
+  for (let j = j0; j <= j1; j++) for (let i = i0, k = j * n + i0; i <= i1; i++, k++) {
+    const c = cells[k];
+    for (let q = 0; q < c.length; q++) if (!c[q].dead) out.push(c[q]);
+  }
+  return out;
+}
+const egNear = (x, z, r, out) => egBox(x - r, x + r, z - r, z + r, out);
 /* far-off enemies (past LOD_FAR, not bosses) think every other step with twice the time step: nobody can tell at that range */
-let LOD_FAR = 50;
+let LOD_FAR = 50, EN_STEP = 0;
 function updateEnemies(dtAll) {
   cullTick();
   const pp = player.pos, hold = S.test && DEV.hold ? 0 : 1;     // test range: enemies can be told to stand still
+  // the bigger the crowd, the closer the full-rate ring is drawn in (the fight right around you never thins out)
+  const nAll = enemies.length, midR = nAll > 900 ? 14 : nAll > 450 ? 20 : 30, midR2 = midR * midR, stepN = (EN_STEP = (EN_STEP + 1) % 6000);
+  // past 900 a third ring opens at 30 m (every 3rd step) and the far field drops to every 4th
+  const outR2 = nAll > 900 ? 30 * 30 : LOD_FAR * LOD_FAR, farN = nAll > 900 ? 4 : 3;
   for (const e of enemies) {
     let dt = dtAll;
     if (!isFinite(e.pos.x + e.pos.y + e.pos.z + e.vel.x + e.vel.y + e.vel.z)) { const sp = spawnPoint(20, 40); e.pos.set(sp.x, sp.y, sp.z); e.vel.set(0, 0, 0); e.spin.set(0, 0, 0); }
     if (!e.boss && !e.mini && !e.dead) {
-      const fx = e.pos.x - pp.x, fz = e.pos.z - pp.z;
-      if (fx * fx + fz * fz > LOD_FAR * LOD_FAR) {
-        e.lodOdd = !e.lodOdd;
-        if (e.lodOdd) { e.lodDt = dtAll; e.ldt = 0; continue; }     // skip this step, catch up next one
-        dt = dtAll + (e.lodDt || 0); e.lodDt = 0;
-      } else if (e.lodDt) { dt = dtAll + e.lodDt; e.lodDt = 0; }
+      // thinking rate by range: every step up close, every 2nd in the middle distance, every 3rd far off. The steps it
+      // sits out are added to its next one (so it covers the same ground), each enemy has its own phase so the work is
+      // spread evenly, and updateEnemyBatches() glides the drawn position along in between. Anything knocked about,
+      // thrown or stunned keeps full rate so the physics stays crisp.
+      const fx = e.pos.x - pp.x, fz = e.pos.z - pp.z, d2 = fx * fx + fz * fz;
+      const every = (e.stun > 0 || e.thrown || e.held || e.attach || e.leap) ? 1 : d2 > LOD_FAR * LOD_FAR ? farN : d2 > outR2 ? 3 : d2 > midR2 ? 2 : 1;
+      if (every > 1) {
+        if (e.lodPh === undefined) e.lodPh = (Math.random() * 12) | 0;
+        e.lodAcc = (e.lodAcc || 0) + dtAll;
+        if ((stepN + e.lodPh) % every !== 0) { e.ldt = 0; continue; }
+        dt = e.lodAcc; e.lodAcc = 0;
+      } else if (e.lodAcc) { dt = dtAll + e.lodAcc; e.lodAcc = 0; }
     }
     e.ldt = dt;
     const d = e.d;
@@ -474,7 +597,9 @@ function updateEnemies(dtAll) {
     } else {
       // close and below you: head straight at the wall and climb rather than walking the long way round
       const straight = !e.boss && !d.npc && (e.direct || (dy > 1.5 && hd < 16));
-      const [mx, mz] = d.npc ? vacSteer(e, dt) : e.steer ? e.steer : straight ? [dx / (hd || 1), dz / (hd || 1)] : enemySteer(e, dx, dz, hd);
+      let mx, mz;
+      if (straight && !d.npc && !e.steer) { mx = dx / (hd || 1); mz = dz / (hd || 1); }
+      else { const st = d.npc ? vacSteer(e, dt) : e.steer ? e.steer : enemySteer(e, dx, dz, hd); mx = st[0]; mz = st[1]; }
       let sp = (e.cele ? 0 : e.steer ? (e.steerSpd || e.speed) : e.speed) * hold * (e.freezeT > 0 ? 0.02 : e.chillT > 0 ? e.chillMul || 0.5 : 1);
       if (e.stand) sp = 0;
       if (hold && d.ranged && hd < 16 && Math.abs(dy) < 8) { sp = 0; e.cd -= dt; if (e.cd <= 0) { e.cd = 2.6; fireHostile(e, pp, 15); } }
@@ -548,24 +673,24 @@ function updateEnemies(dtAll) {
   }
   collideEnemies(dtAll);
   for (const e of enemies) if (e.ldt > 0) poseEnemy(e, e.ldt, player.pos);
+  egBuild();
 }
 /* Ball-ball contacts. Enemies go into a 2.5 m grid each pass and only test the 3x3 cells around them,
    so a crowd of 600 costs about what 100 did with the old sorted sweep. Big ones (bosses, brutes, elites)
    don't fit a cell, so they're tested against everyone directly; there are only ever a few. Two passes for stable stacks. */
-const CG = { cell: 2.5, n: 0, head: null, next: new Int32Array(1024), list: [], big: [] };
+const CG = { cell: 1.4, n: 0, head: null, next: new Int32Array(1024), list: [], big: [] };
 function cgBuild(list) {
   const n = Math.ceil(HALF * 2 / CG.cell) + 2;
   if (CG.n !== n) { CG.n = n; CG.head = new Int32Array(n * n); }
   CG.head.fill(-1);
   if (CG.next.length < list.length) CG.next = new Int32Array(list.length * 2);
+  const inv = 1 / CG.cell, head = CG.head, next = CG.next;
   for (let i = 0; i < list.length; i++) {
     const e = list[i]; if (e.r > 1.2 || !isFinite(e.pos.x + e.pos.z)) continue;
-    const k = cgKey(e.pos.x, e.pos.z); CG.next[i] = CG.head[k]; CG.head[k] = i;
+    let ci = ((e.pos.x + HALF) * inv | 0) + 1, cj = ((e.pos.z + HALF) * inv | 0) + 1;
+    ci = ci < 0 ? 0 : ci >= n ? n - 1 : ci; cj = cj < 0 ? 0 : cj >= n ? n - 1 : cj;
+    const k = cj * n + ci; e.cgI = ci; e.cgJ = cj; next[i] = head[k]; head[k] = i;
   }
-}
-function cgKey(x, z) {
-  const n = CG.n, i = clamp(Math.floor((x + HALF) / CG.cell) + 1, 0, n - 1), j = clamp(Math.floor((z + HALF) / CG.cell) + 1, 0, n - 1);
-  return j * n + i;
 }
 const _ca = new THREE.Vector3(), _cb = new THREE.Vector3(), _cgN = new THREE.Vector3(), _ppV = new THREE.Vector3(), _ppN = new THREE.Vector3(), _ppC = new THREE.Vector3();
 function collidePair(a, b, pass) {
@@ -597,21 +722,28 @@ function collidePair(a, b, pass) {
 function collideEnemies(dt) {
   const list = CG.list; list.length = 0; const big = CG.big; big.length = 0;
   for (const e of enemies) if (!e.dead) { e.shoved = false; list.push(e); if (e.r > 1.2) big.push(e); }
-  /* A crowd of hundreds is where this gets expensive (it was ~40% of a step with 600 enemies), so: a thick crowd gets one
-     relaxation pass instead of two, and enemies far from you only collide every other step (nobody can tell at that range). */
+  /* A crowd of hundreds is where this gets expensive, so: a thick crowd gets one relaxation pass instead of two, and
+     enemies far from you only collide every other step (nobody can tell at that range).
+     The grid's cells are 1.4 m (it was 2.5): a pair can only touch if the two are within (ra + rb) of each other, and
+     each pair is looked for from its BIGGER member, which searches just far enough to reach a neighbour its own size.
+     An ordinary crawler (r 0.62) therefore tests a 4.2 m window instead of a 7.5 m one: about a third of the
+     candidate pairs in a packed horde, where this cost used to grow fastest. */
   const passes = list.length > 300 ? 1 : 2, skipFar = list.length > 150 && ((CG.tick = (CG.tick | 0) ^ 1) === 1), pp0 = player.pos;
+  const far2 = (list.length > 900 ? 26 : LOD_FAR) ** 2, thin = list.length > 150, out2 = list.length > 900 ? 45 * 45 : 1e9;
+  CG.tick3 = ((CG.tick3 | 0) + 1) % 3;       // way out (45 m+) in a huge crowd: a third of them per step
   for (let pass = 0; pass < passes; pass++) {
     cgBuild(list);
-    const n = CG.n, head = CG.head, next = CG.next;
+    const n = CG.n, head = CG.head, next = CG.next, cell = CG.cell;
     for (let i = 0; i < list.length; i++) {
-      const a = list[i]; if (a.r > 1.2) continue;
-      if (skipFar && (a.pos.x - pp0.x) ** 2 + (a.pos.z - pp0.z) ** 2 > LOD_FAR * LOD_FAR) continue;
-      const ci = clamp(Math.floor((a.pos.x + HALF) / CG.cell) + 1, 0, n - 1), cj = clamp(Math.floor((a.pos.z + HALF) / CG.cell) + 1, 0, n - 1);
-      for (let dj = -1; dj <= 1; dj++) {
-        const jj = cj + dj; if (jj < 0 || jj >= n) continue;
-        for (let di = -1; di <= 1; di++) {
-          const ii = ci + di; if (ii < 0 || ii >= n) continue;
-          for (let k = head[jj * n + ii]; k !== -1; k = next[k]) if (k > i) collidePair(a, list[k], pass);
+      const a = list[i], ar = a.r; if (ar > 1.2) continue;
+      if (thin) { const d2 = (a.pos.x - pp0.x) ** 2 + (a.pos.z - pp0.z) ** 2; if (d2 > far2 && (skipFar || (d2 > out2 && ((CG.tick3 + i) % 3)))) continue; }
+      const ci = a.cgI, cj = a.cgJ, reach = Math.ceil(ar * 2 / cell);
+      const j0 = cj - reach < 0 ? 0 : cj - reach, j1 = cj + reach >= n ? n - 1 : cj + reach, i0 = ci - reach < 0 ? 0 : ci - reach, i1 = ci + reach >= n ? n - 1 : ci + reach;
+      for (let jj = j0; jj <= j1; jj++) for (let ii = i0, kk = jj * n + i0; ii <= i1; ii++, kk++) {
+        for (let k = head[kk]; k !== -1; k = next[k]) {
+          if (k === i) continue;
+          const b = list[k], br = b.r;
+          if (br < ar || (br === ar && k > i)) collidePair(a, b, pass);
         }
       }
     }
@@ -635,6 +767,9 @@ function collideEnemies(dt) {
 function poseEnemy(e, dt, pp) {
   const c = ecenter(e);
   e.mesh.position.copy(c);
+  // off screen last frame (updateEnemyBatches sets e.seen) and not right on top of you: where it is is all anyone needs.
+  // Facing, tumbling, flinch, squash and the health bar are picked up again the moment it comes back into view.
+  if (e.seen === false && !e.bar && !e.boss) { e.faded = false; if (e.flT > 0) e.flT -= dt; if (e.zapT > 0) e.zapT -= dt; return; }
   const airborne = e.stun > 0 || (!e.onGround && !e.support && !e.d.fly && e.vel.y < -2);
   if (e.roll && !airborne) {
     // spheres roll along the ground
@@ -686,8 +821,9 @@ function poseEnemy(e, dt, pp) {
   const f = e.flash > 0 ? 0.6 : 0;
   if (e.chillT > 0 && !f) mat.emissive.setRGB(0.12, 0.28, 0.42); else mat.emissive.setRGB(f, f, f);
   // fade anything sitting between the camera and the player so swarms don't blind you
-  const block = segDist2(camera.position, _pcv.set(pp.x, pp.y + 1.4, pp.z), c) < (e.r + 0.5) ** 2 && c.distanceToSquared(camera.position) < camera.position.distanceToSquared(_pcv);
-  e.faded = block;
+  _pcv.set(pp.x, pp.y + 1.4, pp.z);
+  const cd2 = c.distanceToSquared(camera.position);
+  e.faded = cd2 < camera.position.distanceToSquared(_pcv) && segDist2(camera.position, _pcv, c) < (e.r + 0.5) ** 2;
 }
 const UP3 = new THREE.Vector3(0, 1, 0), _pcv = new THREE.Vector3(), _flAx = new THREE.Vector3();
 const _cbX = new THREE.Vector3(), _cbY = new THREE.Vector3(), _cbZ = new THREE.Vector3(0, 1, 0), _cbM = new THREE.Matrix4();
@@ -1086,7 +1222,7 @@ function legGemTick(dt) {
 function clearLegTrail() { clearGemFx(); legTrail.forEach(t => { scene.remove(t.m); t.m.material.dispose(); }); legTrail.length = 0; }
 /* Projectile budget: split and burst shots multiply, and a fast gun with Split + Homing put 1,500 shots in the air (57 ms a step).
    Past SHOT_SOFT the bursts get smaller, past SHOT_HARD they stop (the parent just keeps flying as one shot). The damage stays shared out among what actually spawns. */
-const SHOT_SOFT = 160, SHOT_HARD = 280;
+const SHOT_SOFT = 320, SHOT_HARD = 560;      // doubled: shots find their targets through the enemy grid now, so twice the bullets costs about what one set did
 const shotRoom = n => shots.length >= SHOT_HARD ? 0 : shots.length >= SHOT_SOFT ? Math.max(1, Math.ceil(n / 3)) : n;
 function homingSplit(s) {
   const tier = (s.attrs && s.attrs.get && s.attrs.get('homing')) || 1, want = s.pod ? 2 : 2 + tier + (s.combo === 'homing+split' ? 2 : 0), n = shotRoom(want);
@@ -1415,9 +1551,12 @@ function setGateState(s) {
 }
 
 /* ---------- weapons (behaviour lives in WEAPONS in data.js) ---------- */
+const _nearList = [];
 function nearestEnemy(o, range, exclude) {
   let best = null, bd = range * range;
-  for (const e of enemies) {
+  const list = range < 60 ? egNear(o.x, o.z, range, _nearList) : enemies;
+  for (let ni = 0; ni < list.length; ni++) {
+    const e = list[ni];
     if (e.dead || e.d.npc || (exclude && exclude.has(e))) continue;
     const d = aimPtT(e).distanceToSquared(o);
     if (d < bd) { bd = d; best = e; }
@@ -1796,10 +1935,13 @@ function explode(p, radius, dmg, manual, selfHurt) {
   const pd = Math.hypot(player.pos.x - p.x, player.pos.y + 1.2 - p.y, player.pos.z - p.z);
   cam.shake = Math.max(cam.shake, clamp(1 - pd / (radius * 3 + 12), 0, 1) * Math.min(1, 0.25 + radius * 0.1));
   let any = false;
-  for (const e of enemies) {
+  const er = radius * 1.4, nearE = egNear(p.x, p.z, er, []);     // enemies feel a bigger blast than you do (own list: blasts can set off blasts)
+  for (let ni = 0; ni < nearE.length; ni++) {
+    const e = nearE[ni];
     if (e.dead) continue;
-    const c = ecenter(e).clone(), dd = c.distanceTo(p), er = radius * 1.4;     // enemies feel a bigger blast than you do
+    const c0 = ecenter(e), ddx = c0.x - p.x, ddy = c0.y - p.y, ddz = c0.z - p.z, dd = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
     if (dd >= er + e.r) continue;
+    const c = c0.clone();
     damage(e, dmg); any = true;
     // survivors get thrown
     const dir = dd > 1e-3 ? c.sub(p).divideScalar(dd) : new THREE.Vector3(0, 1, 0);
@@ -1817,6 +1959,7 @@ function segDist2(a, b, c) {
   return x * x + y * y + z * z;
 }
 function updateShots(dt) { updateShots_(dt); DMG_SRC = null; }
+const _shotNear = [];
 function updateShots_(dt) {
   for (const s of shots) {
     DMG_SRC = s.src || null;
@@ -1875,7 +2018,9 @@ function updateShots_(dt) {
     if (hitTargets(s)) continue;
     if (props.length && propsHitShot(s)) { if (s.pierce > 0) s.pierce--; else { s.life = 0; continue; } }
     const reach = Math.hypot(s.pos.x - s.last.x, s.pos.y - s.last.y, s.pos.z - s.last.z);
-    for (const e of enemies) {
+    const near = egBox(Math.min(s.pos.x, s.last.x) - s.r, Math.max(s.pos.x, s.last.x) + s.r, Math.min(s.pos.z, s.last.z) - s.r, Math.max(s.pos.z, s.last.z) + s.r, _shotNear);
+    for (let ni = 0; ni < near.length; ni++) {
+      const e = near[ni];
       if (e.dead || s.hit.has(e)) continue;
       const rr = s.r + e.r + (e.boss ? 1.6 : 0), lim = rr + reach;
       if (Math.abs(e.pos.x - s.pos.x) > lim && Math.abs(e.pos.x - s.last.x) > lim) continue;        // cheap reject: far from the shot's path (x/z only; the aim point shares the enemy's x/z)
@@ -2089,12 +2234,91 @@ function gainXp(v) {
 /* decoration budget: sparks, dust and lightning arcs are skipped once this many effects are alive (orbit + lightning put 20,000 on screen) */
 const FX_MAX = 2500;
 const fxRoom = () => fx.length < FX_MAX;
+/* ---------- particle pools ----------
+   Sparks, debris cubes, dust, smoke puffs and motes used to be one scene object + one closure each, gathered into an
+   instanced batch again every frame. They're the bulk of every fight's effects, so they now live in flat arrays: a
+   particle is a few numbers, a frame is one tight loop that writes straight into the instance buffers, and nothing is
+   allocated or collected. Three pools, one draw call each: GLOW (unlit, blooms), LIT (shaded scrap) and ADD (additive).
+   size curve `mode`: 0 shrinks with life, 1 pops in then holds (debris), 2 swells and fades (smoke), 3 shrinks to a tenth. */
+class ParticlePool {
+  constructor(mat, cap) {
+    this.cap = cap; this.n = 0;
+    const F = () => new Float32Array(cap);
+    this.px = F(); this.py = F(); this.pz = F(); this.vx = F(); this.vy = F(); this.vz = F();
+    this.life = F(); this.max = F(); this.size = F(); this.grav = F(); this.drag = F();
+    this.rx = F(); this.ry = F(); this.wx = F(); this.wy = F(); this.cr = F(); this.cg = F(); this.cb = F();
+    this.mode = new Uint8Array(cap);
+    const im = this.im = new THREE.InstancedMesh(geoBox, mat, cap);
+    im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); im.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    im.count = 0; im.visible = false; im.frustumCulled = false; im.userData.noShadow = true;
+    scene.add(im); im.castShadow = false; im.receiveShadow = false;
+  }
+  add(x, y, z, vx, vy, vz, life, size, hex, grav = 0, drag = 0, mode = 0, rx = 0, ry = 0, wx = 0, wy = 0, dim = 1) {
+    if (this.n >= this.cap) return;
+    const i = this.n++;
+    this.px[i] = x; this.py[i] = y; this.pz[i] = z; this.vx[i] = vx; this.vy[i] = vy; this.vz[i] = vz;
+    this.life[i] = this.max[i] = life; this.size[i] = size; this.grav[i] = grav; this.drag[i] = drag;
+    this.rx[i] = rx; this.ry[i] = ry; this.wx[i] = wx; this.wy[i] = wy; this.mode[i] = mode;
+    this.cr[i] = ((hex >> 16) & 255) / 255 * dim; this.cg[i] = ((hex >> 8) & 255) / 255 * dim; this.cb[i] = (hex & 255) / 255 * dim;
+  }
+  clear() { this.n = 0; this.im.count = 0; this.im.visible = false; }
+  tick(dt) {
+    const im = this.im; let n = this.n;
+    if (!n) { if (im.visible) { im.visible = false; im.count = 0; } return; }
+    const { px, py, pz, vx, vy, vz, life, max, size, grav, drag, rx, ry, wx, wy, cr, cg, cb, mode } = this;
+    const M = im.instanceMatrix.array, C = im.instanceColor.array;
+    for (let i = 0; i < n; i++) {
+      let l = life[i] - dt;
+      if (l <= 0) {
+        // dead: the last particle takes its place
+        const j = --n;
+        if (i !== j) {
+          px[i] = px[j]; py[i] = py[j]; pz[i] = pz[j]; vx[i] = vx[j]; vy[i] = vy[j]; vz[i] = vz[j];
+          life[i] = life[j]; max[i] = max[j]; size[i] = size[j]; grav[i] = grav[j]; drag[i] = drag[j];
+          rx[i] = rx[j]; ry[i] = ry[j]; wx[i] = wx[j]; wy[i] = wy[j]; cr[i] = cr[j]; cg[i] = cg[j]; cb[i] = cb[j]; mode[i] = mode[j];
+        }
+        i--; continue;
+      }
+      life[i] = l;
+      if (grav[i]) vy[i] -= grav[i] * dt;
+      if (drag[i]) { const k = 1 - drag[i] * dt; vx[i] *= k; vy[i] *= k; vz[i] *= k; }
+      px[i] += vx[i] * dt; py[i] += vy[i] * dt; pz[i] += vz[i] * dt;
+      const m = mode[i], f = l / max[i];
+      let s = size[i];
+      if (m === 0) s *= f; else if (m === 1) s *= l * 3 < 1 ? l * 3 : 1;
+      else if (m === 2) { const k = 1 - f, a = k * 1.6 + 0.15; s *= Math.sin((a < 1 ? a : 1) * Math.PI) * (0.6 + k * 0.6); }
+      else s *= f > 0.1 ? f : 0.1;
+      const o = i * 16;
+      if (wx[i] || wy[i] || rx[i] || ry[i]) {
+        const ax = (rx[i] += wx[i] * dt), ay = (ry[i] += wy[i] * dt), cx = Math.cos(ax), sx = Math.sin(ax), cy = Math.cos(ay), sy = Math.sin(ay);
+        M[o] = cy * s; M[o + 1] = sx * sy * s; M[o + 2] = -cx * sy * s; M[o + 4] = 0; M[o + 5] = cx * s; M[o + 6] = sx * s; M[o + 8] = sy * s; M[o + 9] = -sx * cy * s; M[o + 10] = cx * cy * s;
+      } else { M[o] = s; M[o + 1] = 0; M[o + 2] = 0; M[o + 4] = 0; M[o + 5] = s; M[o + 6] = 0; M[o + 8] = 0; M[o + 9] = 0; M[o + 10] = s; }
+      M[o + 3] = 0; M[o + 7] = 0; M[o + 11] = 0; M[o + 12] = px[i]; M[o + 13] = py[i]; M[o + 14] = pz[i]; M[o + 15] = 1;
+      const c = i * 3; C[c] = cr[i]; C[c + 1] = cg[i]; C[c + 2] = cb[i];
+    }
+    this.n = n; im.count = n; im.visible = n > 0;
+    if (n) {
+      im.instanceMatrix.updateRange.offset = 0; im.instanceMatrix.updateRange.count = n * 16; im.instanceMatrix.needsUpdate = true;
+      im.instanceColor.updateRange.offset = 0; im.instanceColor.updateRange.count = n * 3; im.instanceColor.needsUpdate = true;
+    }
+  }
+}
+const PFX = { glow: null, lit: null, add: null };
+function pfxInit() {
+  if (PFX.glow) return;
+  PFX.glow = new ParticlePool(new THREE.MeshBasicMaterial({ color: 0xffffff }), 12000);
+  PFX.lit = new ParticlePool(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7, metalness: 0.15 }), 8000);
+  PFX.add = new ParticlePool(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }), 6000);
+}
+function pfxTick(dt) { if (!PFX.glow) return; PFX.glow.tick(dt); PFX.lit.tick(dt); PFX.add.tick(dt); }
+function pfxClear() { if (!PFX.glow) return; PFX.glow.clear(); PFX.lit.clear(); PFX.add.clear(); }
+const pfxCount = () => PFX.glow ? PFX.glow.n + PFX.lit.n + PFX.add.n : 0;
+const hexOf = c => (typeof c === 'number' ? c : c && c.isColor ? c.getHex() : 0xffffff);
 function addFx(obj, life, upd) { scene.add(obj); fx.push({ obj, life, max: life, upd, own: obj.material && !isSharedMat(obj.material) }); }
 function spark(p, color) {
-  if (!fxRoom()) return;
-  const m = new THREE.Mesh(geoBox, B(color)); m.scale.setScalar(0.22); m.position.copy(p);
-  const v = new THREE.Vector3(rand(-4, 4), rand(2, 6), rand(-4, 4));
-  addFx(m, 0.25, (f, dt) => { f.obj.position.addScaledVector(v, dt); f.obj.scale.setScalar(0.22 * f.life / f.max); });
+  pfxInit(); if (PFX.glow.n > 9000) return;
+  PFX.glow.add(p.x, p.y, p.z, rand(-4, 4), rand(2, 6), rand(-4, 4), 0.25, 0.22, hexOf(color));
 }
 /* muzzle flash: a hot star of light at the barrel and a brief real light that lights up the frame and the ground */
 const MUZZLE_LIGHT = new THREE.PointLight(0xffc27a, 0, 10, 2); scene.add(MUZZLE_LIGHT);
@@ -2111,19 +2335,12 @@ function muzzleFlash(p, dir, size = 1) {
 }
 function muzzleLightTick(dt) { MUZZLE_LIGHT.intensity *= Math.exp(-dt * 38); if (MUZZLE_LIGHT.intensity < 0.02) MUZZLE_LIGHT.intensity = 0; }
 function burst(p, color, n) {
-  for (let i = 0; i < n; i++) {
-    const m = new THREE.Mesh(geoBox, M(color)), s = rand(0.2, 0.45); m.scale.setScalar(s); m.position.copy(p);
-    const v = new THREE.Vector3(rand(-7, 7), rand(3, 10), rand(-7, 7));
-    addFx(m, rand(0.5, 0.9), (f, dt) => { v.y -= 32 * dt; f.obj.position.addScaledVector(v, dt); f.obj.rotation.x += dt * 8; f.obj.scale.setScalar(s * Math.min(1, f.life * 3)); });
-  }
+  pfxInit(); const hex = hexOf(color);
+  for (let i = 0; i < n; i++) PFX.lit.add(p.x, p.y, p.z, rand(-7, 7), rand(3, 10), rand(-7, 7), rand(0.5, 0.9), rand(0.2, 0.45), hex, 32, 0, 1, 0, 0, 8, 0);
 }
 function dust(p, n) {
-  if (!fxRoom()) return;
-  for (let i = 0; i < n; i++) {
-    const m = new THREE.Mesh(geoBox, M(0x8a8270)), s = rand(0.15, 0.3); m.scale.setScalar(s); m.position.set(p.x + rand(-.5, .5), p.y + 0.1, p.z + rand(-.5, .5));
-    const v = new THREE.Vector3(rand(-3, 3), rand(1, 3), rand(-3, 3));
-    addFx(m, rand(0.3, 0.5), (f, dt) => { f.obj.position.addScaledVector(v, dt); f.obj.scale.setScalar(s * f.life / f.max); });
-  }
+  pfxInit(); if (PFX.lit.n > 6000) return;
+  for (let i = 0; i < n; i++) PFX.lit.add(p.x + rand(-.5, .5), p.y + 0.1, p.z + rand(-.5, .5), rand(-3, 3), rand(1, 3), rand(-3, 3), rand(0.3, 0.5), rand(0.15, 0.3), 0x8a8270);
 }
 /* fading effects share a few stepped-opacity materials per colour, so lots of them still draw instanced */
 const _fadeMats = new Map();
@@ -2188,10 +2405,10 @@ function lightning(pts, power = 0.6) {
 /* the Arc Caster's muzzle: sparks spray out of the coils, more and bigger as it levels */
 function arcMuzzle(o, dir, power) {
   const n = 3 + Math.round(power * 4);
+  pfxInit();
   for (let i = 0; i < n; i++) {
-    const m = new THREE.Mesh(geoBox, arcMats().core); m.scale.setScalar(0.05 + 0.03 * power); m.position.copy(o);
-    const v = dir.clone().multiplyScalar(rand(2, 6)).add(new THREE.Vector3(rand(-3, 3), rand(-1, 4), rand(-3, 3)));
-    addFx(m, rand(0.15, 0.35), (f, dt) => { v.y -= 14 * dt; f.obj.position.addScaledVector(v, dt); f.obj.scale.setScalar((0.05 + 0.03 * power) * f.life / f.max); });
+    const k = rand(2, 6);
+    PFX.add.add(o.x, o.y, o.z, dir.x * k + rand(-3, 3), dir.y * k + rand(-1, 4), dir.z * k + rand(-3, 3), rand(0.15, 0.35), 0.05 + 0.03 * power, 0xbff6ff, 14, 0, 0, 0, 0, 0, 0, 0.85);
   }
   const fl = new THREE.Mesh(geoBlast, arcMats().glow); fl.position.copy(o);
   addFx(fl, 0.08, f => fl.scale.setScalar((0.1 + 0.07 * power) * (1.4 - f.life / f.max)));
@@ -2206,8 +2423,10 @@ const FX_BATCH = new Map();
 function batchFx() {
   for (const b of FX_BATCH.values()) b.n = 0;
   const add = (o, own) => {
-    if (!o || !o.isMesh || o.isInstancedMesh || own || o.children.length || o.parent !== scene || Array.isArray(o.material) || (o.material.transparent && !WFX_SHARED.has(o.material)) || !isSharedMat(o.material)) return;
-    const key = o.geometry.uuid + '|' + o.material.uuid;
+    if (!o || !o.isMesh || o.isInstancedMesh || own || o.children.length || o.parent !== scene || Array.isArray(o.material) || !isSharedMat(o.material)) return;      // (shared see-through materials batch too: a lightning storm was 400+ separate draw calls)
+    // (the key is remembered on the object: building the string for every particle every frame was a steady stream of garbage)
+    if (o._fxG !== o.geometry || o._fxM !== o.material) { o._fxG = o.geometry; o._fxM = o.material; o._fxKey = o.geometry.uuid + '|' + o.material.uuid; }
+    const key = o._fxKey;
     let b = FX_BATCH.get(key);
     if (!b || b.n >= b.cap) {
       const cap = b ? b.cap * 2 : 256;
@@ -2228,7 +2447,7 @@ function batchFx() {
 const _sharedMats = new WeakMap();
 function isSharedMat(m) { let v = _sharedMats.get(m); if (v === undefined) { v = isShared(m) || WFX_SHARED.has(m); _sharedMats.set(m, v); } return v; }
 function updateFx(dt) {
-  muzzleLightTick(dt);
+  muzzleLightTick(dt); pfxTick(dt);
   for (const f of fx) { f.life -= dt; f.upd(f, dt); }
   fx = fx.filter(f => {
     if (f.life > 0) return true;
@@ -2415,33 +2634,49 @@ function fzCoinPop() {
    it grows, glows hotter, shakes and throws sparks as it climbs. When it runs out it pays circuits. ---------- */
 const STREAK_WINDOW = 1.5;      // seconds between kills before the streak breaks (was 2.2)
 const KM_TIERS = [[0, '#e6e9ea'], [15, '#ffe46a'], [40, '#ffa23a'], [90, '#ff5a3a'], [180, '#ff4ad2'], [350, '#8a7aff']];
+/* streakKill() runs for every kill, and a big fight has several a step: it only counts now. The counter's DOM (text,
+   colour, size, glow, the little "bump") is brought up to date once per drawn frame by streakUi(), and the bump is a
+   Web Animation instead of the old remove-class / force-layout / add-class restart, which made the browser lay out the
+   whole page for every single kill. */
+const KM = { dirty: false, shown: 0, tier: -1, col: '', ks: '', kg: '', sh: '', bumpA: null, sparkT: 0, wantSpark: 0, fill: -1 };
 function streakKill(e) {
   if (!S.inRun) return;
   S.streak = (S.streak || 0) + 1; S.streakT = STREAK_WINDOW;
   if (S.st) S.st.bestStreak = Math.max(S.st.bestStreak || 0, S.streak);
-  const n = S.streak, el = $('#killMul');
-  if (!el) return;
-  if (n >= 2) el.hidden = false;
-  $('#kmN').textContent = n;
-  const tier = KM_TIERS.filter(t => n >= t[0]).length - 1, col = KM_TIERS[tier][1];
-  el.style.setProperty('--kc', col);
-  el.style.setProperty('--ks', (1 + Math.min(1.3, Math.log2(1 + n) * 0.16)).toFixed(3));
-  el.style.setProperty('--kg', Math.min(40, 4 + n * 0.35).toFixed(1) + 'px');
-  el.style.setProperty('--kshake', Math.min(6, n / 15).toFixed(2) + 'px');
-  el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
-  el.dataset.tier = tier;
-  // crossing a tier: a burst of sparks and a chime
-  if (n === 10 || n === 25 || n === 50 || n === 100 || n === 200 || (n > 200 && n % 100 === 0)) { sparkBurst($('#kmN'), col, 18 + tier * 6); sfx('sparks', 0.4); sfx('levelup', 0.35); }
-  else if (n >= 5 && n % 5 === 0) sparkBurst($('#kmN'), col, 6 + tier * 2);
+  KM.dirty = true;
+  const n = S.streak;
+  // crossing a tier: a burst of sparks and a chime (the little every-5 bursts are rationed in streakUi)
+  if (n === 10 || n === 25 || n === 50 || n === 100 || n === 200 || (n > 200 && n % 100 === 0)) { KM.wantSpark = 2; sfx('sparks', 0.4); sfx('levelup', 0.35); }
+  else if (n >= 5 && n % 5 === 0 && !KM.wantSpark) KM.wantSpark = 1;
+}
+function streakUi(dt) {
+  KM.sparkT -= dt;
+  const el = $('#killMul'); if (!el) return;
+  if (S.streakT > 0) { const f = Math.round(clamp(S.streakT / STREAK_WINDOW, 0, 1) * 200) / 200; if (f !== KM.fill) { KM.fill = f; const b = $('#kmFill'); if (b) b.style.transform = `scaleX(${f})`; } }
+  if (!KM.dirty) return; KM.dirty = false;
+  const n = S.streak || 0; if (!n) return;
+  if (n >= 2 && el.hidden) el.hidden = false;
+  const num = $('#kmN'); num.textContent = n;
+  let tier = 0; for (let i = 0; i < KM_TIERS.length; i++) if (n >= KM_TIERS[i][0]) tier = i;
+  const col = KM_TIERS[tier][1];
+  const ks = (1 + Math.min(1.3, Math.log2(1 + n) * 0.16)).toFixed(2), kg = Math.min(40, 4 + n * 0.35).toFixed(0) + 'px', sh = Math.min(6, n / 15).toFixed(1) + 'px';
+  if (col !== KM.col) { KM.col = col; el.style.setProperty('--kc', col); }
+  if (ks !== KM.ks) { KM.ks = ks; el.style.setProperty('--ks', ks); }
+  if (kg !== KM.kg) { KM.kg = kg; el.style.setProperty('--kg', kg); }
+  if (sh !== KM.sh) { KM.sh = sh; el.style.setProperty('--kshake', sh); }
+  if (tier !== KM.tier) { KM.tier = tier; el.dataset.tier = tier; }
+  if (KM.bumpA) KM.bumpA.cancel();
+  KM.bumpA = num.animate([{ transform: 'scale(1.45)' }, { transform: 'scale(1)' }], { duration: 220, easing: 'cubic-bezier(.2,1.8,.4,1)' });
+  if (KM.wantSpark === 2 || (KM.wantSpark === 1 && KM.sparkT <= 0)) { sparkBurst(num, col, KM.wantSpark === 2 ? 18 + tier * 6 : 6 + tier * 2); KM.sparkT = 0.35; }
+  KM.wantSpark = 0;
 }
 function streakTick(dt) {
   if (!(S.streakT > 0)) return;
   S.streakT -= dt;
-  const f = $('#kmFill'); if (f) f.style.transform = `scaleX(${clamp(S.streakT / STREAK_WINDOW, 0, 1)})`;
   if (S.streakT <= 0) streakEnd();
 }
 function streakEnd() {
-  const n = S.streak || 0; S.streak = 0; S.streakT = 0;
+  const n = S.streak || 0; S.streak = 0; S.streakT = 0; KM.dirty = false; KM.wantSpark = 0;
   const el = $('#killMul'); if (!el) return;
   // pay out: a few circuits for a good streak, more the longer it ran
   const c = n >= 20 ? Math.floor(Math.pow(n / 20, 1.2)) : 0;

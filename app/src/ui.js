@@ -128,17 +128,18 @@ function updateXpLine(dt) {
   const f = clamp(S.xp / S.need, 0, 1);
   XPL.shown += (f - XPL.shown) * Math.min(1, dt * 10);
   const el = $('#xpline'), k = XPL.shown;
-  $('#xpFill').style.transform = `scaleX(${k})`;
-  $('#xpEdge').style.left = (k * 100) + '%';
+  hudCss('#xpFill', 'transform', hudBar(k));
+  hudCss('#xpEdge', 'left', (k * 100).toFixed(1) + '%');
   // colour climbs from cyan through green and gold; glow and height grow with it
   const hue = 185 - 140 * Math.pow(k, 1.4);
-  el.style.setProperty('--xc', `hsl(${hue},90%,${55 + 10 * k}%)`);
-  el.style.setProperty('--glow', (k * k * 26).toFixed(1) + 'px');
-  el.style.height = (6 + 6 * k * k) + 'px';
-  $('#xpPct').textContent = k > 0.55 ? Math.floor(k * 100) + '%' : '';
+  { const xc = `hsl(${hue.toFixed(0)},90%,${(55 + 10 * k).toFixed(0)}%)`, gl = (k * k * 26).toFixed(0) + 'px';
+    if (_hudV.get('xc') !== xc) { _hudV.set('xc', xc); el.style.setProperty('--xc', xc); }
+    if (_hudV.get('xgl') !== gl) { _hudV.set('xgl', gl); el.style.setProperty('--glow', gl); } }
+  hudCss('#xpline', 'height', (6 + 6 * k * k).toFixed(1) + 'px');
+  hudTxt('#xpPct', k > 0.55 ? Math.floor(k * 100) + '%' : '');
   // the last stretch: it trembles, harder the closer it gets
   const sh = k > 0.75 ? (k - 0.75) * 4 : 0;
-  el.style.transform = sh ? `translate(${rand(-1, 1) * sh * 2.5}px, ${rand(-1, 1) * sh * 3}px)` : '';
+  hudCss('#xpline', 'transform', sh ? `translate(${(rand(-1, 1) * sh * 2.5).toFixed(1)}px, ${(rand(-1, 1) * sh * 3).toFixed(1)}px)` : '');
   // sparks fly off the leading edge
   XPL.sparkT -= dt;
   if (k > 0.5 && XPL.sparkT <= 0) {
@@ -208,7 +209,8 @@ const bossBarEls = [];
 function updateBossBars() {
   const list = [S.boss, S.mini && !S.mini.dead ? S.mini : null].filter(Boolean);
   const wrap = $('#bossbar');
-  wrap.hidden = !list.length;
+  if (wrap.hidden !== !list.length) wrap.hidden = !list.length;
+  if (!list.length && !bossBarEls.length) return;
   wrap.classList.toggle('row', list.length > 2);
   while (bossBarEls.length < list.length) {
     const el = document.createElement('div');
@@ -219,47 +221,55 @@ function updateBossBars() {
   }
   for (let i = 0; i < bossBarEls.length; i++) {
     const el = bossBarEls[i], e = list[i];
-    el.style.display = e ? '' : 'none';
+    { const ds = e ? '' : 'none'; if (el.style.display !== ds) el.style.display = ds; }
     if (!e) continue;
-    el.querySelector('.name').textContent = e.barName || bossLabel(e);
-    el.querySelector('.bar>i').style.transform = `scaleX(${clamp(e.hp / e.maxHp, 0, 1)})`;
+    const nm = e.barName || bossLabel(e), bf = hudBar(clamp(e.hp / e.maxHp, 0, 1));
+    if (el._nm !== nm) { el._nm = nm; el.querySelector('.name').textContent = nm; }
+    if (el._bf !== bf) { el._bf = bf; el.querySelector('.bar>i').style.transform = bf; }
   }
 }
+/* The HUD used to rewrite every number, bar and label on every frame whether or not it had changed, and each write
+   makes the browser restyle that element. These only touch the page when the value is actually different. */
+const _hudV = new Map();
+function hudTxt(sel, v) { if (_hudV.get(sel) === v) return; _hudV.set(sel, v); $(sel).textContent = v; }
+function hudHtml(sel, v) { if (_hudV.get(sel) === v) return; _hudV.set(sel, v); $(sel).innerHTML = v; }
+function hudCss(sel, prop, v) { const k = sel + '|' + prop; if (_hudV.get(k) === v) return; _hudV.set(k, v); $(sel).style[prop] = v; }
+const hudBar = f => 'scaleX(' + (Math.round(f * 500) / 500) + ')';
 function updateHUD(dt) {
   const P = player;
   updateDmgNumbers(dt); updateRadar();
   updateAmmo(); updateReloadMarkers(); updateLockMarkers();
   drawMinimap(dt);
   updateBossBars();
-  $('#hpBar').style.transform = `scaleX(${clamp(P.hp / stats.maxHp, 0, 1)})`;
-  $('#shBar').style.transform = `scaleX(${stats.maxShield ? clamp(P.shield / stats.maxShield, 0, 1) : 0})`;
-  $('#hpTxt').textContent = Math.ceil(Math.max(0, P.hp));
-  $('#shTxt').textContent = Math.ceil(Math.max(0, P.shield));
+  hudCss('#hpBar', 'transform', hudBar(clamp(P.hp / stats.maxHp, 0, 1)));
+  hudCss('#shBar', 'transform', hudBar(stats.maxShield ? clamp(P.shield / stats.maxShield, 0, 1) : 0));
+  hudTxt('#hpTxt', Math.ceil(Math.max(0, P.hp)));
+  hudTxt('#shTxt', Math.ceil(Math.max(0, P.shield)));
   const pips = (n, m) => '◆'.repeat(n) + '◇'.repeat(Math.max(0, m - n));
   let mob = '';
   if (stats.airJumps) mob += `<span>Air <b>${pips(P.airJumps, stats.airJumps)}</b></span>`;
   if (stats.dashes) mob += `<span>Dash <b>${pips(P.dashCharges, stats.dashes)}</b></span>`;
-  if (stats.thrust) mob += `<span>Fuel <i class="fuel"><i style="transform:scaleX(${clamp(P.fuel / stats.fuel, 0, 1)})"></i></i></span>`;
+  if (stats.thrust) mob += `<span>Fuel <i class="fuel"><i style="transform:scaleX(${(clamp(P.fuel / stats.fuel, 0, 1)).toFixed(2)})"></i></i></span>`;
   if (stats.load > 1.2) mob += `<span style="color:var(--hostile)">Overloaded</span>`;
   if (stats.legs < 2) mob += `<span style="color:var(--hostile)">Unstable</span>`;
-  $('#mobility').innerHTML = mob;
-  $('#timer').textContent = fmt(S.t); clockHeat(dt);
+  hudHtml('#mobility', mob);
+  hudTxt('#timer', fmt(S.t)); clockHeat(dt);
   { const hn = $('#hint'); const hide = S.t > 30 && !S.test; if (hn.hidden !== hide) hn.hidden = hide; }          // the key hints fade away after the first half minute: no permanent help bar
-  $('#lvlTxt').textContent = 'LV ' + S.level;
-  $('#killTxt').textContent = S.kills;
-  $('#boltTxt').textContent = S.bolts; $('#circTxt').textContent = META.circuits;
-  updateXpLine(dt);
+  hudTxt('#lvlTxt', 'LV ' + S.level);
+  hudTxt('#killTxt', S.kills);
+  hudTxt('#boltTxt', S.bolts); hudTxt('#circTxt', META.circuits);
+  updateXpLine(dt); streakUi(dt);
   let obj = nextEventText();
-  if (S.test && !S.boss && !S.bossDead) obj = `Test · ${enemies.filter(e => !e.dead).length} enemies`;
-  $('#objective').textContent = obj;
+  if (S.test && !S.boss && !S.bossDead) obj = `Test · ${enemies.length} enemies`;
+  hudTxt('#objective', obj);
   hitT -= dt;
   const ch = $('#crosshair');
-  ch.className = 'xh' + (hitT > 0 ? ' hit' : aim.enemy ? ' on' : '');
+  { const cn = 'xh' + (hitT > 0 ? ' hit' : aim.enemy ? ' on' : ''); if (ch.className !== cn) ch.className = cn; }
   XH.bloom = Math.max(0, XH.bloom - dt * (1.6 + XH.bloom * 2));
   if ((xhLeftT -= dt) <= 0) { xhLeftT = 0.5; if (false) renderXhLeft(); }
-  ch.style.transform = `translate(-50%, -50%) scale(${(1 + XH.bloom * 0.85).toFixed(3)})`;
-  ch.style.filter = XH.bloom > 0.02 ? `drop-shadow(0 0 ${(XH.bloom * 6).toFixed(1)}px rgba(255,190,120,${(XH.bloom * 0.9).toFixed(2)}))` : '';
-  ch.hidden = S.mode !== 'play';
+  hudCss('#crosshair', 'transform', `translate(-50%, -50%) scale(${(1 + XH.bloom * 0.85).toFixed(2)})`);
+  hudCss('#crosshair', 'filter', XH.bloom > 0.02 ? `drop-shadow(0 0 ${(XH.bloom * 6).toFixed(1)}px rgba(255,190,120,${(XH.bloom * 0.9).toFixed(2)}))` : '');
+  { const hid = S.mode !== 'play'; if (ch.hidden !== hid) ch.hidden = hid; }
   const mk = $('#marker');
   if (S.gate && S.mode === 'play') {
     const p = new THREE.Vector3(S.gate.x, S.gate.y + 6, S.gate.z).project(camera);
@@ -269,9 +279,9 @@ function updateHUD(dt) {
     mk.hidden = false; mk.style.left = ((x + 1) / 2 * innerWidth) + 'px'; mk.style.top = ((1 - y) / 2 * innerHeight) + 'px';
     const d = Math.hypot(S.gate.x - P.pos.x, S.gate.z - P.pos.z);
     const st = S.gate.state;
-    $('#markerTxt').textContent = `${st === 'exit' ? 'EXIT' : st === 'sealed' ? 'SEALED' : 'GATE'} ${Math.round(d)}m`;
-    $('#markerTxt').style.color = st === 'exit' ? 'var(--orange)' : st === 'sealed' ? 'var(--hostile)' : 'var(--xp)';
-  } else mk.hidden = true;
+    hudTxt('#markerTxt', `${st === 'exit' ? 'EXIT' : st === 'sealed' ? 'SEALED' : 'GATE'} ${Math.round(d)}m`);
+    hudCss('#markerTxt', 'color', st === 'exit' ? 'var(--orange)' : st === 'sealed' ? 'var(--hostile)' : 'var(--xp)');
+  } else if (!mk.hidden) mk.hidden = true;
   // store marker
   const sm = $('#shopMarker');
   if (S.shop && S.mode === 'play') {
@@ -280,8 +290,8 @@ function updateHUD(dt) {
     if (p.z > 1) { x = -x; y = -y; const m = Math.max(Math.abs(x), Math.abs(y)) || 1; x /= m; y = -1; }
     x = clamp(x, -0.92, 0.92); y = clamp(y, -0.85, 0.8);
     sm.hidden = false; sm.style.left = ((x + 1) / 2 * innerWidth) + 'px'; sm.style.top = ((1 - y) / 2 * innerHeight) + 'px';
-    $('#shopMarkerTxt').textContent = `STORE ${Math.round(Math.hypot(S.shop.x - P.pos.x, S.shop.z - P.pos.z))}m`;
-  } else sm.hidden = true;
+    hudTxt('#shopMarkerTxt', `STORE ${Math.round(Math.hypot(S.shop.x - P.pos.x, S.shop.z - P.pos.z))}m`);
+  } else if (!sm.hidden) sm.hidden = true;
 }
 function keyHint(k, b) { return IN.device === 'pad' ? `<kbd>${b}</kbd>` : `<kbd>${k}</kbd>`; }
 
@@ -397,6 +407,7 @@ function syncSettingsUI() {
   applyCrosshair();
 }
 function openPause() {
+  flushMeta();
   if (!playing()) return;
   S.prevMode = S.mode; S.mode = 'pause'; unlockPointer();
   showOptionsRaw(false); syncSettingsUI(); $('#pause').hidden = false; focusFirst();
@@ -491,7 +502,7 @@ $('#physBtn').addEventListener('click', () => {
 $('#fsBtn').addEventListener('click', () => { if (window.desktop) window.desktop.toggleFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); });
 $('#skipBtn').addEventListener('click', () => { S.t += 60; resume(); });
 $('#quitBtn').addEventListener('click', () => toHangar());
-$('#exitBtn').addEventListener('click', () => { if (window.desktop) window.desktop.quit(); else window.close(); });
+$('#exitBtn').addEventListener('click', () => { flushMeta(); if (window.desktop) window.desktop.quit(); else window.close(); });
 $('#againBtn').addEventListener('click', () => toHangar());
 
 function gameOver() {
@@ -524,6 +535,7 @@ function runStatTick(dt) {
 const KILL_NAMES = { crawler: 'Crawlers', elite: 'Elite crawlers', drone: 'Drones', spitter: 'Spitters', bomber: 'Bombers', splitter: 'Splitters', splitling: 'Splitlings', brute: 'Brutes', warden: 'Wardens', robovac: 'Vacuum bots', pig: 'Pigs', magnetron: 'Magnetrons', smelter: 'Smelters', hivemother: 'Hive Mothers', sac: 'Sacs' };
 const big = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(1) + 'k' : String(Math.round(n));
 function showGameOver() {
+  flushMeta();
   S.mode = 'over'; unlockPointer(); $('#hud').hidden = true; deathEnd();
   const st = S.st || newRunStats();
   $('#overSub').textContent = S.test ? 'Test range' : 'Stage ' + S.stage; $('#overDetails').open = false;

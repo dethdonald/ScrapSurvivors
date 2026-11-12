@@ -1,6 +1,15 @@
 'use strict';
 /* Renderer, scenes, shared geometry and small helpers. */
-const $ = s => document.querySelector(s);
+/* $('#id') is called hundreds of times a frame (the HUD alone does ~40): plain "#id" selectors are looked up once and
+   remembered. A remembered element that has since left the page is looked up again, so rebuilt UI is always found. */
+const _$ids = new Map(), _$plain = /^#[\w-]+$/;
+const $ = s => {
+  let el = _$ids.get(s);
+  if (el !== undefined) { if (el.isConnected) return el; _$ids.delete(s); }
+  el = document.querySelector(s);
+  if (el && _$plain.test(s)) _$ids.set(s, el);
+  return el;
+};
 const $$ = s => [...document.querySelectorAll(s)];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -71,6 +80,6 @@ function surfaceOf(color) {
 }
 function SM(color, em, extra) { return new THREE.MeshStandardMaterial(Object.assign({ color, emissive: em || 0, envMapIntensity: 1 }, surfaceOf(color), extra || {})); }
 function M(color, em) { const k = color + '_' + (em || 0); return matCache[k] || (matCache[k] = SM(color, em)); }
-function B(color, opts) { const k = color + JSON.stringify(opts || {}); return basicCache[k] || (basicCache[k] = new THREE.MeshBasicMaterial(Object.assign({ color }, opts || {}))); }
+function B(color, opts) { const k = opts ? color + JSON.stringify(opts) : color + '{}'; return basicCache[k] || (basicCache[k] = new THREE.MeshBasicMaterial(Object.assign({ color }, opts || {}))); }
 function isShared(mat) { return Object.values(matCache).includes(mat) || Object.values(basicCache).includes(mat); }
 function bx(w, h, d, color, x = 0, y = 0, z = 0, em) { const m = new THREE.Mesh(geoBox, M(color, em)); m.scale.set(w, h, d); m.position.set(x, y, z); return m; }
