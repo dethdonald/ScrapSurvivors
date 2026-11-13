@@ -12,10 +12,10 @@ function freshHangarLoadout() {
   L = newLoadout();
   const F = f => FACE_ORDER.indexOf(f);
   if (BUILD_V2) {
-    // V2 starter: walker legs, a scout torso, two arms; only the first carries a pistol (the hangar allows 1 pistol until it's mastered)
+    // V2 starter: walker legs, a scout torso, two arms, a pistol in each
     L.body = mkItem('lower', 'standard');
     const top = mkItem('block', 'upper_scout'); L.body.slots[F('top')] = top;
-    for (let i = 0; i < 2; i++) { const a = mkItem('arm', 'basic'); if (i === 0) a.weapon = mkItem('weapon', 'pistol'); top.slots[i] = a; }
+    for (let i = 0; i < 2; i++) { const a = mkItem('arm', 'basic'); a.weapon = mkItem('weapon', 'pistol'); top.slots[i] = a; }
     INV.shelf = []; stats = null; refreshLoadout(); return;
   }
   L.body = mkItem('block', 'body'); L.body.plug = 'bottom';

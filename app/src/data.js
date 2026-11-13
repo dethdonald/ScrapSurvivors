@@ -359,8 +359,9 @@ const WEAPONS = {
   },
   pistol: {
     name: 'Pistol', range: 45, sound: 'pistol', mass: 0.2, push: 0.5, kick: 1.1, casing: 'brass',
-    mag: lvl => 5 + Math.floor(lvl / 15), reload: lvl => 1.0 / (1 + 0.5 * lvlCurve(lvl, 30)),
-    dmg: lvl => 14 * (1 + 0.12 * (lvl - 1)), rounds: lvl => lvl >= 40 ? 3 : lvl >= 10 ? 2 : 1, pierce: lvl => lvl >= 60 ? 4 : lvl >= 25 ? 2 : 0, cd: lvl => 0.3 / (1 + 0.5 * lvlCurve(lvl, 30)),
+    // buffed in 0.45.3 (dmg 14 → 17, mag 5 → 6, shot gap 0.30 → 0.27 s, reload 1.0 → 0.9 s): you start with two of them now
+    mag: lvl => 6 + Math.floor(lvl / 15), reload: lvl => 0.9 / (1 + 0.5 * lvlCurve(lvl, 30)),
+    dmg: lvl => 17 * (1 + 0.12 * (lvl - 1)), rounds: lvl => lvl >= 40 ? 3 : lvl >= 10 ? 2 : 1, pierce: lvl => lvl >= 60 ? 4 : lvl >= 25 ? 2 : 0, cd: lvl => 0.27 / (1 + 0.5 * lvlCurve(lvl, 30)),
     info(lvl) { const p = this.pierce(lvl); return [['Damage', this.dmg(lvl).toFixed(1)], ['Fire rate', `${(1 / this.cd(lvl)).toFixed(1)} /s`], ['Magazine', this.mag(lvl)], ['Reload', `${this.reload(lvl).toFixed(2)} s`], ['Rounds per shot', this.rounds(lvl)], ['Pierce', p ? `${p} enemies` : 'none'], ['Push', 'light'], ['Range', '45 m']]; },
     desc: 'Fast single rounds. Fires pairs at Lv 10, pierces at Lv 25.',
     model(g, { out }) {
@@ -1256,7 +1257,7 @@ function weaponUnlocked(type) {
 /* true once this weapon has been taken to its max level in some run, ever: that's what opens its 2nd hangar copy */
 const weaponMastered = type => SETTINGS.dev || !!META.unlock.weaponMastered[type];
 /* how many of this weapon the hangar will let you hold at Lv 1: 0 locked, 1 unlocked, 2 once mastered */
-function weaponCap(type) { if (SETTINGS.dev) return 2; if (!weaponUnlocked(type)) return 0; return weaponMastered(type) ? 2 : 1; }
+function weaponCap(type) { if (SETTINGS.dev || type === STARTER_WEAPON) return 2; if (!weaponUnlocked(type)) return 0; return weaponMastered(type) ? 2 : 1; }     // the pistol: two from the start
 /* true if this weapon can currently show up in the world, the store, a case or the terminal */
 function weaponLootUnlocked(type) { return SETTINGS.dev || !LOOT_GATED_WEAPONS.has(type) || weaponUnlocked(type); }
 function armUnlocked(type) {
