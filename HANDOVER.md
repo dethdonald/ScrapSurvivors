@@ -729,3 +729,11 @@ Goal: 2–3× the enemies. Measured on the headless bench (`/home/claude/bench`,
 - **Hitch log** `hitchCheck()` (game.js): any in-run frame over 70 ms is `console.warn`ed (→ scrapsurvivors-log.txt) with new shader count/names/keys and enemy count; last 50 in `HITCH.list`.
 - **Stress test**: XP frozen during the test (a level-up screen was being timed as one multi-second frame — that was the "low 0" rows), paused time not counted, finer steps (100 apart from 1000 to 1600), reports stalls over 100 ms.
 - **Enemy cap** fixed at `ENEMY_CAP = 1500` on every machine (no per-device scaling).
+
+## 0.45.0 — legs, stomp and dust (Nov 13)
+All in player.js unless noted. Tunable live from the dev panel ("Legs & stomp"); values in `GAIT` {stride, stepTime, lift, stomp, dust, prints}, saved to localStorage `scrapsurvivors.gait`.
+- **Gait** (`stepLegs`): a step never takes less than 0.17 s (0.24 s heavy frames, 0.085 s spider legs); it used to shrink to 0.06 s. At speed the planted foot runs out of reach and lifts anyway → a bounding run with both feet off the ground. Longer reach, foot lift peaks late then slams down (`pow(t, 1.5)`).
+- **Body follows the legs** (`updatePlayerVisual`): `P.gaitRoll` (hips roll onto the planted foot, chest counter-rolls), `P.runCrouch` (hips drop up to 0.11 m at a run — this is what lengthens the stride), `P.runLean`.
+- **Footfall**: stronger dip/camera bob/sway, thud sound at speed or on heavy frames, slight shake for heavy frames. Spider legs: light skitter, small puffs.
+- **Dust**: `footDust` (every step, ground-tinted via the tile colour), `landDust` (ring, scales with impact, from impact > 4), skid cloud on hard stops/reversals, wheel/tread trails above 4 m/s. All pooled (`PFX.lit`).
+- **Footprints**: `footPrint/footTick/clearFootprints`, one 160-instance quad mesh, prints shrink away after 14 s.

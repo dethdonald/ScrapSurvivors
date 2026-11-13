@@ -64,6 +64,15 @@ function devRender() {
         <button class="btn ghost nav dbtn" data-act="resetparts">Reset my parts to Mk I</button>
       </div>
     </div>
+    <div class="dsec"><h3>Legs &amp; stomp</h3>
+      ${[['stride', 'Stride length', 0.5, 1.6], ['stepTime', 'Step time (slower →)', 0.5, 2], ['lift', 'Foot lift', 0.3, 2], ['stomp', 'Stomp weight', 0, 2.5], ['dust', 'Dust amount', 0, 3]]
+        .map(([k, n, lo, hi]) => `<label class="drow gait"><span>${n}</span><input type="range" data-gait="${k}" min="${lo}" max="${hi}" step="0.05" value="${GAIT[k]}"><b class="mono">${(+GAIT[k]).toFixed(2)}</b></label>`).join('')}
+      <div class="dgrid two">
+        <button class="btn ghost nav dbtn${on(GAIT.prints)}" data-act="prints">Footprints: ${GAIT.prints ? 'on' : 'off'}</button>
+        <button class="btn ghost nav dbtn" data-act="gaitreset">Reset to defaults</button>
+      </div>
+      <small>Changes apply straight away: close the panel and walk around.</small>
+    </div>
     <div class="dsec"><h3>Stress test</h3>
       <button class="btn nav" data-act="stress">Run the horde stress test</button>
       <small>Fills the range with a bigger and bigger horde while your guns fire, and reports how many enemies this machine holds at 60 and at 30 frames a second. Takes a minute or two.${STRESS.last ? '<br><b>Last run:</b> ' + stressLine(STRESS.last) : ''}</small>
@@ -186,6 +195,8 @@ devPanel.addEventListener('click', e => {
     case 'unlockall': unlockAll(); say('Everything unlocked'); break;
     case 'resetunlocks': resetUnlocks(); say('All unlocks reset'); break;
     case 'stress': devPanelClose(); stressStart(); return;
+    case 'prints': GAIT.prints = GAIT.prints ? 0 : 1; saveGait(); break;
+    case 'gaitreset': Object.assign(GAIT, { stride: 1, stepTime: 1, lift: 1, stomp: 1, dust: 1, prints: 1 }); saveGait(); break;
     case 'close': devPanelClose(); return;
     case 'build': devPanelClose(true); $('#devHint').hidden = false; S.mode = 'play'; openInventory(false); return;
     case 'hangar': devPanelClose(true); toHangar(); return;
@@ -194,6 +205,11 @@ devPanel.addEventListener('click', e => {
   devRender();
   // keep focus on the same button after re-rendering (gamepad / keyboard navigation)
   if (keep) { const f = devPanel.querySelector(`[data-${keep[0]}="${keep[1]}"]`); if (f) f.focus(); }
+});
+devPanel.addEventListener('input', e => {
+  const k = e.target && e.target.dataset && e.target.dataset.gait; if (!k) return;
+  GAIT[k] = +e.target.value; saveGait();
+  const b = e.target.parentElement.querySelector('b'); if (b) b.textContent = GAIT[k].toFixed(2);
 });
 $('#invTestBtn').addEventListener('click', startTestRange);
 $('#devPanelBtn').addEventListener('click', () => { $('#pause').hidden = true; S.mode = 'play'; devPanelOpen(); });

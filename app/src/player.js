@@ -328,7 +328,7 @@ function playerStep(dt) {
       cam.dip = Math.min(0.7, impact / 60 * hw);
       cam.bobV -= Math.min(5, impact * 0.18) * hw; cam.shake = Math.max(cam.shake, clamp((impact - 10) / 40, 0, 0.45) * hw);
       if (impact > 9) { cam.lagDelay = 0.05; cam.lagImp = -Math.min(5, (impact - 6) * 0.16) * hw; if (st.heavy > 0.3) sfx('thud', Math.min(0.7, 0.2 + impact * 0.015)); else sfx('land', Math.min(0.5, 0.12 + impact * 0.012)); }
-      if (impact > 14) dust(P.pos, Math.min(10, impact / 3 | 0));
+      if (impact > 4) landDust(P.pos, impact * hw);
       const fall = P.peak - P.pos.y;
       legGemLanding(impact, fall);
       if (fall > 7 && L.perks.has('skyfall')) shockwave(P.pos, 6 + fall * 0.3, 25 + fall * 4);
@@ -513,16 +513,25 @@ function updatePlayerVisual(dt, alpha) {
   P.dipV += (-140 * P.dip - 10 * P.dipV) * dt;
   P.dip = clamp(P.dip + P.dipV * dt, -0.45, 0.2);
 
+  // the body follows the legs: it rolls onto whichever foot is planted, sinks into a running crouch and leans the way it's going
+  { const kq = 1 - Math.exp(-dt * 14), ks = 1 - Math.exp(-dt * 7);
+    P.gaitRoll = lerp(P.gaitRoll || 0, P.gaitRollT || 0, kq); P.runCrouch = lerp(P.runCrouch || 0, P.runCrouchT || 0, ks); P.runLean = lerp(P.runLean || 0, P.runLeanT || 0, ks); }
   if (ud.hips) {
-    ud.hips.position.y = (sliding ? -0.55 : 0) + P.dip;
-    ud.hips.rotation.set(P.sway.x * 0.4, 0, P.sway.y * 0.4);
+    ud.hips.position.y = (sliding ? -0.55 : 0) + P.dip - P.runCrouch;
+    ud.hips.rotation.set(P.sway.x * 0.4 + P.runLean, 0, P.sway.y * 0.4 + P.gaitRoll);
   }
+  // a hard stop or a reversal at speed scuffs up a skid cloud at the feet
+  if (S.inRun && P.onGround && !sliding && hs > 3) {
+    const dec = -(ax * P.vel.x + az * P.vel.z) / hs;
+    if (dec > 40) { P.skidAcc = Math.min(3, (P.skidAcc || 0) + dt * 26 * GAIT.dust); while (P.skidAcc >= 1) { P.skidAcc--; footDust(_w.set(P.pos.x + rand(-.35, .35), P.pos.y, P.pos.z + rand(-.35, .35)), 0.9, hs); } }
+  }
+  footTick(dt);
   if (ud.torso) {
     const torsoYaw = wrap(P.torsoYaw - P.legYaw);
     // the twist winds up a little sideways lean, and the torso leans into a fast turn
     let whirl = 0;
     if ((P.whirlT || 0) > 0) { P.whirlT -= dt; const k = 1 - Math.max(0, P.whirlT) / 0.38; whirl = Math.PI * 2 * (1 - Math.pow(1 - k, 3)); }   // a full spin, fast then easing
-    ud.torso.rotation.set((sliding ? -0.35 : P.dashT > 0 ? 0.35 : 0) + P.sway.x * 0.7, torsoYaw + whirl, P.sway.y * 0.7 - clamp(P.torsoYawV * 0.025, -0.18, 0.18));
+    ud.torso.rotation.set((sliding ? -0.35 : P.dashT > 0 ? 0.35 : 0) + P.sway.x * 0.7, torsoYaw + whirl, P.sway.y * 0.7 - clamp(P.torsoYawV * 0.025, -0.18, 0.18) - (P.gaitRoll || 0) * 0.6);      // (the chest counter-rolls a little, so the shoulders stay level-ish while the hips rock)
   }
   m.updateMatrixWorld(true);
   stepLegs(ud, dt, hs, sliding);
@@ -535,6 +544,7 @@ function updatePlayerVisual(dt, alpha) {
       const hw = lg.localToWorld(new THREE.Vector3(sh.hub.position.x, sh.restY, 0));
       target = clamp(groundAt(hw.x, hw.z) - P.renderPos.y, -0.2, 0.3) - P.dip * 0.9
              + (hs > 1 ? Math.sin(P.walk * 6 + i * 2.1) * 0.025 * Math.min(1, hs / 8) : 0);
+      if (S.inRun && hs > 4 && Math.random() < dt * hs * 1.3 * GAIT.dust) { hw.y = groundAt(hw.x, hw.z); footDust(hw, 0.55, hs); }      // wheels and treads throw a trail at speed
     }
     sh.vel += ((target - sh.off) * 150 - sh.vel * 11) * dt;
     sh.off = clamp(sh.off + sh.vel * dt, -0.25, 0.3);
@@ -646,17 +656,27 @@ function stepLegs(ud, dt, hs, sliding) {
   const P = player;
   const legs = ud.legs.filter(l => l.userData.ik);
   let stepping = legs.filter(l => l.userData.leg && l.userData.leg.t < 1).length;
+  const heavyK = clamp((stats && stats.heavy) || 0, 0, 1);
+  let biped = false, rollSum = 0;
   legs.forEach((lg, idx) => {
     const ik = lg.userData.ik;
     const len = ik.a + ik.b;
     // how far a planted foot can sit from straight-below before the leg would have to stretch
-    const maxHoriz = Math.sqrt(Math.max(0.01, (len * 0.97) ** 2 - ik.restV.y ** 2));
-    const reach = Math.min(maxHoriz * 0.85, 0.28 + hs * 0.05);
-    // cadence: faster running means quicker steps, so a foot never has to cover more ground than the leg allows
-    const stepTime = clamp(maxHoriz * 0.95 / Math.max(hs, 0.5), 0.06, 0.3);
+    // (the running crouch drops the hips, which is what buys the longer stride: the floor is nearer, so the foot can sit further out)
+    const vert = Math.max(0.3, Math.abs(ik.restV.y) - (P.runCrouch || 0));
+    const maxHoriz = Math.sqrt(Math.max(0.01, (len * 0.97) ** 2 - vert * vert));
+    const spider = !!(lg.userData.item && lg.userData.item.type === 'spider');
+    if (!spider && !lg.userData.dangle) biped = true;
+    const reach = Math.min(maxHoriz * 0.92, (spider ? 0.3 + hs * 0.04 : 0.34 + hs * 0.07) * GAIT.stride);
+    /* cadence. A step never takes less than minT, however fast you run: it used to shrink to 0.06 s, which is where
+       the sewing-machine legs came from. At speed the planted foot now runs out of reach before the other one has
+       landed, so it lifts anyway and both feet are off the ground for a moment: a bounding run, not a faster shuffle.
+       Spider legs keep their quick, light skitter; heavy frames plod. */
+    const minT = (spider ? 0.085 : 0.17 + 0.07 * heavyK) * GAIT.stepTime;
+    const stepTime = clamp(maxHoriz * 0.95 / Math.max(hs, 0.5), minT, (spider ? 0.22 : 0.36) * GAIT.stepTime);
     const rest = lg.localToWorld(ik.restV.clone());
     const lead = new THREE.Vector3(P.vel.x, 0, P.vel.z).multiplyScalar(stepTime * 0.9);
-    if (lead.length() > maxHoriz * 0.7) lead.setLength(maxHoriz * 0.7);
+    if (lead.length() > maxHoriz * 0.8) lead.setLength(maxHoriz * 0.8);
     const want = rest.clone().add(lead); want.y = groundAt(want.x, want.z) + ik.footH;
     let st = lg.userData.leg;
     if (!st) st = lg.userData.leg = { foot: want.clone(), from: want.clone(), to: want.clone(), t: 1 };
@@ -691,17 +711,30 @@ function stepLegs(ud, dt, hs, sliding) {
       st.t = Math.min(1, st.t + dt / stepTime);
       const e = st.t * st.t * (3 - 2 * st.t);
       st.foot.lerpVectors(st.from, st.to, e);
-      st.foot.y += Math.sin(st.t * Math.PI) * Math.min(0.3, 0.1 + hs * 0.02);
+      // the stomp: the foot comes up slowly and high, hangs, then is driven down fast (the peak sits two thirds of the way through)
+      const lift = (spider ? Math.min(0.22, 0.1 + hs * 0.015) : Math.min(0.5, 0.16 + hs * 0.035) * (1 + 0.3 * heavyK)) * GAIT.lift;
+      st.foot.y += Math.sin((spider ? st.t : Math.pow(st.t, 1.5)) * Math.PI) * lift;
+      rollSum -= Math.sign((lg.userData.out && lg.userData.out.x) || 1);       // the body leans off the leg in the air, onto the one that's planted
       if (st.t >= 1) {
         st.foot.copy(st.to);
-        // footfall: the body's weight lands on this leg -> a small physical bounce and a lean onto that side
-        const hf = 1 + 0.6 * ((stats && stats.heavy) || 0);
-        P.dipV -= (0.7 + hs * 0.11) * hf;
-        cam.bobV -= (0.35 + hs * 0.05) * hf;              // each footfall jolts the camera a little
+        // footfall: the body's weight lands on this leg -> a physical bounce, a lean onto that side, dust and a print
+        const hf = 1 + 0.6 * heavyK, k = GAIT.stomp;
         const side = Math.sign((lg.userData.out && lg.userData.out.x) || 1);
-        P.swayV.y += side * (0.15 + hs * 0.02);
-        if (hs > 2) dustStep(st.foot);
-        if (hs > 1.5) sfx('step', Math.min(0.5, 0.15 + hs * 0.02));
+        if (spider) {
+          P.dipV -= (0.25 + hs * 0.04) * k; cam.bobV -= 0.12 * k; P.swayV.y += side * 0.05;
+          if (hs > 1.5) { footDust(st.foot, 0.35, hs); sfx('step', Math.min(0.3, 0.08 + hs * 0.015)); footPrint(st.foot, P.legYaw, 0.1, 0.1); }
+        } else {
+          P.dipV -= (1.1 + hs * 0.16) * hf * k;
+          cam.bobV -= (0.45 + hs * 0.06) * hf * k;          // each footfall jolts the camera
+          P.swayV.y += side * (0.22 + hs * 0.03) * k;
+          if (heavyK > 0.3) cam.shake = Math.max(cam.shake, 0.035 * heavyK * k);
+          if (hs > 1) {
+            footDust(st.foot, 1 + 0.6 * heavyK, hs);
+            sfx('step', Math.min(0.6, 0.2 + hs * 0.03));
+            if (hs > 4 || heavyK > 0.3) sfx('thud', Math.min(0.3, (0.1 + 0.12 * heavyK + hs * 0.008) * k));
+            footPrint(st.foot, P.legYaw, 0.24, 0.38);
+          }
+        }
       }
     } else {
       const off = Math.hypot(st.foot.x - want.x, st.foot.z - want.z), groundGap = Math.abs(st.foot.y - want.y);
@@ -710,13 +743,91 @@ function stepLegs(ud, dt, hs, sliding) {
       const partnerBusy = legs.some((o, j) => j !== idx && (j % 2) !== (idx % 2) && o.userData.leg && o.userData.leg.t < 1);
       if (stretched || ((off > reach || groundGap > 0.6) && !partnerBusy && stepping < Math.ceil(legs.length / 2))) {
         st.from.copy(st.foot); st.to.copy(want); st.t = 0; stepping++;
+        if (!spider && hs > 3) P.dipV += 0.35 * GAIT.stomp;          // push-off: the body rises into the stride
       }
       st.foot.y = Math.max(st.foot.y, groundAt(st.foot.x, st.foot.z) + ik.footH);
     }
     legPose(ik, lg.worldToLocal(st.foot.clone()));
   });
+  // what the body does about it next frame (updatePlayerVisual): roll onto the planted foot, crouch and lean into a run
+  const run = P.onGround && !sliding && biped ? clamp((hs - 1.5) / 4, 0, 1) : 0;
+  P.gaitRollT = P.onGround && legs.length ? clamp(rollSum / legs.length * 2, -1, 1) * (biped ? 0.07 : 0.02) * GAIT.stomp : 0;
+  P.runCrouchT = 0.11 * run * GAIT.stride;
+  P.runLeanT = (P.backpedal ? -0.05 : 0.08) * run;
 }
-function dustStep(p) { if (Math.random() < 0.5) dust(p, 1); }
+/* ---------- gait tuning (dev panel sliders; saved with the other settings) ---------- */
+const GAIT = Object.assign({ stride: 1, stepTime: 1, lift: 1, stomp: 1, dust: 1, prints: 1 }, (() => { try { return JSON.parse(localStorage.getItem('scrapsurvivors.gait')) || {}; } catch (e) { return {}; } })());
+function saveGait() { try { localStorage.setItem('scrapsurvivors.gait', JSON.stringify(GAIT)); } catch (e) {} }
+/* ---------- dust: footsteps, landings, skids, wheels ----------
+   Tinted to the ground it comes off (the tile's own colour, pulled toward a dry tan), drawn by the pooled particles. */
+const _dustCol = new THREE.Color(), _dustBase = new THREE.Color(0x9a927e);
+function groundDustHex(x, z) {
+  const k = idxOf(x, z);
+  if (tileMesh && tileMesh.instanceColor && k >= 0) { tileMesh.getColorAt(k, _dustCol); _dustCol.lerp(_dustBase, 0.35).multiplyScalar(0.95); } else _dustCol.copy(_dustBase);
+  return _dustCol.getHex();
+}
+function footDust(p, k, hs) {
+  if (!S.inRun || GAIT.dust <= 0) return;
+  pfxInit(); if (PFX.lit.n > 6500) return;
+  const hex = groundDustHex(p.x, p.z), n = Math.round((2 + Math.min(3, hs * 0.4)) * k * GAIT.dust), vx = player.vel.x * 0.1, vz = player.vel.z * 0.1;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = rand(0.5, 1.7) * (0.7 + 0.3 * k), c = Math.cos(a), sn = Math.sin(a);
+    // a soft puff that swells and drifts back off the foot...
+    PFX.lit.add(p.x + c * 0.12, p.y + 0.06, p.z + sn * 0.12, c * sp - vx, rand(0.3, 0.9), sn * sp - vz, rand(0.4, 0.75), rand(0.2, 0.34) * (0.8 + 0.3 * k), hex, 0, 2.2, 2, rand(0, 3), rand(0, 3));
+  }
+  // ...and a couple of bits of grit that are kicked up and fall
+  for (let i = 0; i < Math.round(k * GAIT.dust); i++) PFX.lit.add(p.x, p.y + 0.05, p.z, rand(-1.6, 1.6) - vx * 2, rand(1.5, 3.2), rand(-1.6, 1.6) - vz * 2, rand(0.3, 0.5), rand(0.05, 0.09), hex, 14, 0, 0, rand(0, 3), rand(0, 3), rand(-8, 8), rand(-8, 8), 0.8);
+}
+/* a landing throws a ring of dust out along the ground: wider and thicker the harder you come down */
+function landDust(p, impact) {
+  if (!S.inRun || GAIT.dust <= 0) return;
+  pfxInit(); if (PFX.lit.n > 6500) return;
+  const hex = groundDustHex(p.x, p.z), n = Math.round(clamp(impact * 1.3, 6, 46) * GAIT.dust), out = clamp(2 + impact * 0.22, 2.5, 9);
+  for (let i = 0; i < n; i++) {
+    const a = (i + Math.random()) / n * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a), sp = out * rand(0.55, 1);
+    PFX.lit.add(p.x + c * 0.35, p.y + 0.08, p.z + sn * 0.35, c * sp, rand(0.2, 1.1), sn * sp, rand(0.5, 0.95), rand(0.26, 0.5) * clamp(0.7 + impact * 0.02, 0.7, 1.5), hex, 0, 3.2, 2, rand(0, 3), rand(0, 3));
+  }
+  for (let i = 0; i < n / 3; i++) PFX.lit.add(p.x + rand(-.4, .4), p.y + 0.1, p.z + rand(-.4, .4), rand(-3, 3), rand(2, 5), rand(-3, 3), rand(0.35, 0.6), rand(0.05, 0.1), hex, 14, 0, 0, rand(0, 3), rand(0, 3), rand(-8, 8), rand(-8, 8), 0.8);
+}
+/* ---------- footprints: a dark scuff where each foot lands, fading out (shrinking away) after a while ----------
+   One instanced quad for all of them, written round-robin: 160 prints is plenty to trail behind you. */
+const FOOT_MAX = 160, FOOT_LIFE = 14;
+const FOOT = { im: null, n: 0, born: new Float32Array(FOOT_MAX).fill(-1e9), sx: new Float32Array(FOOT_MAX), sz: new Float32Array(FOOT_MAX), x: new Float32Array(FOOT_MAX), y: new Float32Array(FOOT_MAX), z: new Float32Array(FOOT_MAX), yaw: new Float32Array(FOOT_MAX), t: 0, clock: 0 };
+const _fpM = new THREE.Matrix4(), _fpQ = new THREE.Quaternion(), _fpS = new THREE.Vector3(), _fpP = new THREE.Vector3(), _fpUp = new THREE.Vector3(0, 1, 0);
+function footInit() {
+  if (FOOT.im) return;
+  const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
+  const im = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0x0b0c0d, transparent: true, opacity: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), FOOT_MAX);
+  im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); im.frustumCulled = false; im.userData.noShadow = true; im.castShadow = false; im.receiveShadow = false;
+  _fpM.makeScale(0, 0, 0); for (let i = 0; i < FOOT_MAX; i++) im.setMatrixAt(i, _fpM);
+  scene.add(im); FOOT.im = im;
+}
+function footWrite(i, k) {
+  _fpQ.setFromAxisAngle(_fpUp, FOOT.yaw[i]);
+  _fpM.compose(_fpP.set(FOOT.x[i], FOOT.y[i], FOOT.z[i]), _fpQ, _fpS.set(FOOT.sx[i] * k, 1, FOOT.sz[i] * k));
+  FOOT.im.setMatrixAt(i, _fpM);
+}
+function footPrint(p, yaw, w, l) {
+  if (!S.inRun || !GAIT.prints) return;
+  const g = groundAt(p.x, p.z);
+  if (Math.abs(groundAt(p.x + 0.2, p.z) - g) > 0.05 || Math.abs(groundAt(p.x - 0.2, p.z) - g) > 0.05 || Math.abs(groundAt(p.x, p.z + 0.2) - g) > 0.05 || Math.abs(groundAt(p.x, p.z - 0.2) - g) > 0.05) return;   // not over a ledge
+  footInit();
+  const i = FOOT.n++ % FOOT_MAX;
+  FOOT.x[i] = p.x; FOOT.y[i] = g + 0.022 + (i % 8) * 0.0015; FOOT.z[i] = p.z; FOOT.yaw[i] = yaw; FOOT.sx[i] = w; FOOT.sz[i] = l; FOOT.born[i] = FOOT.clock;
+  footWrite(i, 1); FOOT.im.instanceMatrix.needsUpdate = true;
+}
+function footTick(dt) {
+  FOOT.clock += dt;
+  if (!FOOT.im || (FOOT.t -= dt) > 0) return;
+  FOOT.t = 0.12;
+  let any = false;
+  for (let i = 0; i < FOOT_MAX; i++) {
+    const age = FOOT.clock - FOOT.born[i]; if (age < FOOT_LIFE - 3 || age > FOOT_LIFE + 0.3) continue;
+    footWrite(i, clamp((FOOT_LIFE - age) / 3, 0, 1)); any = true;
+  }
+  if (any) FOOT.im.instanceMatrix.needsUpdate = true;
+}
+function clearFootprints() { if (!FOOT.im) return; _fpM.makeScale(0, 0, 0); for (let i = 0; i < FOOT_MAX; i++) FOOT.im.setMatrixAt(i, _fpM); FOOT.born.fill(-1e9); FOOT.im.instanceMatrix.needsUpdate = true; }
 
 /* Is the straight line a->b clear of terrain (sampled)? */
 function lineClear(a, b, pad = 0.3) {
