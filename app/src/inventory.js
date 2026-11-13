@@ -360,7 +360,7 @@ function renderBench() {
           const headCount = k === 'weapon' ? '' : ` · ${Math.max(0, left)}/${HANGAR_RULES[k].max}`;
           const sep = head ? `<div class="psep"><span>${CAT_LABEL[k]}${SETTINGS.dev ? '' : headCount}</span></div>` : '';
           const tag = SETTINGS.dev ? '∞' : k === 'weapon' ? `${hangarCount('weapon', t)}/${weaponCap(t)}` : left > 0 ? '' : 'max';
-          return sep + partRow(mkPreviewItem(k, t), `data-cat="${k}:${t}"${left <= 0 ? ' data-capped="1"' : ''}`, tag).replace('class="prow"', left <= 0 ? 'class="prow capped"' : 'class="prow"');
+          return sep + partRow(mkPreviewItem(k, t), `data-cat="${k}:${t}"${left <= 0 ? ' data-capped="1"' : ''}`, tag).replace('class="prow', left <= 0 ? 'class="prow capped' : 'class="prow');      // (weapon rows are "prow wrow": matching the closing quote here meant they never got greyed out)
         }).join('')
       : INV.shelf.map((it, i) => partRow(it, `data-shelf="${i}"`)).join('') || '<div class="phint">—</div>';
   } else {
