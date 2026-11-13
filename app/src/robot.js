@@ -659,11 +659,12 @@ function buildAdapter(g, item, out, reg) {
   const face = ax >= ay && ax >= az ? (o.x > 0 ? 'right' : 'left') : ay >= az ? (o.y > 0 ? 'top' : 'bottom') : (o.z > 0 ? 'front' : 'back');
   // the adapter's own frame: +z straight out of the torso socket, x across the head
   const hg = new THREE.Group(), fr = FACE_ROT[face]; hg.rotation.set(fr[0], fr[1], fr[2]); g.add(hg);
-  const W = 0.42, gap = 0.5, H = 0.3, stub = 0.2, steel = V2_STEEL, collar = toArm ? 0x3a6ea8 : 0xa8763a;
+  // a thin plate now (0.12 m deep instead of 0.5): it used to push whatever it held half a metre further out
+  const W = 0.42, gap = 0.5, H = 0.075, stub = 0.045, steel = V2_STEEL, collar = toArm ? 0x3a6ea8 : 0xa8763a;
   const Hw = W + (n - 1) * gap, hz = stub + H / 2;
   hg.add(bx(0.3, 0.3, stub, steel, 0, 0, stub / 2));                                  // the stub, in line with the torso socket
   hg.add(bx(Hw, W, H, steel, 0, 0, hz));                                              // the head
-  hg.add(bx(Hw + 0.04, W + 0.04, 0.05, collar, 0, 0, hz + H / 2 - 0.02));             // coloured collar: blue = arm, amber = module
+  hg.add(bx(Hw + 0.04, W + 0.04, 0.025, collar, 0, 0, hz + H / 2 - 0.01));             // coloured collar: blue = arm, amber = module
   const fq = hg.quaternion.clone(), oOut = new THREE.Vector3(0, 0, 1).applyQuaternion(fq);
   for (let i = 0; i < n; i++) {
     const off = (i - (n - 1) / 2) * gap;
