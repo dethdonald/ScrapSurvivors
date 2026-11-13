@@ -57,6 +57,7 @@ function startStage() {
   setLevelPalette(); _skyCol.copy(LEVEL_PAL.sky);
   buildTerrainMesh(); mmBuild();
   physResetWorld();
+  try { warmRender(); } catch (err) { console.warn('warm-up', err); }
   Object.assign(S, {
     t: 0, spawnAcc: 0, flowT: 0, rerolls: 3, shopAwayT: 0, berserkT: 0, berserkLast: -999, vacSeeded: false, vacT: 0, gateOpen: false, bossSpawned: false, bossDead: false, boss: null, mini: null, nextMini: 200, hordeIdx: 0,
     hordes: [{ t: rand(140, 170) / TIME_K }, { t: rand(400, 440) / TIME_K }, { t: rand(640, 690) / TIME_K }],
@@ -184,6 +185,17 @@ function simStep(dt) {
 /* at most 3 logic steps per drawn frame: a slow frame used to trigger up to 8 catch-up steps, which made the next frame
    slower still (a spiral). Now a very heavy moment runs slightly slow-motion instead of tanking the framerate. */
 const MAX_CATCHUP = 3;
+/* ---------- hitch log: any frame over 70 ms in a fight is written to scrapsurvivors-log.txt with what changed that frame
+   (new shaders compiled, enemies added), so a stutter on someone's machine can be traced without being there. */
+const HITCH = { np: -1, n: 0, list: [] };
+function hitchCheck(dt, ms) {
+  const P = renderer.info.programs, np = P ? P.length : 0, newP = HITCH.np < 0 ? 0 : np - HITCH.np; HITCH.np = np;
+  if (ms < 70 || !S.inRun || S.mode !== 'play') return;
+  const h = { ms: Math.round(ms), shaders: newP, enemies: enemies.length, t: Math.round(S.t) };
+  if (newP > 0 && P) { h.which = P.slice(-newP).map(p => p.name).join(', '); h.keys = P.slice(-newP).map(p => String(p.cacheKey).slice(0, 400)); }
+  HITCH.list.push(h); if (HITCH.list.length > 50) HITCH.list.shift();
+  if (HITCH.n++ < 25) console.warn('hitch ' + JSON.stringify(h));
+}
 let last = performance.now(), acc = 0;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
@@ -266,6 +278,7 @@ function frame(now) {
     const rt0 = performance.now();
     renderFrame(scene, camera);
     if (SETTINGS.dev) perfTick(dt, performance.now() - perfT0, perfSim, performance.now() - rt0);
+    hitchCheck(dt, performance.now() - perfT0);
     if (STRESS.on) stressTick(now);
   }
   requestAnimationFrame(frame);

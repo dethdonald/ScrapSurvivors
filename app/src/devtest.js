@@ -222,7 +222,7 @@ function perfTick(dt, total, sim, ren) {
    between the two sizes either side of the line. Screens faster than 60 Hz are fine (we look at frame time, and a
    60 Hz screen simply shows "60+" for everything it keeps up with).
    Also runs unattended: launch with --stress and the result is written to stress-result.json next to the game. */
-const STRESS = { on: false, steps: [200, 400, 600, 800, 1000, 1300, 1600, 2000, 2500, 3000, 4000], i: 0, t: 0, ft: [], rows: [], last: null, el: null, lastNow: 0, auto: false };
+const STRESS = { on: false, steps: [200, 400, 600, 800, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1800, 2000, 2300, 2600, 3000, 4000], i: 0, t: 0, ft: [], rows: [], last: null, el: null, lastNow: 0, auto: false };
 const STRESS_MIX = [['crawler', 0.74], ['drone', 0.12], ['spitter', 0.08], ['bomber', 0.03], ['splitter', 0.03]];
 function stressLine(r) { return `60 fps up to ~${r.at60 ?? '?'} enemies · 30 fps up to ~${r.at30 ?? '?'}${r.capped ? ' (hit the top of the test)' : ''}`; }
 function stressFill(n) {
@@ -237,11 +237,13 @@ function stressStart(auto) {
   if (!S.test || STRESS.on) return;
   devClearEnemies(); DEV.god = true; DEV.hold = false;
   Object.assign(STRESS, { on: true, i: 0, t: 0, ft: [], rows: [], lastNow: 0, auto: !!auto });
+  S.xp = 0; S.need = 1e12; S.pendingLv = 0;        // no level-ups: the time spent on that screen was being counted as one enormous frame
+  STRESS.h0 = HITCH.list.length; HITCH.list.length = 0;
   if (!STRESS.el) { STRESS.el = document.createElement('div'); STRESS.el.id = 'stressHud'; document.body.appendChild(STRESS.el); }
   STRESS.el.hidden = false; STRESS.el.textContent = 'Stress test…';
 }
 function stressStop(why) {
-  STRESS.on = false; mouseFire = false;
+  STRESS.on = false; mouseFire = false; S.need = xpNeed(S.level);
   const rows = STRESS.rows, ms = r => r.ms;
   // where the frame-time curve crosses a line (16.9 ms = 59 fps, 33.9 ms = 29.5 fps: a hair of slack for timer jitter)
   const cross = lim => {
@@ -251,20 +253,21 @@ function stressStop(why) {
     return rows[rows.length - 1].n;
   };
   const top = rows.length ? rows[rows.length - 1] : null;
-  const res = { why, at60: cross(16.9), at30: cross(33.9), capped: !!top && top.ms <= 33.9, rows, gfx: SETTINGS.gfx, w: innerWidth, h: innerHeight, dpr: devicePixelRatio, when: new Date().toISOString(), version: typeof VERSION === 'string' ? VERSION : '' };
+  const hitches = HITCH.list.filter(h => h.ms >= 100);
+  const res = { why, at60: cross(16.9), at30: cross(33.9), capped: !!top && top.ms <= 33.9, rows, gfx: SETTINGS.gfx, w: innerWidth, h: innerHeight, dpr: devicePixelRatio, when: new Date().toISOString(), version: typeof VERSION === 'string' ? VERSION : '', hitches, warm: WARM_INFO };
   STRESS.last = res;
   devClearEnemies();
-  STRESS.el.innerHTML = `<b>Stress test done</b><br>${stressLine(res)}<br><table>${rows.map(r => `<tr><td>${r.n}</td><td>${r.fps.toFixed(0)} fps</td><td>low ${r.low.toFixed(0)}</td><td>${r.ms.toFixed(1)} ms</td></tr>`).join('')}</table><small>graphics: ${res.gfx} · ${res.w}×${res.h} · click to close</small>`;
+  STRESS.el.innerHTML = `<b>Stress test done</b><br>${stressLine(res)}<br><table>${rows.map(r => `<tr><td>${r.n}</td><td>${r.fps.toFixed(0)} fps</td><td>low ${r.low.toFixed(0)}</td><td>${r.ms.toFixed(1)} ms</td></tr>`).join('')}</table>${hitches.length ? `<div class="hitch">${hitches.length} stall${hitches.length > 1 ? 's' : ''} over 100 ms: ${hitches.slice(0, 4).map(h => h.ms + ' ms' + (h.shaders ? ' (' + h.shaders + ' new shader' + (h.shaders > 1 ? 's' : '') + ')' : '')).join(', ')}</div>` : '<div>No stalls over 100 ms</div>'}<small>graphics: ${res.gfx} · ${res.w}×${res.h} · click to close</small>`;
   STRESS.el.style.pointerEvents = 'auto'; STRESS.el.onclick = () => { STRESS.el.hidden = true; STRESS.el.style.pointerEvents = ''; };
   console.log('STRESS_RESULT ' + JSON.stringify(res));
 }
 /* called once per drawn frame (game.js) */
 function stressTick(now) {
   if (!STRESS.on) return;
-  if (!S.test || S.mode !== 'play') { if (S.mode === 'levelup' || S.mode === 'perk' || S.mode === 'countdown') return; stressStop('left the test range'); return; }
+  if (!S.test || S.mode !== 'play') { STRESS.lastNow = 0; if (S.mode === 'levelup' || S.mode === 'perk' || S.mode === 'countdown' || S.mode === 'pause' || S.mode === 'devpanel') return; stressStop('left the test range'); return; }
   const dtMs = STRESS.lastNow ? now - STRESS.lastNow : 0; STRESS.lastNow = now;
   const n = STRESS.steps[STRESS.i];
-  mouseFire = true; S.pendingLv = 0;                  // every gun firing; no level-up screens in the way
+  mouseFire = true; S.pendingLv = 0; S.xp = 0;                  // every gun firing; no level-up screens in the way
   player.hp = stats.maxHp;
   stressFill(n);
   STRESS.t += dtMs / 1000;

@@ -723,3 +723,9 @@ Goal: 2–3× the enemies. Measured on the headless bench (`/home/claude/bench`,
 - **DOM/HUD**: diffed HUD writes, kill-streak UI once per frame, cached `$('#id')`, minimap colour cached, META saves debounced (`flushMeta` on quit/pause/game over).
 - **Caps raised**: run spawn cap `ENEMY_CAP` 640 → 1300; shot caps 160/280 → 320/560; dev counts 500 and 1000.
 - **Stress test**: dev panel → “Run the horde stress test” (or `electron . --stress`, writes `stress-result.json`). Mixed horde 200 → 4000, reports enemies held at 60 and 30 fps on that machine.
+
+## 0.44.1 — stutter fixes (Nov 13)
+- **Shader warm-up** `warmRender()` (combat.js), called from `startStage()`: builds every enemy kind's template and instanced batches (non-boss batches pre-sized to the next power of two above `ENEMY_CAP` + 64, so they never reallocate mid-fight), adds throwaway meshes for each effect material combination (Basic/Standard/Lambert × side × toneMapped × transparent/additive × plain/instanced/instance-colour), then `renderer.compile(scene, camera)`. `WARM_INFO` = {ms, progs}.
+- **Hitch log** `hitchCheck()` (game.js): any in-run frame over 70 ms is `console.warn`ed (→ scrapsurvivors-log.txt) with new shader count/names/keys and enemy count; last 50 in `HITCH.list`.
+- **Stress test**: XP frozen during the test (a level-up screen was being timed as one multi-second frame — that was the "low 0" rows), paused time not counted, finer steps (100 apart from 1000 to 1600), reports stalls over 100 ms.
+- **Enemy cap** fixed at `ENEMY_CAP = 1500` on every machine (no per-device scaling).

@@ -257,6 +257,54 @@ function updateEnemyBatches() {
     }
   }
 }
+/* ---------- shader warm-up: no first-time stalls mid-fight ----------
+   The first time the GPU is asked to draw something with a new combination of material settings (a new enemy kind,
+   a see-through enemy, a double-sided flash, an instanced spark...) the driver has to compile a shader for it, and on
+   Windows that can freeze the game for anywhere from a few frames to a second or more. warmRender() runs while a stage
+   is being built (behind the drop countdown / loading): it
+     1. builds every enemy kind's pieces and their instanced batches, already big enough for a full horde (so a batch
+        never has to be reallocated in the middle of a fight either), and
+     2. puts one throwaway object for each material combination the effects use into the scene,
+   then asks three.js to compile everything in the scene at once. Programs are shared by settings, not by colour, so
+   effects made later in any colour reuse what was compiled here. */
+const WARM_INFO = { ms: 0, progs: 0 };
+function warmRender() {
+  const t0 = performance.now(), P = renderer.info.programs, p0 = P ? P.length : 0;
+  const hordeCap = 1 << Math.ceil(Math.log2(ENEMY_CAP + 64));
+  for (const type of Object.keys(ETYPES)) {
+    const d = ETYPES[type];
+    for (const sh of type === 'crawler' ? CRAWLER_SHAPES : [undefined]) {
+      let T; try { T = enemyTemplate(type, sh); } catch (err) { continue; }
+      for (const part of T) { const b = enemyBatch(part); if (!d.boss && b.cap < hordeCap) growBatch(b, hordeCap); }
+    }
+  }
+  // the batches are hidden while empty: show them for the compile
+  const shown = [];
+  for (const b of ENEMY_BATCH.values()) for (const k of EB_KEYS) { const im = b[k]; if (im && !im.visible) { im.visible = true; shown.push(im); } }
+  // one stand-in per effect material combination (colour doesn't matter, the settings do)
+  const g = new THREE.Group(), geo = geoBox, col = new THREE.Color(1, 1, 1), mats = [];
+  for (const side of [THREE.FrontSide, THREE.DoubleSide]) for (const tm of [true, false]) for (const tr of [false, true]) {
+    mats.push(new THREE.MeshBasicMaterial({ color: 0xffffff, side, toneMapped: tm, transparent: tr, depthWrite: !tr }));
+    mats.push(new THREE.MeshBasicMaterial({ color: 0xffffff, side, toneMapped: tm, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  }
+  for (const side of [THREE.FrontSide, THREE.DoubleSide]) for (const tr of [false, true]) {
+    mats.push(new THREE.MeshStandardMaterial({ color: 0xffffff, side, transparent: tr, roughness: 0.6, metalness: 0.2 }));
+    mats.push(new THREE.MeshLambertMaterial({ color: 0xffffff, side, transparent: tr }));
+  }
+  mats.push(M(0xffffff), M(0xffffff, 0x222222), SM(0xffffff, 0, { roughness: 0.5, metalness: 0.3 }));
+  for (const m of mats) {
+    const a = new THREE.Mesh(geo, m); a.castShadow = true; a.receiveShadow = true; g.add(a);
+    const b = new THREE.Mesh(geo, m); b.castShadow = false; b.receiveShadow = false; g.add(b);
+    const im = new THREE.InstancedMesh(geo, m, 1); im.count = 1; im.castShadow = true; im.receiveShadow = true; g.add(im);
+    const ic = new THREE.InstancedMesh(geo, m, 1); ic.setColorAt(0, col); ic.count = 1; ic.receiveShadow = !m.isMeshBasicMaterial; g.add(ic);
+  }
+  g.position.set(0, -500, 0); scene.add(g);
+  try { renderer.compile(scene, camera); } catch (err) { console.warn('warm-up', err); }
+  scene.remove(g);
+  for (const m of mats) if (!isShared(m)) m.dispose();      // the programs stay in three.js's cache; only the throwaway materials go
+  for (const im of shown) im.visible = false;
+  WARM_INFO.ms = performance.now() - t0; WARM_INFO.progs = (P ? P.length : 0) - p0;
+}
 /* the stand-in each enemy carries: just a transform plus the bits of state the game pokes (flash, chill, the bomber's light) */
 function enemyProxy(type, shape) {
   const p = new THREE.Object3D();
@@ -364,7 +412,7 @@ function spawnPack(p, n, extra) {
   }
 }
 /* the most enemies alive at once in a run. It was 640; the horde now costs well under half of what it did per enemy. */
-const ENEMY_CAP = 1300;
+const ENEMY_CAP = 1500;
 function spawnTick(dt) {
   if (S.test || enemies.length >= ENEMY_CAP) return;      // the test range only spawns what you ask for
   // twice the swarm of the original tuning (each enemy just as tough)
