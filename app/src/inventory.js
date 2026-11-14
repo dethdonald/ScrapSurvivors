@@ -143,14 +143,15 @@ function scrapValue(it) { return Math.max(1, Math.round([it, ...childrenOf(it)].
 
 /* ---------- open / close ---------- */
 function openInventory(hangar) {
+  // mid-run the bay wipes up over the fight (the hangar between runs opens plainly, it is already its own screen)
+  if (!hangar && !INV.wiping && typeof asciiWipe === 'function') { INV.wiping = 1; asciiWipe(() => { INV.wiping = 0; openInventory(false); }, 'u'); return; }
   INV.hangar = hangar; INV.msg = ''; INV.msgT = 0;
   if (!hangar) { if (S.mode !== 'inv') S.prevMode = S.mode; S.mode = 'inv'; unlockPointer(); }
   else S.mode = 'hangar';
   $('#hud').hidden = true;
   $('#inv').hidden = false;
   $('#toast').hidden = true;
-  // a quick wipe across the screen as the storage window opens mid-run
-  if (!hangar) { const inv = $('#inv'); inv.classList.remove('wipe'); void inv.offsetWidth; inv.classList.add('wipe'); sfx('swish', 0.4); }
+  if (!hangar) sfx('swish', 0.4);
   rebuildPreview();
   renderBench();
 
@@ -173,11 +174,14 @@ function closeInventory() {
   if (need.length) { say(`Needs: ${need.join(', ')}`, true); sfx('deny'); return; }
   const left = stowLoose();
   if (left) { say(`Storage full · mount or recycle ${left}`, true); sfx('deny'); renderBench(); return; }
-  $('#inv').hidden = true; setTip(null);
-  $('#hud').hidden = false;
-  refreshLoadout();
-  S.mode = S.prevMode === 'drop' ? 'drop' : 'play';
-  if (S.mode === 'play' && S.pendingLv > 0) openLevelUp(); else lockPointer();
+  const finish = () => {
+    $('#inv').hidden = true; setTip(null);
+    $('#hud').hidden = false;
+    refreshLoadout();
+    S.mode = S.prevMode === 'drop' ? 'drop' : 'play';
+    if (S.mode === 'play' && S.pendingLv > 0) openLevelUp(); else lockPointer();
+  };
+  if (typeof asciiWipe === 'function') asciiWipe(finish, 'u'); else finish();
 }
 function invBack() {
   if (INV.drag) { endDrag(INV.cursor.x, INV.cursor.y, true); return; }
@@ -370,6 +374,10 @@ function renderBench() {
   }
   $('#partsHead').textContent = INV.hangar ? 'Parts' : `Storage ${storeCount()}/${storeCap()}`;
   $('#partsHint').textContent = INV.hangar ? 'Drag to socket · Click: turn · Twin: upgrade' : 'Drag out: mount · Twin: upgrade · Bin: bolts';
+  { const lg = $('#invLegend');
+    if (lg) lg.innerHTML = IN.device === 'pad'
+      ? `${padBtn('A')}grab · ${padBtn('RS')}turn · ${padBtn('B')}back · ${padBtn(INV.hangar ? 'Start' : 'Start')}${INV.hangar ? 'launch' : 'close'} · right stick over parts: scroll`
+      : 'Drag: turn · Scroll: zoom · <kbd>Enter</kbd> close'; }
   $('#scrapZone').hidden = INV.hangar;
   $('#invDoneBtn').textContent = INV.hangar ? 'Launch' : 'Fight';
   $('#invMenuBtn').hidden = !INV.hangar;
@@ -979,6 +987,7 @@ const SFX_CAP = { low: 14, mid: 26, high: 40 }, SFX_LEN = { thoom: 1, boom: 0.9,
 const SFXV = { ends: [], dropped: 0, played: 0, byKind: {} };
 function sfx(kind, vol = 1) {
   if (!actx) return;
+  if ((SETTINGS.master ?? 1) <= 0 || (SETTINGS.sfxVol ?? 1) <= 0) return;
   const now = actx.currentTime;
   if (sfxGap[kind] && now - (sfxLast[kind] || 0) < sfxGap[kind]) return;
   const ends = SFXV.ends; let w = 0; for (let i = 0; i < ends.length; i++) if (ends[i] > now) ends[w++] = ends[i]; ends.length = w;      // forget the finished ones
@@ -1001,7 +1010,9 @@ function sfxNoiseBuf(dur) {
 function sfxPlay(kind, vol, live) {
   const now = actx.currentTime;
   try {
-    const t = actx.currentTime, out = actx.createGain(); out.gain.value = 0.35 * vol; out.connect(actx.destination);
+    const t = actx.currentTime, out = actx.createGain();
+    out.gain.value = 0.35 * vol * (SETTINGS.master ?? 1) * (SETTINGS.sfxVol ?? 1);      // master and effects volume (Options > Audio)
+    out.connect(actx.destination);
     // guns: every shot is pitched a touch differently so automatic fire doesn't sound like one sample on repeat
     const gun = GUN_LAYERS[kind], pv = (gun ? 1 + (Math.random() - 0.5) * 0.12 : 1) * (typeof SFX_PITCH === 'number' ? SFX_PITCH : 1);
     // big bangs ring off the arena walls: a couple of darker, later echoes

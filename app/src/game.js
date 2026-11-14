@@ -48,7 +48,7 @@ function clearWorld() {
   physDestroyRobot();
   clearRagdoll();
   if (DR.active) { DR.pieces.forEach(p => scene.remove(p.obj)); DR.pieces = []; DR.active = false; }
-  endAtmos(); if (pickRing) pickRing.visible = false; $('#qrIntro').hidden = true;
+  endAtmos(); if (pickRing) pickRing.visible = false; qrIntroHide();
   $('#countdown').hidden = true;
 }
 function startStage() {
@@ -84,7 +84,7 @@ function startStage() {
 }
 function land() {
   const P = player;
-  endDropRag(); endAtmos(); $('#qrIntro').hidden = true;
+  endDropRag(); endAtmos(); qrIntroHide();
   P.pos.y = groundAt(P.pos.x, P.pos.z); P.vel.set(0, 0, 0); P.onGround = true; P.peak = P.pos.y;
   if (S.megaLand) {
     // coming down from a mega jump: the impact wipes out everything nearby (bosses just take a hit)
@@ -100,11 +100,28 @@ function land() {
     propsBlast(P.pos.clone(), R, 8); sfx('boom', 1); cam.shake = 1;
     enemies = enemies.filter(e => !e.dead);
   }
-  S.mode = 'play'; cam.shake = 0.7; cam.pitch = 0.25; cam.bobV -= 4;
+  endDive();
+  S.mode = 'play'; cam.pitch = 0.25;
   gems.filter(g => g.sky).forEach(g => { g.done = true; scene.remove(g.mesh); }); gems = gems.filter(g => !g.done);
-  ring(P.pos, 10, 0.6, ORANGE); dust(P.pos, 14);
+  /* Touchdown is an impact: the frame drives into the ground in a crouch and the ground gives. A fireball, two
+     shockwave rings, a scorch mark, a wall of dust, and anything standing nearby is thrown off its feet. */
+  heroLand();
+  const lp = P.pos.clone(), hi = lp.clone().setY(lp.y + 1);
+  blast(hi, 7, 0xffb24a); blast(hi, 4.5, 0xff6a2a);
+  ring(lp, 15, 0.55, ORANGE); ring(lp, 9, 0.75, 0xffd25a); ring(lp, 22, 0.9, 0x8a6a4a);
+  dust(lp, 26); landDust(lp, 34); stain(lp.x, lp.z, 5.5, 0x1a1512);
+  propsBlast(lp, 14, 9);
+  for (const e of enemies) {
+    if (e.dead || e.boss) continue;
+    const d = Math.hypot(e.pos.x - lp.x, e.pos.z - lp.z); if (d > 14) continue;
+    const dir = new THREE.Vector3(e.pos.x - lp.x, 0, e.pos.z - lp.z); if (dir.lengthSq() < 1e-4) dir.set(1, 0, 0);
+    knock(e, dir.normalize(), 16 * (1 - d / 14) + 4, 9);
+    damage(e, (25 + 20 * (S.stage || 1)) * (1 - d / 14));      // anything light standing under the impact is scrapped
+  }
+  sfx('boom', 0.9); sfx('thoom', 0.7); sfx('land', 0.8);
+  cam.shake = 1.15; cam.bobV -= 7; cam.dip = 0.5; P.dipV -= 9;
   computeFlow(P.pos.x, P.pos.z);
-  $('#hint').innerHTML = `${keyHint('LMB', 'RT')}fire ${stats.canSprint ? keyHint('Shift', 'LB') + 'boost ' : ''}${keyHint('C', 'B')}slide ${keyHint('Enter', 'View')}inventory`;
+  $('#hint').innerHTML = `${keyHint('LMB', 'RT')}fire ${stats.canSprint ? keyHint('Shift', 'LB') + 'boost ' : ''}${keyHint('C', 'B')}slide ${keyHint('Enter', 'Start')}build bay`;
   setTimeout(() => { if (S.mode === 'play') $('#hint').innerHTML = ''; }, 9000);
   banner('TOUCHDOWN', S.t < 1 ? 'Boss at 8:30' : '', 'var(--orange)', 2.2);
 }
@@ -154,7 +171,14 @@ function simStep(dt) {
   const sub = dt / CFG.playerSubsteps;
   for (let i = 0; i < CFG.playerSubsteps; i++) playerStep(sub);
   physStep(dt);
-  P.shieldT -= dt; if (P.shieldT <= 0) P.shield = Math.min(stats.maxShield, P.shield + stats.shieldRate * dt);
+  // a big shield refills no slower than a small one: the rate is a flat amount plus a share of the maximum,
+  // so any build gets its shield back about three seconds after the shooting stops (it was over ten).
+  P.shieldT -= dt;
+  if (P.shieldT <= 0 && P.shield < stats.maxShield) {
+    const was = P.shield;
+    P.shield = Math.min(stats.maxShield, P.shield + (stats.shieldRate + stats.maxShield * 0.3) * dt);
+    if (was <= 0 && P.shield > 0) sfx('snapZ', 0.35);        // the moment it comes back up
+  }
   S.t += dt;
   runStatTick(dt);
   updateTimeline();
@@ -203,7 +227,7 @@ function frame(now) {
   pollInput(dt);
   try { musicTick(dt); } catch (e) { console.warn('music', e); }
   if (cineTick(dt)) { requestAnimationFrame(frame); return; }          // the MK III reveal owns the frame (gameplay and the stage clock stand still)
-  if (S.mode === 'title' || S.mode === 'custom' || S.mode === 'catalog' || (S.mode === 'pause' && TITLE.fromOptions)) {
+  if (S.mode === 'title' || S.mode === 'custom' || S.mode === 'catalog' || S.mode === 'levelsel' || (S.mode === 'pause' && TITLE.fromOptions)) {
     renderTitle(dt);
   } else if (S.mode === 'hangar' || S.mode === 'inv') {
     renderPreview(dt);
@@ -242,7 +266,7 @@ function frame(now) {
         el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
         if (n > 0) sfx('beep'); else sfx('launch');
       }
-      if (S.countT <= 1.2) { setTimeout(() => { $('#countdown').hidden = true; }, 500); S.mode = 'drop'; startDropRag(); cam.shake = 0.35; INTRO.k = 0; }
+      if (S.countT <= 1.2) { setTimeout(() => { $('#countdown').hidden = true; }, 500); S.mode = 'drop'; startDive(); cam.shake = 0.35; INTRO.k = 0; }
       player.renderPos.copy(player.pos); player.visY = player.pos.y;
       if (player.model) { player.model.position.copy(player.pos); player.model.visible = S.mode !== 'countdown'; }
       updateCamera(dt); introCamera(dt); updateHUD(dt);
@@ -269,7 +293,9 @@ function frame(now) {
     } else if (player.model && S.inRun) {
       updatePlayerVisual(dt, playing() ? alpha : 1);
       physSync(playing() ? alpha : 1); syncProps();
+      if (S.mode === 'drop') updateAtmos(dt);
       updateCamera(dt);
+      if (S.mode === 'drop' && INTRO.k < 1) { INTRO.k = Math.min(1, INTRO.k + dt / 1.5); introCamera(dt); }    // still pulling out of the QR shot
       updateHUD(dt);
     }
     if (SETTINGS.dev) { renderer.info.autoReset = false; renderer.info.reset(); }
@@ -332,6 +358,20 @@ function drawLevelQR() {
   c.fillStyle = K;
   for (let k = 0; k < NC; k++) if (mod[k]) c.fillRect(Q + k % GRID, Q + ((k / GRID) | 0), 1, 1);
   cv.dataset.q = Q; cv.hidden = false; cv.style.opacity = 0;
+  // the readout that grows out of the code
+  const zone = (typeof LEVELS === 'object' && LEVELS[S.level0 || 'arena']) ? LEVELS[S.level0 || 'arena'].name : 'The Arena';
+  const bossAt = `${Math.floor(BOSS_AT / TIME_K / 60)}:${String(Math.round(BOSS_AT / TIME_K % 60)).padStart(2, '0')}`;
+  const put = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  put('#qiZone', zone); put('#qiStage', S.stage); put('#qiBoss', bossAt); put('#qiRings', SKY_RINGS.length);
+  put('#qiTitle', 'SCANNING DROP ZONE');
+  $('#qrBack').hidden = false; $('#qrBack').style.opacity = 0;
+  const info = $('#qrInfo'); info.hidden = false; info.classList.remove('on'); info.style.opacity = 0;
+}
+function qrIntroHide() {
+  $('#qrIntro').hidden = true;
+  const b = $('#qrBack'), i = $('#qrInfo');
+  if (b) b.hidden = true;
+  if (i) { i.hidden = true; i.classList.remove('on'); }
 }
 function introCamera(dt) {
   const t = S.countT, cv = $('#qrIntro'), dropping = S.mode !== 'countdown';
@@ -350,12 +390,23 @@ function introCamera(dt) {
   // the QR: in fast, hold, then dissolve into the level underneath (it's the same layout, so it lines up)
   const a = dropping ? 0 : t > 3.6 ? (3.99 - t) / 0.39 : t > 2.5 ? 1 : clamp((t - 1.5) / 1.0, 0, 1);
   cv.style.opacity = a.toFixed(3);
+  // the black field behind the code hides the level, then clears a beat before the code does, so the arena
+  // is revealed underneath exactly where the code was
+  const back = $('#qrBack'), info = $('#qrInfo');
+  if (back) { back.style.opacity = Math.min(1, a * 1.25).toFixed(3); back.hidden = a <= 0; }
+  if (info) {
+    info.style.opacity = a.toFixed(3);
+    if (!dropping && t < 3.55 && !info.classList.contains('on')) { info.classList.add('on'); sfx('beep', 0.35); }
+    if (a <= 0) { info.hidden = true; info.classList.remove('on'); }
+  }
   if (a <= 0 && dropping) cv.hidden = true;
   if (a > 0) {
     const Q = +cv.dataset.q, cell = CELL, ext2 = HALF + Q * cell;
     const p1 = new THREE.Vector3(-ext2, INTRO.gy, -ext2).project(camera), p2 = new THREE.Vector3(ext2, INTRO.gy, ext2).project(camera);
     const x1 = (p1.x + 1) / 2 * innerWidth, y1 = (1 - p1.y) / 2 * innerHeight, x2 = (p2.x + 1) / 2 * innerWidth, y2 = (1 - p2.y) / 2 * innerHeight;
-    Object.assign(cv.style, { left: Math.min(x1, x2) + 'px', top: Math.min(y1, y2) + 'px', width: Math.abs(x2 - x1) + 'px', height: Math.abs(y2 - y1) + 'px' });
+    const box = { left: Math.min(x1, x2) + 'px', top: Math.min(y1, y2) + 'px', width: Math.abs(x2 - x1) + 'px', height: Math.abs(y2 - y1) + 'px' };
+    Object.assign(cv.style, box);
+    if (info && !info.hidden) { const z = parseFloat(getComputedStyle(info).zoom) || 1; Object.assign(info.style, { left: parseFloat(box.left) / z + 'px', top: parseFloat(box.top) / z + 'px', width: parseFloat(box.width) / z + 'px', height: parseFloat(box.height) / z + 'px' }); }
   }
 }
 /* ---------- atmosphere entry: heat shield glow, fire trail, speed streaks and a burning sky up high ---------- */

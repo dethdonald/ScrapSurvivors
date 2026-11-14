@@ -10,7 +10,7 @@ const IN = {
 };
 let mouseFire = false, mouseLook = false, mouseZoom = false;
 
-function menuOpen() { return ['catalog', 'wcase', 'devpanel', 'roulette', 'title', 'custom', 'hangar', 'inv', 'levelup', 'perk', 'pause', 'over', 'shop', 'terminal'].includes(S.mode); }
+function menuOpen() { return ['catalog', 'levelsel', 'wcase', 'devpanel', 'roulette', 'title', 'custom', 'hangar', 'inv', 'levelup', 'perk', 'pause', 'over', 'shop', 'terminal'].includes(S.mode); }
 /* (typeof S: mouse and key events can arrive while the later scripts are still loading, before game.js has made S.
    That threw "S is not defined" hundreds of times in the log on a slow start.) */
 const booted = () => typeof S !== 'undefined';
@@ -116,7 +116,7 @@ function pollInput(dt) {
     if (dx) navH(dx); else if (dy) navMove(0, dy);
     if (pressed(0)) { const a = document.activeElement; if (a && a.classList.contains('nav')) a.click(); else focusFirst(); }
     if (pressed(1)) menuBack();
-    if (pressed(9) && S.mode === 'pause') resume();
+    if (pressed(8) && S.mode === 'pause') resume();
     if ((pressed(8) || pressed(3) || pressed(9)) && S.mode === 'inv') closeInventory();
     readMoveAxes();
     return;
@@ -127,8 +127,9 @@ function pollInput(dt) {
   if (pressed(5)) IN.dashP = true;
   if (pressed(2)) IN.interactP = true;
   if (pressed(10)) IN.padSprintLatch = !IN.padSprintLatch;
-  if ((pressed(8) || pressed(3)) && S.mode === 'play') openInventory(false);
-  if (pressed(9)) openPause();
+  // Start (the right-hand button) opens the build bay; View / Options (the left-hand one) pauses. Y still opens the bay.
+  if ((pressed(9) || pressed(3)) && S.mode === 'play') openInventory(false);
+  if (pressed(8)) openPause();
 
   const lookScale = (IN.device === 'pad' && aim.enemy && SETTINGS.aimAssist) ? 0.55 : 1;
   cam.yaw -= gp.axes[2] * 2.9 * SETTINGS.sens * lookScale * dt;
@@ -195,6 +196,7 @@ function navMove(dx, dy) {
 }
 function menuBack() {
   if (S.mode === 'catalog') closeCatalog();
+  else if (S.mode === 'levelsel') closeLevelSelect();
   else if (S.mode === 'devpanel') devPanelClose();
   else if (S.mode === 'terminal') { if (TERM.sel >= 0) { TERM.sel = -1; renderTerminal(); focusFirst(); } else closeTerminal(); }
   else if (S.mode === 'pause') pauseBack();

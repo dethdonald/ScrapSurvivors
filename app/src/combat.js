@@ -411,10 +411,13 @@ function spawnPack(p, n, extra) {
     spawnEnemy('crawler', { x, z, y: H[k] + i * 0.3 }, Object.assign({ shape, elite: i === eliteAt }, extra || {}));
   }
 }
-/* the most enemies alive at once in a run. It was 640; the horde now costs well under half of what it did per enemy. */
+/* The most enemies alive at once. The same on every machine (a Steam Deck and a desktop play the same game),
+   but it opens up over the first three stages so stage 1 is a warm-up and stage 3 onward is the full crush. */
 const ENEMY_CAP = 1500;
+const STAGE_CAP = [0.3, 0.62, 1];
+function enemyCap() { return Math.round(ENEMY_CAP * (STAGE_CAP[Math.min(STAGE_CAP.length, Math.max(1, S.stage || 1)) - 1] || 1)); }
 function spawnTick(dt) {
-  if (S.test || enemies.length >= ENEMY_CAP) return;      // the test range only spawns what you ask for
+  if (S.test || enemies.length >= enemyCap()) return;      // the test range only spawns what you ask for
   // twice the swarm of the original tuning (each enemy just as tough)
   let rate = 2 * 2.2 * (0.75 + oldT() / 60 * 0.33 + (S.stage - 1) * 0.5) * (1 + 0.35 * (S.stage - 1)) * densityMul();
   const ot = overtimeMul();
@@ -423,7 +426,7 @@ function spawnTick(dt) {
   S.spawnAcc += rate * dt;
   const oT = oldT();
   while (S.spawnAcc >= 1) {
-    if (enemies.length >= ENEMY_CAP) { S.spawnAcc = 0; break; }      // at the cap: don't bank spawns for a burst later
+    if (enemies.length >= enemyCap()) { S.spawnAcc = 0; break; }      // at the cap: don't bank spawns for a burst later
     const r = Math.random();
     if (oT > 40 && r < 0.035) { S.spawnAcc -= 1; spawnEnemy('bomber', spawnPoint(28, 55)); }
     else if (oT > 75 && r < 0.085) { S.spawnAcc -= 1; spawnEnemy('splitter', spawnPoint(28, 55)); }
@@ -2135,12 +2138,12 @@ function placeSkyLoot(start, bonus) {
     g.mesh.scale.multiplyScalar(val >= 10 ? 3.6 : val >= 5 ? 3 : val > 1 ? 2.4 : 1.8);
     if (val >= 10) g.mesh.material = M(0xff2a2a, 0x8a0808); else if (val >= 5) g.mesh.material = M(0x3a8cff, 0x0a2a8a);   // 10s glow red, 5s blue
   };
-  const roll = () => { const r = Math.random(); return r < (bonus ? 0.05 : 0.025) ? 10 : r < (bonus ? 0.13 : 0.075) ? 5 : r < (bonus ? 0.28 : 0.135) ? 3 : 1; };
-  const spread = bonus ? 34 : 28, step = bonus ? 5 : 7;
+  const roll = () => { const r = Math.random(); return r < (bonus ? 0.08 : 0.05) ? 10 : r < (bonus ? 0.2 : 0.14) ? 5 : r < (bonus ? 0.4 : 0.3) ? 3 : 1; };   // fewer bolts, each worth more
+  const spread = bonus ? 34 : 28, step = bonus ? 8 : 13;      // (the sky used to be thick with bolts; the gaps are now roughly twice as big)
   let cx = start.x, cz = start.z;
   for (let y = DROP_HEIGHT - 25; y > 35; y -= rand(step * 0.6, step * 1.4)) {
     cx = clamp(cx + rand(-6, 6), -HALF + 10, HALF - 10); cz = clamp(cz + rand(-6, 6), -HALF + 10, HALF - 10);   // the cloud drifts as you fall
-    const n = 1 + (Math.random() < 0.45 ? 1 : 0) + (bonus && Math.random() < 0.5 ? 1 : 0);
+    const n = 1 + (Math.random() < 0.2 ? 1 : 0) + (bonus && Math.random() < 0.4 ? 1 : 0);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, r = spread * Math.sqrt(Math.random());
       place(new THREE.Vector3(clamp(cx + Math.cos(a) * r, -HALF + 6, HALF - 6), y + rand(-2, 2), clamp(cz + Math.sin(a) * r, -HALF + 6, HALF - 6)), roll());
@@ -2152,7 +2155,7 @@ function placeSkyLoot(start, bonus) {
       skyRing(new THREE.Vector3(clamp(cx + Math.cos(a) * r, -HALF + 16, HALF - 16), y, clamp(cz + Math.sin(a) * r, -HALF + 16, HALF - 16)), bonus);
     }
     // now and then a short line of bolts to chase
-    if (Math.random() < 0.12) { const a = Math.random() * Math.PI * 2, r = spread * Math.random(), x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r; for (let i = 0; i < 4; i++) place(new THREE.Vector3(clamp(x + i * 1.2, -HALF + 6, HALF - 6), y - i * 1.6, z), 1); }
+    if (Math.random() < 0.07) { const a = Math.random() * Math.PI * 2, r = spread * Math.random(), x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r; for (let i = 0; i < 4; i++) place(new THREE.Vector3(clamp(x + i * 1.2, -HALF + 6, HALF - 6), y - i * 1.6, z), 1); }
   }
 }
 /* Red launch pad: one use. Rockets you straight up, then you fall the whole way again through fresh bolts. */
@@ -2175,7 +2178,7 @@ function bonusDrop() {
   cam.launchHold = null;
   const fl = $('#flash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');     // a white cut into the fall
   sfx('whistle', 0.6);
-  S.mode = 'drop'; startDropRag(); cam.pitch = 1.2; cam.dist = 30; cam.shake = 0.5;
+  S.mode = 'drop'; startDive(); cam.pitch = 1.2; cam.dist = 30; cam.shake = 0.5;
 }
 /* ---------- scrap ---------- */
 const BASE_PULL = 4;    // bolts, loot and other pickups come to you only from this close; the Magnet module pulls XP only

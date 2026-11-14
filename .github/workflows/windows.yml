@@ -1,0 +1,67 @@
+# Builds the Windows version of Scrap Survivors on GitHub's own Windows machines and attaches it to a release.
+# Run it from the repository's Actions tab -> "Build Windows" -> "Run workflow". It also runs by itself whenever
+# a push changes the game's VERSION file, so every published version gets a Windows build without being asked.
+name: Build Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Also publish it as a downloadable release'
+        type: boolean
+        default: true
+  push:
+    branches: [main]
+    paths: ['VERSION']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Read the game's version
+        id: v
+        shell: bash
+        run: echo "v=$(tr -d ' \r\n' < VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Install the build tools
+        working-directory: app
+        run: npm install --no-audit --no-fund
+
+      - name: Stamp the version
+        working-directory: app
+        run: npm version --no-git-tag-version --allow-same-version ${{ steps.v.outputs.v }}
+
+      - name: Build the Windows app
+        working-directory: app
+        run: npx electron-builder --win portable --publish never
+
+      - name: Keep the build for download
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScrapSurvivors-${{ steps.v.outputs.v }}-windows
+          path: dist/*.exe
+          if-no-files-found: error
+
+      - name: Publish it as a release
+        if: github.event_name == 'push' || inputs.release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.v }}
+          name: Scrap Survivors ${{ steps.v.outputs.v }}
+          body: |
+            Windows build of Scrap Survivors ${{ steps.v.outputs.v }}.
+
+            Download `ScrapSurvivors-${{ steps.v.outputs.v }}.exe` below and double-click it: it needs no installing.
+            Windows SmartScreen will warn about an unknown publisher the first time (the build is not signed);
+            choose "More info" then "Run anyway".
+          files: dist/*.exe
+          fail_on_unmatched_files: true

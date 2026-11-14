@@ -27,14 +27,23 @@
       "src/**/*",
       "node_modules/three/build/three.min.js",
       "package.json",
-      "node_modules/@dimforge/rapier3d-compat/**/*"
+      "node_modules/@dimforge/rapier3d-compat/**/*",
+      "updater.js"
     ],
     "linux": {
       "target": "AppImage",
       "category": "Game"
     },
     "win": {
-      "target": "portable"
+      "target": "portable",
+      "artifactName": "ScrapSurvivors-${version}.${ext}"
+    },
+    "directories": {
+      "output": "../dist"
+    },
+    "artifactName": "ScrapSurvivors-${version}.${ext}",
+    "portable": {
+      "unpackDirName": "ScrapSurvivors"
     }
   }
 }

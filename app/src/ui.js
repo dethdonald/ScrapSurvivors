@@ -28,7 +28,40 @@ function detectUI() {
 }
 const RES_NAMES = { standard: 'standard', hi: 'high-res', deck: 'Steam Deck', small: 'small window' };
 function syncUIScaleLabel() { const v = $('#uiScaleVal'); if (v) v.textContent = `${Math.round((SETTINGS.uiScale || 1) * 100)}% · ${RES_NAMES[UIZ.mode]} ×${UIZ.auto.toFixed(2)}`; }
-addEventListener('resize', detectUI);
+/* ---------- fit to the window ----------
+   A panel that is taller or wider than the space it has used to grow a scrollbar. Instead it now shrinks itself
+   (text, spacing and all) until it fits, down to about two thirds of normal; past that it scrolls as before.
+   Runs when a menu opens and whenever the window changes size. */
+const FIT_SELECTORS = ['#custPanel', '#catalog .catpanel', '#optMenu', '#pauseMain', '#over .overcard', '.devpanel .dpanel', '#inv .bstats', '#inv .abilities', '#partsPanel', '#levelup .pickwrap', '#shop .pickwrap', '#wcase .pickwrap', '#terminal .pickwrap', '#perk .pickwrap'];
+function naturalSize(el) {
+  let ex = 0;
+  for (const c of el.querySelectorAll('*')) { const cs = getComputedStyle(c); if (/auto|scroll/.test(cs.overflowY)) ex = Math.max(ex, c.scrollHeight - c.clientHeight); }
+  return { w: el.scrollWidth, h: el.scrollHeight + ex };
+}
+function fitPanel(el) {
+  if (!el || !el.offsetParent) return;
+  el.style.zoom = '';
+  const base = parseFloat(getComputedStyle(el).zoom) || 1;
+  el.style.zoom = '1';
+  const n = naturalSize(el), r = el.getBoundingClientRect();
+  // the room it has: the window less the gap it already keeps from the edges
+  const mx = Math.max(8, Math.min(r.left, innerWidth - r.right, 24)), my = Math.max(8, Math.min(r.top, innerHeight - r.bottom, 24));
+  const availW = innerWidth - mx * 2, availH = innerHeight - my * 2;
+  const z = Math.max(0.62, Math.min(base, n.w > 0 ? availW / n.w : base, n.h > 0 ? availH / n.h : base));
+  el.style.zoom = Math.abs(z - 1) < 0.004 ? '' : z.toFixed(3);
+}
+let _fitQ = 0;
+function fitAll() {
+  if (_fitQ) return;
+  _fitQ = requestAnimationFrame(() => { _fitQ = 0; for (const sel of FIT_SELECTORS) { const el = document.querySelector(sel); if (el) fitPanel(el); } });
+}
+addEventListener('resize', () => { detectUI(); fitAll(); });
+/* refit whenever a menu is shown or hidden */
+try {
+  const mo = new MutationObserver(fitAll);
+  for (const el of document.querySelectorAll('.overlay, #custPanel, #catalog, .devpanel')) mo.observe(el, { attributes: true, attributeFilter: ['hidden', 'class'] });
+} catch (e) {}
+addEventListener('load', fitAll);
 const fmt = t => { t = Math.max(0, Math.floor(t)); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
 let hitT = 0;
 const XH = { bloom: 0 };   // reticle flare from firing
@@ -291,7 +324,18 @@ function updateHUD(dt) {
     hudTxt('#shopMarkerTxt', `STORE ${Math.round(Math.hypot(S.shop.x - P.pos.x, S.shop.z - P.pos.z))}m`);
   } else if (!sm.hidden) sm.hidden = true;
 }
-function keyHint(k, b) { return IN.device === 'pad' ? `<kbd>${b}</kbd>` : `<kbd>${k}</kbd>`; }
+/* ---------- button prompts ----------
+   On a keyboard a prompt is a key cap. On a controller it is the button itself: the four face buttons as
+   coloured discs, everything else (bumpers, triggers, Start, View, the sticks) as a small pill. */
+const PAD_FACE = { A: 'a', B: 'b', X: 'x', Y: 'y' };
+function padBtn(name) {
+  const n = String(name).trim(), f = PAD_FACE[n.toUpperCase()];
+  if (f) return `<i class="pbtn face ${f}">${n.toUpperCase()}</i>`;
+  return `<i class="pbtn pill">${n}</i>`;
+}
+function keyHint(k, b) { return IN.device === 'pad' ? padBtn(b) : `<kbd>${k}</kbd>`; }
+/* a line of prompts that re-draws itself when you swap between keyboard and controller */
+function hintLine(pairs) { return pairs.map(([k, b, what]) => keyHint(k, b) + what).join(' '); }
 
 /* ---------- level-up offers ---------- */
 /* Level-up: three different stat upgrades, each with its own random rarity (luck helps). */
@@ -362,7 +406,10 @@ function optRow(sel, label, v, tip) {
 function syncSettingsUI() {
   if (typeof inkSyncUI === 'function') inkSyncUI();
   $('#uiScale').value = SETTINGS.uiScale || 1; syncUIScaleLabel();
-  $('#musicVol').value = SETTINGS.music ?? 0.6; $('#musicVal').textContent = Math.round((SETTINGS.music ?? 0.6) * 100) + '%';
+  const vol = (id, lab, v) => { const e = $(id); if (e) e.value = v; const l = $(lab); if (l) l.textContent = Math.round(v * 100) + '%'; };
+  vol('#musicVol', '#musicVal', SETTINGS.music ?? 0.6);
+  vol('#masterVol', '#masterVal', SETTINGS.master ?? 1);
+  vol('#sfxVol', '#sfxVal', SETTINGS.sfxVol ?? 1);
   $('#sens').value = SETTINGS.sens; $('#sensVal').textContent = (+SETTINGS.sens).toFixed(1);
   optRow('#invertBtn', 'Invert look', !!SETTINGS.invertY);
   optRow('#assistBtn', 'Aim assist', !!SETTINGS.aimAssist, 'Gamepad only');
@@ -378,6 +425,10 @@ function syncSettingsUI() {
   optRow('#xhColorBtn', 'Colour', SETTINGS.xhColor);
   optRow('#xhSizeBtn', 'Size', XH_SIZES.find(s => s[1] === SETTINGS.xhSize)[0]);
   applyCrosshair();
+  // the controller map, drawn with the same round prompts the game uses in play
+  const pm = $('#padMap');
+  if (pm) pm.innerHTML = [['A', 'Jump'], ['B', 'Slide'], ['X', 'Interact'], ['Y', 'Build bay'], ['LB', 'Boost'], ['RB', 'Dash'], ['RT', 'Fire'], ['LS', 'Move'], ['RS', 'Look'], ['Start', 'Build bay'], ['View', 'Pause']]
+    .map(([b, what]) => `<span class="pmrow">${padBtn(b)}<em>${what}</em></span>`).join('');
 }
 function openPause() {
   flushMeta();
@@ -389,31 +440,36 @@ function openPause() {
    Options' own Graphics / Developer Tools sub-pages.
    The Raw versions toggle instantly (used when the screen is already mid-transition, e.g. opening Pause itself);
    the plain versions wrap the swap in an ASCII wipe, for an actual menu-to-menu jump. */
+/* Options is a list of doors: Controls, Audio, UI & HUD, Graphics, Developer Tools. Each is its own page.
+   The Raw versions swap instantly (used when the screen is already mid-transition, e.g. opening Pause itself);
+   the plain ones wrap the swap in an ASCII wipe, for an actual menu-to-menu jump. */
+const OPT_PAGES = ['#optCtrlMenu', '#optAudioMenu', '#optHudMenu', '#optGfxMenu', '#optDevMenu'];
 function showOptionsRaw(on) {
   $('#pauseMain').hidden = on; $('#optMenu').hidden = !on;
-  if (!on) { $('#optGfxMenu').hidden = true; $('#optDevMenu').hidden = true; }
+  if (!on) for (const id of OPT_PAGES) { const el = $(id); if (el) el.hidden = true; }
   if (on) { syncSettingsUI(); $('#optMenu .optbody').scrollTop = 0; }
   if (!$('#pause').hidden) focusFirst();
 }
 function showOptions(on) { asciiWipe(() => showOptionsRaw(on)); }
 const optionsOpen = () => !$('#optMenu').hidden;
-function showGfxMenuRaw(on) {
-  $('#optMenu').hidden = on; $('#optGfxMenu').hidden = !on;
-  if (on) { syncSettingsUI(); $('#optGfxMenu .optbody').scrollTop = 0; }
+function showPageRaw(id, on) {
+  const el = $(id); if (!el) return;
+  $('#optMenu').hidden = on; el.hidden = !on;
+  if (on) { syncSettingsUI(); const b = el.querySelector('.optbody'); if (b) b.scrollTop = 0; }
   if (!$('#pause').hidden) focusFirst();
 }
-function showGfxMenu(on) { asciiWipe(() => showGfxMenuRaw(on)); }
-function showDevMenuRaw(on) {
-  $('#optMenu').hidden = on; $('#optDevMenu').hidden = !on;
-  if (on) { syncSettingsUI(); $('#optDevMenu .optbody').scrollTop = 0; }
-  if (!$('#pause').hidden) focusFirst();
-}
-function showDevMenu(on) { asciiWipe(() => showDevMenuRaw(on)); }
+function showPage(id, on) { asciiWipe(() => showPageRaw(id, on)); }
+const openPage = () => OPT_PAGES.find(id => { const el = $(id); return el && !el.hidden; });
+/* kept as names because the rest of the code (and the gamepad back button) talks in these terms */
+function showGfxMenuRaw(on) { showPageRaw('#optGfxMenu', on); }
+function showGfxMenu(on) { showPage('#optGfxMenu', on); }
+function showDevMenuRaw(on) { showPageRaw('#optDevMenu', on); }
+function showDevMenu(on) { showPage('#optDevMenu', on); }
 const gfxMenuOpen = () => !$('#optGfxMenu').hidden;
 const devMenuOpen = () => !$('#optDevMenu').hidden;
 function pauseBack() {
-  if (gfxMenuOpen()) { showGfxMenu(false); sfx('tick'); return; }
-  if (devMenuOpen()) { showDevMenu(false); sfx('tick'); return; }
+  const page = openPage();
+  if (page) { showPage(page, false); sfx('tick'); return; }
   if (optionsOpen() && !TITLE.fromOptions) { showOptions(false); sfx('tick'); return; }
   resume();
 }
@@ -431,8 +487,13 @@ function resume() {
 $('#resumeBtn').addEventListener('click', resume);
 $('#optBtn').addEventListener('click', () => { showOptions(true); sfx('tick'); });
 $('#optBackBtn').addEventListener('click', pauseBack);
-$('#gfxMenuBtn').addEventListener('click', () => { showGfxMenu(true); sfx('tick'); });
-$('#devMenuBtn').addEventListener('click', () => { showDevMenu(true); sfx('tick'); });
+for (const [btn, back, id] of [['#ctrlMenuBtn', '#ctrlBackBtn', '#optCtrlMenu'], ['#audioMenuBtn', '#audioBackBtn', '#optAudioMenu'], ['#hudMenuBtn', '#hudBackBtn', '#optHudMenu'], ['#gfxMenuBtn', '#gfxBackBtn', '#optGfxMenu'], ['#devMenuBtn', '#devBackBtn', '#optDevMenu']]) {
+  const b = $(btn), k = $(back);
+  if (b) b.addEventListener('click', () => { showPage(id, true); sfx('tick'); });
+  if (k) k.addEventListener('click', () => { showPage(id, false); sfx('tick'); });
+}
+$('#masterVol').addEventListener('input', e => { SETTINGS.master = +e.target.value; saveSettings(); syncSettingsUI(); });
+$('#sfxVol').addEventListener('input', e => { SETTINGS.sfxVol = +e.target.value; saveSettings(); sfx('tick', 0.6); syncSettingsUI(); });
 $('#gfxBackBtn').addEventListener('click', pauseBack);
 $('#devBackBtn').addEventListener('click', pauseBack);
 $('#invBtn').addEventListener('click', () => { if (S.prevMode !== 'play') { sfx('deny'); denyFx($('#invBtn')); return; } $('#pause').hidden = true; S.mode = 'play'; openInventory(false); });

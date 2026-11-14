@@ -7,6 +7,10 @@
   --f-mono:'Cascadia Mono','Consolas','DejaVu Sans Mono',ui-monospace,monospace;
   color-scheme:dark;
 }
+/* Every box counts its own frame and padding inside its width. Without this a panel that was told to be 300px
+   wide actually took 304px (its 2px border on each side), which left a couple of stray pixels hanging out of the
+   bottom of almost every list: just enough for the browser to put a left/right scrollbar on it. */
+*,*::before,*::after{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--ink);color:var(--text);font-family:var(--f-display);user-select:none}
 #game{position:fixed;inset:0}
@@ -59,6 +63,11 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--ink);color:var(-
 #banner .h{font-size:clamp(26px,5vw,46px);font-weight:700;letter-spacing:.12em}
 #banner .s{font-size:15px;opacity:.85;margin-top:4px}
 #prompt{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--orange);padding:8px 14px;font-size:15px;white-space:nowrap}
+/* controller prompts: the face buttons as coloured discs, the rest as pills */
+.pbtn{display:inline-grid;place-items:center;font-family:var(--f-mono);font-weight:700;font-size:10px;line-height:1;margin-right:5px;vertical-align:middle;color:#06090c}
+.pbtn.face{width:17px;height:17px;border-radius:50%;box-shadow:inset 0 -2px 0 rgba(0,0,0,.28)}
+.pbtn.face.a{background:#4caf50}.pbtn.face.b{background:#e2465c}.pbtn.face.x{background:#3a8cff}.pbtn.face.y{background:#ffc83a}
+.pbtn.pill{min-width:22px;height:16px;padding:0 5px;border-radius:9px;background:#cfd5d8;letter-spacing:.04em;text-transform:uppercase;font-size:9px}
 kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);padding:1px 5px;margin-right:4px;background:var(--panel2);color:var(--text)}
 #hint{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);font-size:13px;color:var(--dim);text-align:center;width:90vw}
 #marker{position:absolute;width:0;height:0}
@@ -390,7 +399,7 @@ em.attr{font-style:normal;font-size:11px;font-weight:600;margin-left:2px}
 @keyframes luPop{from{transform:scale(.97)}to{transform:none}}
 
 /* drop countdown */
-#countdown{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);font-family:var(--f-mono);font-weight:700;font-size:clamp(80px,14vw,170px);color:#fff;
+#countdown{z-index:5;position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);font-family:var(--f-mono);font-weight:700;font-size:clamp(80px,14vw,170px);color:#fff;
   text-shadow:0 0 30px color-mix(in srgb,var(--sec) 60%,transparent);pointer-events:none;letter-spacing:.04em}
 #countdown.pop{animation:cdPop .9s cubic-bezier(.2,.8,.3,1) both}
 @keyframes cdPop{0%{transform:translate(-50%,-50%) scale(1.6);opacity:0}15%{opacity:1}70%{transform:translate(-50%,-50%) scale(1);opacity:1}100%{transform:translate(-50%,-50%) scale(.85);opacity:0}}
@@ -594,6 +603,35 @@ em.attr{font-style:normal;font-size:11px;font-weight:600;margin-left:2px}
 
 .flybolt{position:fixed;left:-7px;top:-7px;width:14px;height:14px;z-index:60;pointer-events:none;background:#e8c35a;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);box-shadow:inset 0 0 0 3px #a8822a;filter:drop-shadow(0 0 4px rgba(232,195,90,.8))}
 
+/* ---------- the drop-zone scan ----------
+   The arena printed as a QR code, on a black field (the level underneath is covered so only the code shows),
+   with the stage's details growing out of the code's corners on connector lines. */
+#qrBack{position:fixed;inset:0;z-index:2;background:#05070a;pointer-events:none}
+#qrInfo{position:fixed;z-index:4;pointer-events:none;font-family:var(--f-mono);zoom:var(--uiz,1)}
+#qrInfo .qi{position:absolute;display:flex;align-items:center;gap:0;opacity:0}
+#qrInfo .qline{display:block;height:1px;width:0;background:var(--sec);box-shadow:0 0 6px var(--sec)}
+#qrInfo .qtxt{white-space:nowrap;padding:0 8px;transform:translateX(-6px);opacity:0;transition:transform .22s ease-out,opacity .22s ease-out}
+#qrInfo .qtxt b{display:block;font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);font-weight:400}
+#qrInfo .qtxt em{display:block;font-style:normal;font-size:15px;letter-spacing:.1em;color:var(--text)}
+#qrInfo .qtxt.mid{text-align:center;transform:translateY(6px)}
+#qrInfo .qtxt.mid em{font-size:12px;letter-spacing:.3em;color:var(--sec)}
+/* left-hand callouts run leftward out of the code, right-hand ones rightward */
+#qrInfo .tl,#qrInfo .bl{right:100%;flex-direction:row-reverse}
+#qrInfo .tl .qtxt,#qrInfo .bl .qtxt{text-align:right;transform:translateX(6px)}
+#qrInfo .tr,#qrInfo .br{left:100%}
+#qrInfo .tl,#qrInfo .tr{top:14%}
+#qrInfo .bl,#qrInfo .br{bottom:14%}
+#qrInfo .top{left:0;right:0;bottom:100%;flex-direction:column;align-items:center}
+#qrInfo .top .qline{width:1px;height:0;background:var(--sec)}
+#qrInfo.on .qi{opacity:1}
+#qrInfo.on .qline{width:clamp(40px,7vw,120px);transition:width .3s cubic-bezier(.2,.8,.3,1)}
+#qrInfo.on .top .qline{width:1px;height:26px;transition:height .3s cubic-bezier(.2,.8,.3,1)}
+#qrInfo.on .qtxt{transform:none;opacity:1}
+#qrInfo.on .tl .qline{transition-delay:.05s}#qrInfo.on .tl .qtxt{transition-delay:.28s}
+#qrInfo.on .tr .qline{transition-delay:.11s}#qrInfo.on .tr .qtxt{transition-delay:.34s}
+#qrInfo.on .bl .qline{transition-delay:.17s}#qrInfo.on .bl .qtxt{transition-delay:.4s}
+#qrInfo.on .br .qline{transition-delay:.23s}#qrInfo.on .br .qtxt{transition-delay:.46s}
+#qrInfo.on .top .qtxt{transition-delay:.12s}
 #qrIntro{position:fixed;z-index:3;pointer-events:none;image-rendering:pixelated;image-rendering:crisp-edges;box-shadow:0 0 60px rgba(0,0,0,.6)}
 
 /* new gem slot dialog */
@@ -694,12 +732,18 @@ svg.picon{width:20px;height:20px;flex:none;fill:currentColor;stroke:none;vertica
 #xhLeft .pchip.max{border-color:#e8c35a}
 #xhLeft .pchip.max em i{background:#e8c35a}
 
+/* Menus scroll up and down, never sideways: anything too wide for its panel wraps or is trimmed instead. */
+.plist,.optbody,.custbody,.catgrid,.catdetail,.dpanel,.overcard,.patchdir,.cosshelf,.shopcards,.abilities{overflow-x:hidden}
 /* ---------- UI scale (set from the window size + Options): zoom the panels, not the 3D view ---------- */
 :root{--uiz:1;--xhz:1}
 #hud>#devHint,#hud>#xhLeft,#hud>#partUps,#hud>.hbox,#hud>.tc,#hud>#countdown,#hud>#banner,#hud>#prompt,#hud>#hint,
 #inv>.bstats,#inv>.abilities,#inv>.readycheck,#inv>.parts,#inv>.toast,
 #title>.tmain,#title>#tRandom,#title>.tver,#title>.custpanel,
 .overlay:not(.bench)>*,#perfHud{zoom:var(--uiz)}
+/* the build bay's panels and the HUD's corner boxes scale as well; world-anchored bits (markers, damage
+   numbers, the minimap blips) are deliberately left alone, since their positions are in real screen pixels */
+.overlay.bench>*{zoom:var(--uiz)}
+#hud>.tl,#hud>.tc,#hud>.tr,#hud>#loadoutBox,#hud>#speedo,#hud>#bossbar,#hud>#hint,#hud>#prompt,#hud>.toast,#hud>#killMul,#hud>#rewardPop{zoom:var(--uiz)}
 #hud>#crosshair,#hud>#xhWrap{zoom:calc(var(--uiz) * var(--xhz))}
 .tip{transform-origin:0 0}
 /* Steam Deck: small, sharp screen: tighter margins so the bigger UI still fits */
@@ -802,10 +846,12 @@ body[data-res=deck] #loadoutBox{left:8px;bottom:8px}body[data-res=deck] #speedo{
 
 /* ---------- windows: hazard-stripe bar to drag, corner grip to resize ---------- */
 .win::before{display:none!important}
-.winbar{position:absolute;left:-2px;right:-2px;top:-2px;height:12px;background:var(--hazard);cursor:grab;z-index:5;pointer-events:auto;touch-action:none}
+/* (it used to hang 2px outside the panel to cover its frame; that overhang was what made the panel 2px wider
+   than itself, which is where the stray left/right scrollbars came from) */
+.winbar{position:absolute;left:0;right:0;top:0;height:12px;background:var(--hazard);cursor:grab;z-index:5;pointer-events:auto;touch-action:none}
 .winbar:hover{filter:brightness(1.2)}
 body.win-moving,body.win-moving *{cursor:grabbing!important;user-select:none}
-.wingrip{position:absolute;right:-2px;bottom:-2px;width:16px;height:16px;cursor:nwse-resize;z-index:5;pointer-events:auto;touch-action:none;
+.wingrip{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;z-index:5;pointer-events:auto;touch-action:none;
   background:linear-gradient(135deg,transparent 0 45%,var(--sec) 45% 55%,transparent 55% 65%,var(--sec) 65% 75%,transparent 75%)}
 body.win-sizing,body.win-sizing *{cursor:nwse-resize!important;user-select:none}
 .win-free{z-index:8}
@@ -1005,3 +1051,25 @@ body.berserk #vignette{box-shadow:inset 0 0 160px 30px rgba(255,20,20,.45);anima
 #titleToast{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);z-index:20;padding:8px 16px;background:rgba(5,8,10,.86);border:2px solid var(--sec);color:var(--text);font-size:12px;letter-spacing:.12em;white-space:nowrap;pointer-events:none;opacity:0}
 #titleToast.show{animation:titleToast 3.6s ease forwards}
 @keyframes titleToast{0%{opacity:0;transform:translate(-50%,8px)}8%,82%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-6px)}}
+
+/* ---------- level select: the drop zone is picked before the build bay ---------- */
+.levelsel{position:absolute;inset:0;display:grid;align-content:center;justify-items:center;gap:14px;padding:24px;zoom:var(--uiz,1)}
+.levelsel h2{margin:0 0 6px;font-size:clamp(26px,3.4vw,40px);letter-spacing:.2em}
+.lvgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;width:min(1080px,94vw)}
+.lvcard{position:relative;display:grid;justify-items:center;gap:6px;padding:18px 16px 16px;background:rgba(10,15,19,.86);border:2px solid var(--frame-dim,#3a444c);color:var(--text);font:inherit;text-align:center;cursor:pointer}
+.lvcard .lvart{color:var(--sec);width:76px}
+.lvcard .lvart svg{width:100%;height:auto;display:block}
+.lvcard b{font-size:17px;letter-spacing:.16em}
+.lvcard small{color:var(--dim);font-size:12px;line-height:1.45;max-width:26ch}
+.lvcard .lvgo{font-style:normal;font-size:11px;letter-spacing:.2em;color:var(--sec);border:1px solid var(--sec);padding:2px 10px;margin-top:4px}
+.lvcard:hover,.lvcard:focus{border-color:var(--sec);outline:none;background:rgba(18,26,32,.92)}
+.lvcard.uc{cursor:not-allowed;opacity:.62;filter:grayscale(.55)}
+.lvcard.uc:hover,.lvcard.uc:focus{border-color:var(--frame-dim,#3a444c);background:rgba(10,15,19,.86)}
+.lvcard .ucTag{position:absolute;left:8px;right:8px;bottom:12px;height:20px;display:grid;place-items:center;transform:rotate(-3deg);pointer-events:none}
+.lvcard .ucTag i{position:absolute;inset:0;background:repeating-linear-gradient(-45deg,#ffd23a 0 10px,#111 10px 20px);box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.lvcard .ucTag b{position:relative;font-size:10px;letter-spacing:.16em;background:#111;color:#ffd23a;padding:2px 8px}
+@media (max-width:860px){.lvgrid{grid-template-columns:1fr}.lvcard small{max-width:40ch}}
+
+.padmap{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px 12px}
+.pmrow{display:flex;align-items:center;gap:2px;font-size:12px;color:var(--dim)}
+.pmrow em{font-style:normal;color:var(--text)}

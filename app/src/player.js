@@ -109,7 +109,7 @@ function computeStats() {
   // jetpacks: summed thrust and fuel
   s.thrust = 0; s.fuel = 0;
   for (const it of mountedItems()) if (it.kind === 'module' && it.type === 'jetpack') { s.thrust += MODULES.jetpack.thrust(it.lvl); s.fuel += MODULES.jetpack.fuel(it.lvl); }
-  s.fire = 1; s.dmg = 1; s.magnet = 4; s.shieldRate = 2.2; s.shieldDelay = 4; s.xpMult = 1;   // shield: small, refills slowly after 4 s without damage
+  s.fire = 1; s.dmg = 1; s.magnet = 4; s.shieldRate = 5; s.shieldDelay = 2; s.xpMult = 1;   // shield: comes back 2 s after the last hit, and fast (see shieldRate below)
   for (const it of mountedItems()) if (it.kind === 'module' && MODULES[it.type] && MODULES[it.type].apply) MODULES[it.type].apply(s, it.lvl);
   // run bonuses from level-up stat cards
   const bo = L.bonus || {};
@@ -118,7 +118,7 @@ function computeStats() {
   s.multi = (bo.multi || 0) / 100; s.projSpeed = 1 + (bo.pspeed || 0) / 100; s.range = 1 + (bo.range || 0) / 100; s.luck = bo.luck || 0;
   s.crit = 0.05 + (bo.crit || 0) / 100;      // every hit has a small random chance to crit for double damage
   if (P.has('titan')) s.maxHp += 60;
-  if (P.has('aegis')) { s.maxShield += 40; s.shieldDelay -= 1.5; }
+  if (P.has('aegis')) { s.maxShield += 40; s.shieldDelay -= 1; }
   if (P.has('grav')) s.jump += 1.5;
   if (P.has('overclock')) s.fire += 0.25;
   if (P.has('payload')) s.dmg *= 1.2;
@@ -402,27 +402,38 @@ function tryMantle(dt) {
   return true;
 }
 
+/* ---------- the dive ----------
+   The frame used to come apart into a limp tumbling ragdoll for the whole fall. Now it drops head first, a
+   controlled dive: pitched over until the head leads, banking into your steering, with the legs trailing and the
+   arms streaming up behind. Near the ground it swings feet down and lands in a crouch (see heroLand below). */
+const DIVE = { on: false, pitch: 0, bank: 0, spin: 0 };
+function startDive() {
+  DIVE.on = true; DIVE.pitch = 0.6; DIVE.bank = 0; DIVE.spin = rand(-0.5, 0.5);
+  player.heroT = 0;
+  if (player.model) player.model.visible = true;
+}
+function endDive() { DIVE.on = false; DIVE.pitch = 0; DIVE.bank = 0; }
+/* how far over the frame is pitched this instant: head down for most of the fall, feet down for the landing */
+function diveTick(dt) {
+  const P = player, alt = P.pos.y - groundAt(P.pos.x, P.pos.z);
+  // 2.75 rad ~ head straight down with a slight forward tilt; it swings upright over the last 22 m
+  const want = alt > 22 ? 2.75 : 0;
+  const k = alt > 22 ? 2.2 : 7;                                  // the flip to feet-first is the quick part
+  DIVE.pitch += (want - DIVE.pitch) * Math.min(1, dt * k);
+  DIVE.bank += ((IN.mx * Math.cos(P.legYaw) - IN.mz * Math.sin(P.legYaw)) * 0.5 - DIVE.bank) * Math.min(1, dt * 4);
+  DIVE.spin *= Math.max(0, 1 - dt * 1.5);
+}
+/* Touchdown: a superhero landing. Deep crouch, chest forward, one fist driven into the ground, the other arm
+   flung back, held for a beat before the frame straightens up. Started by land(). */
+function heroLand() { player.heroT = 1; player.heroYaw = player.legYaw; }
+
 /* Drop phase: steer a falling frame */
 function dropStep(dt) {
   const P = player;
-  // steering in the fall: quick to respond, plus a gentle pull toward the bolts and rings just below you
-  // in the direction you're already steering (or straight down if you're not steering)
-  let ax = 0, az = 0;
-  {
-    let best = null, bs = 0;
-    const steer = IN.mag > 0.2, sx = steer ? IN.mx / IN.mag : 0, sz = steer ? IN.mz / IN.mag : 0;
-    const consider = (x, y, z, w) => {
-      const dy = P.pos.y - y; if (dy < 3 || dy > 55) return;
-      const dx = x - P.pos.x, dz = z - P.pos.z, hd = Math.hypot(dx, dz); if (hd > 16) return;
-      if (steer && hd > 2 && (dx * sx + dz * sz) / hd < 0.3) return;          // only things roughly where you're heading
-      const sc = w / (1 + hd * 0.2 + dy * 0.05); if (sc > bs) { bs = sc; best = [dx, dz, hd]; }
-    };
-    for (const g of gems) if (g.sky && !g.pull && !g.ringCoin) consider(g.pos.x, g.pos.y, g.pos.z, 1);
-    for (const R of SKY_RINGS) if (!R.done) consider(R.c.x, R.c.y, R.c.z, 3);
-    if (best && best[2] > 0.5) { const k = Math.min(1, best[2] / 4) * 7; ax = best[0] / best[2] * k; az = best[1] / best[2] * k; }
-  }
-  P.vel.x = lerp(P.vel.x, IN.mx * 20 + ax, Math.min(1, dt * 5));
-  P.vel.z = lerp(P.vel.z, IN.mz * 20 + az, Math.min(1, dt * 5));
+  // Steering is yours alone. (It used to pull the frame toward nearby bolts and rings, which meant the fall
+  // mostly flew itself; now a line through the loot is something you aim for.)
+  P.vel.x = lerp(P.vel.x, IN.mx * 22, Math.min(1, dt * 5));
+  P.vel.z = lerp(P.vel.z, IN.mz * 22, Math.min(1, dt * 5));
   P.vel.y = -24;
   const prevY = P.pos.y + 1.3;
   P.pos.addScaledVector(P.vel, dt);
@@ -483,6 +494,13 @@ function updatePlayerVisual(dt, alpha) {
     P.torsoYaw = wrap(P.torsoYaw + P.torsoYawV * h);
   }
   m.rotation.order = 'YXZ'; m.rotation.set(0, P.legYaw, 0);
+  if (DIVE.on) {
+    diveTick(dt);
+    // pitch about the chest rather than the feet, so the frame tips over on the spot instead of swinging round
+    m.rotation.set(-DIVE.pitch, P.legYaw + DIVE.spin, DIVE.bank);
+    const c = 1.3, sp = Math.sin(-DIVE.pitch), cp = Math.cos(-DIVE.pitch);
+    m.position.y += c - c * cp; m.position.x += -c * sp * Math.sin(P.legYaw); m.position.z += -c * sp * Math.cos(P.legYaw);
+  }
   // show-off flip on air jumps once the legs total Lv 50
   if (P.flipT > 0) {
     P.flipT += dt / 0.5;
@@ -511,9 +529,12 @@ function updatePlayerVisual(dt, alpha) {
   // the body follows the legs: it rolls onto whichever foot is planted, sinks into a running crouch and leans the way it's going
   { const kq = 1 - Math.exp(-dt * 14), ks = 1 - Math.exp(-dt * 7);
     P.gaitRoll = lerp(P.gaitRoll || 0, P.gaitRollT || 0, kq); P.runCrouch = lerp(P.runCrouch || 0, P.runCrouchT || 0, ks); P.runLean = lerp(P.runLean || 0, P.runLeanT || 0, ks); }
+  // the hero landing fades out over about three quarters of a second
+  if (P.heroT > 0) { P.heroT = Math.max(0, P.heroT - dt / 0.75); }
+  const hero = P.heroT > 0 ? Math.sin(Math.min(1, P.heroT * 1.6) * Math.PI / 2) : 0;      // snaps into the pose, eases out of it
   if (ud.hips) {
-    ud.hips.position.y = (sliding ? -0.55 : 0) + P.dip - P.runCrouch;
-    ud.hips.rotation.set(P.sway.x * 0.4 + P.runLean, 0, P.sway.y * 0.4 + P.gaitRoll);
+    ud.hips.position.y = (sliding ? -0.55 : 0) + P.dip - P.runCrouch - hero * 0.55;
+    ud.hips.rotation.set(P.sway.x * 0.4 + P.runLean + hero * 0.3, 0, P.sway.y * 0.4 + P.gaitRoll);
   }
   // a hard stop or a reversal at speed scuffs up a skid cloud at the feet
   if (S.inRun && P.onGround && !sliding && hs > 3) {
@@ -526,7 +547,7 @@ function updatePlayerVisual(dt, alpha) {
     // the twist winds up a little sideways lean, and the torso leans into a fast turn
     let whirl = 0;
     if ((P.whirlT || 0) > 0) { P.whirlT -= dt; const k = 1 - Math.max(0, P.whirlT) / 0.38; whirl = Math.PI * 2 * (1 - Math.pow(1 - k, 3)); }   // a full spin, fast then easing
-    ud.torso.rotation.set((sliding ? -0.35 : P.dashT > 0 ? 0.35 : 0) + P.sway.x * 0.7, torsoYaw + whirl, P.sway.y * 0.7 - clamp(P.torsoYawV * 0.025, -0.18, 0.18) - (P.gaitRoll || 0) * 0.6);      // (the chest counter-rolls a little, so the shoulders stay level-ish while the hips rock)
+    ud.torso.rotation.set((sliding ? -0.35 : P.dashT > 0 ? 0.35 : 0) + P.sway.x * 0.7 + hero * 0.5, torsoYaw + whirl, P.sway.y * 0.7 - clamp(P.torsoYawV * 0.025, -0.18, 0.18) - (P.gaitRoll || 0) * 0.6);      // (the chest counter-rolls a little, so the shoulders stay level-ish while the hips rock)
   }
   m.updateMatrixWorld(true);
   stepLegs(ud, dt, hs, sliding);
@@ -560,6 +581,18 @@ function updatePlayerVisual(dt, alpha) {
       ag.parent.getWorldQuaternion(_q1);
       const k = Math.min(1, P.flailT / 0.22), ph = ii * 2.4 + S.t * 26;
       t = ag.getWorldPosition(_w).clone().add(new THREE.Vector3(Math.sin(ph) * 1.6, 1.2 + Math.sin(ph * 1.3) * 1.1, 0.6 + Math.cos(ph * 0.9) * 1.4).applyQuaternion(_q1).multiplyScalar(k * 2.2 + 0.3));
+    } else if (DIVE.on) {
+      // diving: the arms stream straight up behind the falling frame
+      t = ag.getWorldPosition(_w).clone().add(new THREE.Vector3(rand(-0.3, 0.3), 6, rand(-0.3, 0.3)));
+    } else if (hero > 0) {
+      /* the landing pose: the first arm drives its fist into the ground ahead of the feet, the rest are flung back
+         and out. It blends out with `hero`, so the arms drift back to aiming rather than snapping. */
+      const fy = P.heroYaw === undefined ? P.legYaw : P.heroYaw, fx = -Math.sin(fy), fz = -Math.cos(fy);
+      const side = ii % 2 ? -1 : 1, ap = ag.getWorldPosition(_w).clone();
+      const goal = ii === 0
+        ? new THREE.Vector3(P.renderPos.x + fx * 1.2, groundAt(P.renderPos.x + fx * 1.2, P.renderPos.z + fz * 1.2) + 0.05, P.renderPos.z + fz * 1.2)
+        : ap.clone().add(new THREE.Vector3(-fx * 2.2 + fz * 1.6 * side, 1.6, -fz * 2.2 - fx * 1.6 * side));
+      t = ap.lerp(goal, hero);
     } else if (P.scampering || (P.scampT2 || 0) > 0) {
       // scampering: arms reach up the wall, hand over hand
       const wl = Math.hypot(P.wallX || 0, P.wallZ || 0) || 1, inX = -(P.wallX || 0) / wl, inZ = -(P.wallZ || 0) / wl;

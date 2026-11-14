@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.46.2 · BUILD NOV 13';
+const VERSION = '0.47.0 · BUILD NOV 14';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -471,7 +471,29 @@ function leaveTitle() {
   $('#title').hidden = true;
   TITLE.tipPart = null; $('#titleTip').hidden = true; $('#ttLine').setAttribute('hidden', '');
 }
-$('#tStart').addEventListener('click', () => { ensureAudio(); leaveTitle(); freshHangarLoadout(); openInventory(true); });
+/* ---------- level select ----------
+   Start opens the drop-zone picker first; only the Arena is built, the other two are shown as what is coming. */
+const LEVELS = { arena: { name: 'The Arena', ready: true } };
+function openLevelSelect() {
+  ensureAudio();
+  S.mode = 'levelsel';
+  TITLE.tipPart = null; hideTitleTip();
+  asciiWipe(() => { $('.tmain').hidden = true; $('#levelSel').hidden = false; focusFirst(); });
+}
+function closeLevelSelect() {
+  S.mode = 'title';
+  asciiWipe(() => { $('#levelSel').hidden = true; $('.tmain').hidden = false; focusFirst(); });
+}
+function pickLevel(id) {
+  const L0 = LEVELS[id];
+  if (!L0 || !L0.ready) { sfx('deny', 0.5); return; }
+  S.level0 = id;
+  sfx('tick');
+  asciiWipe(() => { $('#levelSel').hidden = true; $('.tmain').hidden = false; leaveTitle(); freshHangarLoadout(); openInventory(true); });
+}
+$('#tStart').addEventListener('click', () => { sfx('tick'); openLevelSelect(); });
+$('#lvBack').addEventListener('click', () => { sfx('tick'); closeLevelSelect(); });
+$('#lvGrid').addEventListener('click', e => { const b = e.target.closest('[data-level]'); if (b) pickLevel(b.dataset.level); });
 $('#tOptions').addEventListener('click', () => {
   ensureAudio();
   TITLE.fromOptions = true; S.prevMode = 'title'; S.mode = 'pause';

@@ -758,3 +758,28 @@ All in player.js unless noted. Tunable live from the dev panel ("Legs & stomp");
 ## 0.46.2 — cosmetics fix + secret unlocks (Nov 13)
 - **Cosmetic placement on other frames** (`cosmeticAuto` in cosmetics.js): a cosmetic stores the part it was stuck to on the title robot (a random build). On a frame without that part it was dropped at a fixed point that is usually inside the torso (the "cigarette clips into the player" bug). Now a ray is cast at the finished model (down from above for `up` cosmetics, at the upper front — the robot faces **-Z** — otherwise) and it is placed where that lands.
 - **Secret cosmetics**: `COSMETICS[k].secret` + `clicks`. Clicking the robot in Customize (each click within 1.2 s of the last): 5th → cigarette, 15th → joint (replaces the cigarette). `unlockCosmetic` adds to `CUSTOM.cosUnlocked` (saved with the other custom data); unlocked ones appear in the Cosmetics shelf (`cosUnlocked(k)`). `titleToast()` announces a first unlock.
+
+## 0.47.0 — UI pass, drop rework, level select (Nov 14)
+**UI / menus**
+- `*{box-sizing:border-box}` plus `.winbar`/`.wingrip` no longer hanging 2px outside their panel: that overhang made every panel 2px wider than itself, which is what put stray left/right scrollbars on lists. `overflow-x:hidden` on the real scrolling lists as well.
+- `fitPanel`/`fitAll` (ui.js, `FIT_SELECTORS`): a panel that would be taller or wider than the window shrinks itself (zoom) to fit, down to 0.62, instead of scrolling. Runs on resize and whenever an overlay's `hidden`/`class` changes (MutationObserver).
+- The build bay (`.overlay.bench>*`) and the HUD's corner boxes now take `--uiz` too; world-anchored HUD bits (markers, damage numbers) deliberately do not.
+- **Options is now a list of doors**: Controls / Audio / UI & HUD / Graphics / Developer Tools, each its own page. `showPage(id, on)` + `OPT_PAGES` replaced the per-menu show/hide pairs (`showGfxMenu` etc. kept as thin wrappers). UI scale moved from Graphics to UI & HUD.
+- **Audio page**: `SETTINGS.master`, `SETTINGS.music`, `SETTINGS.sfxVol`. sfx() multiplies by master×sfxVol, music by master.
+- **Controller prompts**: `padBtn(name)` → round coloured face buttons (A/B/X/Y) or pills (LB, RT, Start…), `.pbtn` in CSS; `keyHint` uses them on a pad. Controls page lists the whole map (`#padMap`).
+- **Pad buttons swapped**: Start (9) opens the build bay, View/Options (8) pauses. Y (3) still opens the bay.
+- **Level select** before the build bay: `#levelSel`, `LEVELS` in title.js, mode `'levelsel'`. Arena is playable; Foundry and Orbital Yard are shown under construction. Chosen id lands in `S.level0`.
+- **ASCII wipe** rewritten: stable per-cell glyphs (only ~90 cells re-roll per frame, so it no longer boils), a black backing gradient that actually obscures, 150 ms in / 150 ms out, and a direction — random in menus, always `'u'` in gameplay. The build bay in a run wipes up on the way in and out.
+
+**Drop and landing**
+- The limp drop ragdoll is gone in favour of a controlled dive (`DIVE`, `startDive/diveTick/endDive` in player.js): head down at ~2.75 rad, banking with your steering, pitching feet-down over the last 22 m. `startDropRag` is still there for the bonus drop path but is no longer called.
+- `heroLand()` → `player.heroT`: deep crouch, chest forward, first arm driving a fist into the ground, the others flung back; blends out over 0.75 s.
+- Touchdown explosion in `land()`: two fireballs, three rings, scorch stain, `landDust`, `propsBlast`, knockback and damage (`25 + 20×stage`) inside 14 m, camera shake 1.15.
+- The QR intro: `#qrBack` (black field, so no level shows around the code) and `#qrInfo` — drop zone, stage, boss time and ring count grow out of the code's corners on connector lines (`.on` class drives the CSS). `qrIntroHide()` clears all three.
+
+**Tuning**
+- Shield: delay 4 s → 2 s, rate 2.2 → 5 + 30% of max per second (a full shield is back about 3 s after the shooting stops), with a sound as it comes back up.
+- Sky loot: layers twice as far apart, fewer bolts per layer, each worth more; the fall no longer steers itself toward bolts and rings.
+- `enemyCap()`: `ENEMY_CAP × STAGE_CAP[stage]` = 30% / 62% / 100% over stages 1-3.
+
+**Windows build**: `.github/workflows/windows.yml` builds a portable .exe on GitHub's Windows runners (Actions tab → Build Windows → Run workflow, or automatically when VERSION changes) and attaches it to a release tagged `v<version>`. `package.json` build config gained `directories.output` (`../dist`), `artifactName` and `updater.js` in `files`. publish.sh copies the workflow.

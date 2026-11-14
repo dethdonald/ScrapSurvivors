@@ -264,7 +264,7 @@ function musicTick(dt) {
   set(B.drone, Math.max(0.9 * D * D, tense ? 0.3 : 0));            // the tension drone also creeps in for a dire boss fight, not just low health
   const paused = S.mode === 'pause' || S.mode === 'inv' || S.mode === 'shop' || S.mode === 'terminal';
   const duck = S.mode === 'cine' ? 0.12 : paused ? 0.45 : 1;
-  MUSIC.out.gain.setTargetAtTime(dead ? 0 : SETTINGS.music * duck * 0.9, now, dead ? 0.08 : 0.6);
+  MUSIC.out.gain.setTargetAtTime(dead ? 0 : SETTINGS.music * (SETTINGS.master ?? 1) * duck * 0.9, now, dead ? 0.08 : 0.6);
   // muffled, through-the-wall tone while that menu is open, cleared the moment you're back in control
   MUSIC.muffle.frequency.setTargetAtTime(paused ? 650 : 20000, now, paused ? 0.5 : 0.35);
   MUSIC.muffle.Q.setTargetAtTime(paused ? 1.1 : 0.7, now, 0.4);

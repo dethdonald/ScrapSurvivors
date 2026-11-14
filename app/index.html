@@ -38,7 +38,15 @@
     <!-- numbers other code writes to; no longer shown on the HUD -->
     <div id="hudData" hidden><b id="killTxt"></b><b id="circTxt"></b><div id="loadout"></div><div id="xhLeft"></div></div>
     <div id="bossbar" hidden></div>
+    <div id="qrBack" hidden></div>
     <canvas id="qrIntro" hidden></canvas>
+    <div id="qrInfo" hidden>
+      <div class="qi tl"><i class="qline"></i><div class="qtxt"><b>Drop zone</b><em id="qiZone">The Arena</em></div></div>
+      <div class="qi tr"><i class="qline"></i><div class="qtxt"><b>Stage</b><em id="qiStage">1</em></div></div>
+      <div class="qi bl"><i class="qline"></i><div class="qtxt"><b>Boss</b><em id="qiBoss">8:30</em></div></div>
+      <div class="qi br"><i class="qline"></i><div class="qtxt"><b>Scrap rings</b><em id="qiRings">3</em></div></div>
+      <div class="qi top"><i class="qline"></i><div class="qtxt mid"><em id="qiTitle">SCANNING DROP ZONE</em></div></div>
+    </div>
     <div id="countdown" hidden>3</div>
     <div id="reloadLayer"></div>
     <div id="dmgLayer"></div>
@@ -77,7 +85,7 @@
       <button class="btn nav" id="invDoneBtn">Launch</button>
       <button class="btn ghost nav devtest" id="invTestBtn" hidden>Test range</button>
       <button class="btn ghost nav" id="invMenuBtn">Main menu</button>
-      <div class="legend">Drag: turn · Scroll: zoom · <kbd>Enter</kbd> close<br><kbd>A</kbd> grab · <kbd>R</kbd> turn · <kbd>B</kbd> back · right stick over parts: scroll</div>
+      <div class="legend" id="invLegend">Drag: turn · Scroll: zoom · <kbd>Enter</kbd> close</div>
     </aside>
     <div class="toast" id="toast" hidden></div>
     <svg id="tipLine" class="tipline" hidden><line id="tipL" x1="0" y1="0" x2="0" y2="0" pathLength="1"></line><rect id="tipDot" width="7" height="7"></rect></svg>
@@ -98,6 +106,31 @@
         <button class="tbtn nav" id="tOptions">Options</button>
         <button class="tbtn nav" id="tQuit">Quit</button>
       </nav>
+    </div>
+    <div class="levelsel" id="levelSel" hidden>
+      <div class="eyebrow">Choose a drop zone</div>
+      <h2>SELECT LEVEL</h2>
+      <div class="lvgrid" id="lvGrid">
+        <button class="lvcard nav" data-level="arena">
+          <span class="lvart" aria-hidden="true"><svg viewBox="0 0 64 44"><path d="M4 38h56M10 38l6-16h32l6 16M18 22l4-10h20l4 10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="32" cy="29" r="4" fill="currentColor"/></svg></span>
+          <b>THE ARENA</b>
+          <small>Open scrapyard bowl. Pads, pillars and plenty of room to run.</small>
+          <em class="lvgo">Ready</em>
+        </button>
+        <button class="lvcard nav uc" data-level="foundry" aria-disabled="true">
+          <span class="lvart" aria-hidden="true"><svg viewBox="0 0 64 44"><path d="M4 38h56M12 38V16l10 6V10l10 6V8l12 8v22" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 30h6M34 26h8" stroke="currentColor" stroke-width="2"/></svg></span>
+          <b>THE FOUNDRY</b>
+          <small>Molten channels, conveyor lines and very little cover.</small>
+          <span class="ucTag"><i></i><b>UNDER CONSTRUCTION</b></span>
+        </button>
+        <button class="lvcard nav uc" data-level="orbit" aria-disabled="true">
+          <span class="lvart" aria-hidden="true"><svg viewBox="0 0 64 44"><ellipse cx="32" cy="22" rx="26" ry="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="32" cy="22" r="7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="58" cy="22" r="3" fill="currentColor"/></svg></span>
+          <b>ORBITAL YARD</b>
+          <small>Low gravity, broken hulls, and nothing under the gaps.</small>
+          <span class="ucTag"><i></i><b>UNDER CONSTRUCTION</b></span>
+        </button>
+      </div>
+      <button class="btn nav" id="lvBack">Back</button>
     </div>
     <div class="tver mono"><span id="verTxt">VERSION</span><span class="tupd" id="updTxt"></span></div>
     <div class="custpanel" id="custPanel" hidden>
@@ -222,38 +255,67 @@
       <h2>OPTIONS</h2>
       <div class="optbody">
         <div class="optsec">
-          <h3>Controls</h3>
-          <label class="setting"><span>Look sensitivity <b class="mono" id="sensVal">1.0</b></span><input class="nav" id="sens" type="range" min="0.2" max="3" step="0.1"></label>
-          <button class="btn ghost nav" id="invertBtn">Invert look: off</button>
-          <button class="btn ghost nav" id="assistBtn">Gamepad aim assist: on</button>
-        </div>
-        <div class="optsec">
-          <h3>Audio</h3>
-          <label class="setting"><span>Music volume <b class="mono" id="musicVal">60%</b></span><input class="nav" id="musicVol" type="range" min="0" max="1" step="0.05"></label>
-        </div>
-        <div class="optsec">
-          <h3>Crosshair &amp; HUD</h3>
-          <div class="xhopts">
-            <button class="btn ghost nav" id="xhStyleBtn">Crosshair: diamond</button>
-            <button class="btn ghost nav" id="xhColorBtn">Colour: white</button>
-            <button class="btn ghost nav" id="xhSizeBtn">Size: medium</button>
-            <div class="xhprev" aria-hidden="true"><div id="xhPreview" class="xh"><i></i><b></b></div></div>
-          </div>
-          <button class="btn ghost nav" id="autoModBtn">Auto-upgrade new modules: on</button>
-        </div>
-        <div class="optsec">
-          <h3>More</h3>
+          <button class="btn ghost nav orow" id="ctrlMenuBtn"><span>Controls</span><span>&#9656;</span></button>
+          <button class="btn ghost nav orow" id="audioMenuBtn"><span>Audio</span><span>&#9656;</span></button>
+          <button class="btn ghost nav orow" id="hudMenuBtn"><span>UI &amp; HUD</span><span>&#9656;</span></button>
           <button class="btn ghost nav orow" id="gfxMenuBtn"><span>Graphics</span><span>&#9656;</span></button>
           <button class="btn ghost nav orow" id="devMenuBtn"><span>Developer Tools</span><span>&#9656;</span></button>
         </div>
       </div>
       <button class="btn nav" id="optBackBtn">Back</button>
     </div>
+    <div class="menu optmenu" id="optCtrlMenu" hidden>
+      <h2>CONTROLS</h2>
+      <div class="optbody">
+        <div class="optsec">
+          <label class="setting"><span>Look sensitivity <b class="mono" id="sensVal">1.0</b></span><input class="nav" id="sens" type="range" min="0.2" max="3" step="0.1"></label>
+          <button class="btn ghost nav" id="invertBtn">Invert look: off</button>
+          <button class="btn ghost nav" id="assistBtn">Gamepad aim assist: on</button>
+        </div>
+        <div class="optsec">
+          <h3>Controller</h3>
+          <div class="padmap" id="padMap"></div>
+        </div>
+      </div>
+      <button class="btn nav" id="ctrlBackBtn">Back</button>
+    </div>
+    <div class="menu optmenu" id="optHudMenu" hidden>
+      <h2>UI &amp; HUD</h2>
+      <div class="optbody">
+        <div class="optsec">
+          <label class="setting"><span>UI scale <b class="mono" id="uiScaleVal">100%</b></span><input class="nav" id="uiScale" type="range" min="0.7" max="1.6" step="0.05"></label>
+        </div>
+        <div class="optsec">
+          <h3>Crosshair</h3>
+          <div class="xhopts">
+            <button class="btn ghost nav" id="xhStyleBtn">Crosshair: diamond</button>
+            <button class="btn ghost nav" id="xhColorBtn">Colour: white</button>
+            <button class="btn ghost nav" id="xhSizeBtn">Size: medium</button>
+            <div class="xhprev" aria-hidden="true"><div id="xhPreview" class="xh"><i></i><b></b></div></div>
+          </div>
+        </div>
+        <div class="optsec">
+          <h3>Build bay</h3>
+          <button class="btn ghost nav" id="autoModBtn">Auto-upgrade new modules: on</button>
+        </div>
+      </div>
+      <button class="btn nav" id="hudBackBtn">Back</button>
+    </div>
+    <div class="menu optmenu" id="optAudioMenu" hidden>
+      <h2>AUDIO</h2>
+      <div class="optbody">
+        <div class="optsec">
+          <label class="setting"><span>Master volume <b class="mono" id="masterVal">100%</b></span><input class="nav" id="masterVol" type="range" min="0" max="1" step="0.05"></label>
+          <label class="setting"><span>Music <b class="mono" id="musicVal">60%</b></span><input class="nav" id="musicVol" type="range" min="0" max="1" step="0.05"></label>
+          <label class="setting"><span>Sound effects <b class="mono" id="sfxVal">100%</b></span><input class="nav" id="sfxVol" type="range" min="0" max="1" step="0.05"></label>
+        </div>
+      </div>
+      <button class="btn nav" id="audioBackBtn">Back</button>
+    </div>
     <div class="menu optmenu" id="optGfxMenu" hidden>
       <h2>GRAPHICS</h2>
       <div class="optbody">
         <div class="optsec">
-          <label class="setting"><span>UI scale <b class="mono" id="uiScaleVal">100%</b></span><input class="nav" id="uiScale" type="range" min="0.7" max="1.6" step="0.05"></label>
           <button class="btn ghost nav" id="gfxBtn">Graphics: high</button>
           <button class="btn ghost nav" id="detailBtn">World detail: on</button>
           <button class="btn ghost nav" id="physBtn">Physics body: on</button>
