@@ -43,6 +43,7 @@ function clearWorld() {
   targets.forEach(t => scene.remove(t.mesh)); targets = []; shots.forEach(s => scene.remove(s.mesh)); gems.forEach(g => scene.remove(g.mesh)); fx.forEach(f => scene.remove(f.obj));
   CULL.q = []; enemies = []; shots = []; gems = []; fx = []; egReset(); pfxClear(); WRECKS = 0; clearSkyRings(); wdClear(); wfxClear(); S.streak = 0; S.streakT = 0; $('#killMul').hidden = true; S.frenzyT = 0; $('#fzBar').hidden = true;
   if (S.gate) { scene.remove(S.gate.group); S.gate = null; }
+  dmgReset();
   clearSpectators(); clearShop(); clearTerminal(); clearHazards(); TERM.nextAt = 0; TERM.checkT = 0; clearCases(); clearLegTrail(); clearStains(); clearFootprints();
   if (S.nuke) { scene.remove(S.nuke.obj); S.nuke = null; }
   physDestroyRobot();
@@ -292,6 +293,7 @@ function frame(now) {
       }
     } else if (player.model && S.inRun) {
       updatePlayerVisual(dt, playing() ? alpha : 1);
+      dmgTick(dt);
       physSync(playing() ? alpha : 1); syncProps();
       if (S.mode === 'drop') updateAtmos(dt);
       updateCamera(dt);

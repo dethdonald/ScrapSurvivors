@@ -914,13 +914,16 @@ function fireHostile(e, tgt, speed, yo = 1.4) {
 function hurt(a, from) {
   if (player.iframes > 0 || S.mode !== 'play') return;
   a = comboHurt(a);
+  const a0 = a;
   if (a <= 0.01) return;
   if (from) camKick(new THREE.Vector3(player.pos.x - from.x, 0, player.pos.z - from.z), Math.min(0.32, 0.1 + a * 0.006));   // the view jolts away from whatever hit you
   if (S.test && DEV.god) { player.iframes = 0.15; cam.shake = Math.max(cam.shake, 0.12); sfx('hurt', 0.25); return; }
   player.iframes = 0.15; player.shieldT = stats.shieldDelay;
   if (S.st) S.st.taken += Math.min(a, Math.max(0, player.hp) + Math.max(0, player.shield));
+  const hadShield = player.shield > 0;
   if (player.shield > 0) { const s = Math.min(player.shield, a); player.shield -= s; a -= s; if (S.st) S.st.shielded += s; }
   player.hp -= a; cam.shake = Math.max(cam.shake, 0.25); sfx('hurt', 0.6);
+  try { dmgHit(a0, from, hadShield); } catch (e) {}      // sparks and shrapnel off the side it came from
   // the frame flinches and flails its arms for a beat: a hard kick into the existing body-sway spring (away
   // from whatever hit you, when we know where that was) plus a short window where the arms thrash instead of aiming
   {

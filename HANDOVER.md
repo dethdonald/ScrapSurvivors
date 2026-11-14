@@ -783,3 +783,14 @@ All in player.js unless noted. Tunable live from the dev panel ("Legs & stomp");
 - `enemyCap()`: `ENEMY_CAP × STAGE_CAP[stage]` = 30% / 62% / 100% over stages 1-3.
 
 **Windows build**: `.github/workflows/windows.yml` builds a portable .exe on GitHub's Windows runners (Actions tab → Build Windows → Run workflow, or automatically when VERSION changes) and attaches it to a release tagged `v<version>`. `package.json` build config gained `directories.output` (`../dist`), `artifactName` and `updater.js` in `files`. publish.sh copies the workflow.
+
+## 0.47.1 — battle damage (Nov 14)
+New file `src/damage.js` (loaded after player.js). Everything in it is decoration: it never changes health or hitboxes.
+- `BDMG` state, `BDMG_STEPS = [0.65, 0.4, 0.2]`. **Names here are prefixed BDMG because ui.js already owns `DMG`** (damage numbers) — the two collided and silently killed ui.js until renamed.
+- `dmgScan(model)`: picks up to three panel-sized meshes off the body blocks (0.12–0.75 m, nothing on an arm, weapon, leg, module, jet, muzzle or cosmetic), sorted so the same frame always sheds the same plates in the same order. Re-scans whenever `player.model` changes.
+- `dmgShed/dmgRefit`: a plate is hidden and a free copy tumbles away (gravity, bounce, spin, 4.5 s life); it is bolted back on with a spark and a clunk once health climbs 6% above the line it came off at.
+- `dmgHit(amount, from, hadShield)` from `hurt()`: sparks and shrapnel on the side the hit came from, smoke for the big ones.
+- `dmgShieldBreak()`: fires from `dmgTick` when the shield goes from up to zero — blue shards, two rings, a blue vignette flash and a lower crack.
+- Injured idle: sparks below 75% health, smoke below 45%, both getting worse as it drops.
+- Cracked lens: a canvas inside `#hud` (so menus cover it and it hides with the HUD), one crack cluster per plate lost, grown from an edge and never allowed within 30% of screen centre. Opacity 0.22/0.29/0.36 — deliberately faint.
+- `dmgTick(dt)` from game.js's visual branch; `dmgReset()` from `clearWorld`.
