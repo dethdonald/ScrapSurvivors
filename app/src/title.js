@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.47.1 · BUILD NOV 14';
+const VERSION = '0.47.2 · BUILD NOV 14';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -494,6 +494,7 @@ function pickLevel(id) {
 $('#tStart').addEventListener('click', () => { sfx('tick'); openLevelSelect(); });
 $('#lvBack').addEventListener('click', () => { sfx('tick'); closeLevelSelect(); });
 $('#lvGrid').addEventListener('click', e => { const b = e.target.closest('[data-level]'); if (b) pickLevel(b.dataset.level); });
+$('#lvHard').addEventListener('click', () => sfx('deny', 0.5));
 $('#tOptions').addEventListener('click', () => {
   ensureAudio();
   TITLE.fromOptions = true; S.prevMode = 'title'; S.mode = 'pause';

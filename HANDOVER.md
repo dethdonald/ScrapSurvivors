@@ -794,3 +794,9 @@ New file `src/damage.js` (loaded after player.js). Everything in it is decoratio
 - Injured idle: sparks below 75% health, smoke below 45%, both getting worse as it drops.
 - Cracked lens: a canvas inside `#hud` (so menus cover it and it hides with the HUD), one crack cluster per plate lost, grown from an edge and never allowed within 30% of screen centre. Opacity 0.22/0.29/0.36 — deliberately faint.
 - `dmgTick(dt)` from game.js's visual branch; `dmgReset()` from `clearWorld`.
+
+## 0.47.2 — level select fixes (Nov 14)
+- **The mouse could not click it**: `#title` sets `pointer-events:none` (so the 3D scene behind it stays draggable) and only `.tmain` turned them back on. `.levelsel` now does too. **Anything else added under `#title` needs the same.**
+- Vertical list instead of three columns: art, name, blurb, status chip per row, with a dark scrim behind so the panel reads over the title scene.
+- The two unbuilt levels have no names ("? ? ?", "Not built yet").
+- A **Hard mode** row sits below the list, shown and disabled ("Locked"); `#lvHard` just plays the deny sound for now.

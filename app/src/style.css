@@ -1052,23 +1052,26 @@ body.berserk #vignette{box-shadow:inset 0 0 160px 30px rgba(255,20,20,.45);anima
 #titleToast.show{animation:titleToast 3.6s ease forwards}
 @keyframes titleToast{0%{opacity:0;transform:translate(-50%,8px)}8%,82%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-6px)}}
 
-/* ---------- level select: the drop zone is picked before the build bay ---------- */
-.levelsel{position:absolute;inset:0;display:grid;align-content:center;justify-items:center;gap:14px;padding:24px;zoom:var(--uiz,1)}
-.levelsel h2{margin:0 0 6px;font-size:clamp(26px,3.4vw,40px);letter-spacing:.2em}
-.lvgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;width:min(1080px,94vw)}
-.lvcard{position:relative;display:grid;justify-items:center;gap:6px;padding:18px 16px 16px;background:rgba(10,15,19,.86);border:2px solid var(--frame-dim,#3a444c);color:var(--text);font:inherit;text-align:center;cursor:pointer}
-.lvcard .lvart{color:var(--sec);width:76px}
+/* ---------- level select: the drop zone is picked before the build bay ----------
+   A vertical list, one level per row. (#title turns pointer events off for the 3D scene behind it, so this
+   panel has to turn them back on or nothing in it can be clicked.) */
+.levelsel{position:absolute;inset:0;display:grid;align-content:center;justify-items:center;gap:12px;padding:24px;pointer-events:auto;zoom:var(--uiz,1)}
+.levelsel::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(5,8,10,.82) 0 42%,rgba(5,8,10,.45) 100%);pointer-events:none}
+.levelsel>*{position:relative}
+.levelsel h2{margin:0 0 4px;font-size:clamp(24px,3vw,36px);letter-spacing:.2em}
+.lvgrid,.lvmods{display:grid;gap:10px;width:min(620px,92vw)}
+.lvcard,.lvmod{position:relative;display:grid;grid-template-columns:58px 1fr auto;align-items:center;gap:16px;padding:14px 16px;background:rgba(9,13,17,.96);border:2px solid var(--frame-dim,#3a444c);color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.lvmod{grid-template-columns:1fr auto}
+.lvcard .lvart{color:var(--sec);width:58px}
 .lvcard .lvart svg{width:100%;height:auto;display:block}
-.lvcard b{font-size:17px;letter-spacing:.16em}
-.lvcard small{color:var(--dim);font-size:12px;line-height:1.45;max-width:26ch}
-.lvcard .lvgo{font-style:normal;font-size:11px;letter-spacing:.2em;color:var(--sec);border:1px solid var(--sec);padding:2px 10px;margin-top:4px}
-.lvcard:hover,.lvcard:focus{border-color:var(--sec);outline:none;background:rgba(18,26,32,.92)}
-.lvcard.uc{cursor:not-allowed;opacity:.62;filter:grayscale(.55)}
-.lvcard.uc:hover,.lvcard.uc:focus{border-color:var(--frame-dim,#3a444c);background:rgba(10,15,19,.86)}
-.lvcard .ucTag{position:absolute;left:8px;right:8px;bottom:12px;height:20px;display:grid;place-items:center;transform:rotate(-3deg);pointer-events:none}
-.lvcard .ucTag i{position:absolute;inset:0;background:repeating-linear-gradient(-45deg,#ffd23a 0 10px,#111 10px 20px);box-shadow:0 2px 6px rgba(0,0,0,.5)}
-.lvcard .ucTag b{position:relative;font-size:10px;letter-spacing:.16em;background:#111;color:#ffd23a;padding:2px 8px}
-@media (max-width:860px){.lvgrid{grid-template-columns:1fr}.lvcard small{max-width:40ch}}
+.lvtext b{display:block;font-size:16px;letter-spacing:.16em}
+.lvtext small{display:block;color:var(--dim);font-size:12px;line-height:1.4;margin-top:2px}
+.lvgo{font-style:normal;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--sec);border:1px solid var(--sec);padding:3px 10px;white-space:nowrap}
+.lvgo.wip{color:#ffd23a;border-color:#ffd23a}
+.lvcard:hover,.lvcard:focus,.lvmod:focus{border-color:var(--sec);outline:none;background:rgba(20,29,36,.98)}
+.lvcard.uc,.lvmod.uc{cursor:not-allowed;opacity:.6;filter:grayscale(.5)}
+.lvcard.uc:hover,.lvcard.uc:focus,.lvmod.uc:hover,.lvmod.uc:focus{border-color:#ffd23a;background:rgba(9,13,17,.96)}
+
 
 .padmap{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px 12px}
 .pmrow{display:flex;align-items:center;gap:2px;font-size:12px;color:var(--dim)}
