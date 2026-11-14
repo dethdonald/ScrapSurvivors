@@ -23,7 +23,6 @@ function rollCaseLevel() {
   let lvl = 1; if (Math.random() < first) { lvl = 2; while (lvl < MAX_LVL && Math.random() < next) lvl++; }
   return lvl;
 }
-function ownedTypes(kind) { return [...new Set(allItems().filter(o => o.kind === kind).map(o => o.type))]; }
 function rollCasePart() {
   const luck = (stats && stats.luck || 0) + 6;
   let r = Math.random(), kind = 'weapon';

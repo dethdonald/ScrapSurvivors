@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.45.3 · BUILD NOV 13';
+const VERSION = '0.46.0 · BUILD NOV 13';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -397,9 +397,26 @@ async function checkUpdate() {
   // Linux/Deck: the shell launcher does the actual download on the next start, so this button doesn't need
   // anything "ready" first - clicking it just restarts (main.js re-runs the launcher script instead of the
   // raw binary on Linux, so the restart itself is what triggers the update).
-  else if (r.state === 'available') el.innerHTML = line('new', `UPDATE ${v} AVAILABLE`) + '<button class="updBtn nav" id="updRestart">RESTART TO UPDATE</button>';
+  else if (r.state === 'available') el.innerHTML = line('new', `UPDATE ${v} AVAILABLE`) + (window.desktop.applyUpdate ? '<button class="updBtn nav" id="updNow">UPDATE NOW</button>' : '<button class="updBtn nav" id="updRestart">RESTART TO UPDATE</button>');
   else el.innerHTML = line('err', r.reason === 'noaccess' ? 'CAN\'T CHECK FOR UPDATES (NO ACCESS)' : 'COULDN\'T CHECK FOR UPDATES');
   const b = $('#updRestart'); if (b) b.addEventListener('click', () => { flushMeta(); window.desktop.restart(); });
+  /* UPDATE NOW (Deck / Linux): the game downloads and installs the update itself and shows each step here, then
+     reloads straight into the new version. If that fails the reason is shown, with the old restart button as a fallback. */
+  const n = $('#updNow'); if (n) n.addEventListener('click', async () => {
+    if (UPD.applying) return; UPD.applying = true; flushMeta();
+    const show = txt => { el.innerHTML = line('new', txt); };
+    show(`UPDATE ${v} · CONNECTING…`);
+    if (!UPD.hooked && window.desktop.onUpdateProgress) { UPD.hooked = true; window.desktop.onUpdateProgress(p => {
+      if (!UPD.applying || !p) return;
+      show(p.stage === 'download' ? `UPDATE ${UPD.v} · DOWNLOADING ${p.detail}` : p.stage === 'unpack' ? `UPDATE ${UPD.v} · UNPACKING…` : p.stage === 'install' ? `UPDATE ${UPD.v} · INSTALLING…` : p.stage === 'done' ? `UPDATED TO ${p.detail} · RELOADING…` : `UPDATE ${UPD.v} · CONNECTING…`);
+    }); }
+    UPD.v = v;
+    let res = null; try { res = await window.desktop.applyUpdate(); } catch (e) { res = { ok: false, reason: String(e && e.message || e) }; }
+    if (res && res.ok) return;                       // the window reloads (or the program restarts) by itself in a moment
+    UPD.applying = false;
+    el.innerHTML = line('err', 'UPDATE FAILED: ' + String((res && res.reason) || 'unknown').toUpperCase().replace(/[<>&]/g, '')) + '<button class="updBtn nav" id="updRestart">RESTART TO UPDATE</button>';
+    const rb = $('#updRestart'); if (rb) rb.addEventListener('click', () => { flushMeta(); window.desktop.restart(); });
+  });
   // the Windows build downloads in the background: look again until it's ready (a minute at most)
   if (r.state === 'downloading' && UPD.polls++ < 12) setTimeout(checkUpdate, 5000);
 }
@@ -440,7 +457,7 @@ function renderTitle(dt) {
     else if (TITLE.life > 15) explodeTitleRobot();
   }
   if (TITLE.respawnT > 0) { TITLE.respawnT -= dt; if (TITLE.respawnT <= 0) { clearTitlePieces(); spawnTitleRobot(!titleInferno()); } }
-  thrownTick(dt);
+  titleThrownTick(dt);
   if (inf) { TITLE.cam.updateMatrixWorld(); TITLE.inf.tick(dt, TITLE.cam); titleInfernoGuns(dt); }
   if (typeof logoTick === 'function') { TITLE.cam.updateMatrixWorld(); logoTick(dt); }
   const ex0 = MAT_OUT.uniforms.exposure.value;
@@ -503,7 +520,7 @@ function stickerAt(e) {
   const hit = stickerRay(e).intersectObject(TITLE.robot, true).find(h => h.object.visible);
   return hit && hit.object.userData.patch ? hit.object : null;
 }
-const stickerOk = e => S.mode === 'custom' && !(e.target.closest && e.target.closest('.custpanel, button, input, .tip'));
+const stickerOk = e => booted() && S.mode === 'custom' && !(e.target.closest && e.target.closest('.custpanel, button, input, .tip'));
 addEventListener('pointerdown', e => {
   if (!stickerOk(e) || (e.button !== 0 && e.button !== 2)) return;
   if (e.button === 0) TITLE.clickDown = { x: e.clientX, y: e.clientY, hit: robotHit(e) };
@@ -514,7 +531,7 @@ addEventListener('pointerdown', e => {
   TITLE.rotDrag = { x: e.clientX, y: e.clientY };                                  // drag empty space to turn the robot
 });
 addEventListener('pointermove', e => {
-  if (S.mode !== 'custom') return;
+  if (!booted() || S.mode !== 'custom') return;
   if (flingMove(e)) return;
   if (cosmeticPointerMove(e)) return;
   if (TITLE.rotDrag && TITLE.robot) { TITLE.robot.rotation.y += (e.clientX - TITLE.rotDrag.x) * 0.012; TITLE.rotDrag.x = e.clientX; document.body.style.cursor = 'grabbing'; return; }
@@ -705,7 +722,6 @@ function renderCosShelf() {
     `<button class="cos nav${CUSTOM.cosmetics.some(x => x.type === k) ? ' on' : ''}" data-cos="${k}" title="${c.name}">${c.icon}<span>${c.name}</span></button>`).join('');
 }
 renderCosShelf();
-const overCustPanel = e => { const r = $('#custPanel').getBoundingClientRect(); return !$('#custPanel').hidden && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
 $('#cosShelf').addEventListener('pointerdown', e => {
   const b = e.target.closest('[data-cos]'); if (!b || e.button !== 0) return;
   e.preventDefault();
@@ -842,7 +858,9 @@ function flingRelease() {
   sfx(v.length() > 8 ? 'swish' : 'pop', 0.5);
   return true;
 }
-function thrownTick(dt) {
+/* (was called thrownTick, the same name as the function in bosses.js that flies an enemy a boss has hurled at you.
+   This file loads later, so it silently replaced that one: hurled enemies never hit you and never landed.) */
+function titleThrownTick(dt) {
   for (const T of TITLE.thrown) {
     T.life -= dt; T.v.y -= 16 * dt;
     T.obj.position.addScaledVector(T.v, dt);

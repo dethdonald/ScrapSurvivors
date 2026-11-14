@@ -117,7 +117,7 @@ function buildBlock(g, item, out, reg) {
     // stickers land in the same places on every robot you build (body 0 = bottom, 1 = the next one up...), and
     // stay wherever you've dragged them in Customize
     const bi = BODY_IDX++;
-    if (item === BUILD_ROOT) addPatch(blk, item, w, h, d, bi);
+    if (item === BUILD_ROOT) addBodyPatch(blk, item, w, h, d, bi);
     addStickerBomb(blk, item, w, h, d, bi);
   }
   const ext = Math.abs(out.x) * w / 2 + Math.abs(out.y) * h / 2 + Math.abs(out.z) * d / 2;
@@ -239,7 +239,9 @@ function addStickerBomb(blk, item, w, h, d, bi) {
     placeSticker(m, fg, `${bi}:${k}`, fw, fh, s);
   }
 }
-function addPatch(blk, item, w, h, d, bi = 0) {
+/* (was called addPatch, the same name as the poison-patch function in gemfx.js, which loads later and replaced it:
+   the hull never got its patch, and every rebuild of the robot dropped a stray poison patch into the scene instead.) */
+function addBodyPatch(blk, item, w, h, d, bi = 0) {
   const tex = patchTexture(); if (!tex) return;
   const rng = mulberry32((CUSTOM.layout + 101 * (bi + 1)) | 0);
   const faces = ['front', 'back', 'left', 'right'].filter(f => f !== item.plug);
@@ -613,7 +615,7 @@ function buildLower(g, item, out, reg) {
   const blk = { group: grp, faces };
   if (BUILD_ROOT) {
     const bi = BODY_IDX++;
-    if (item.type === 'wheels') { addQrStickers(blk, item, S.w, S.h, S.d); if (item === BUILD_ROOT) addPatch(blk, item, S.w, S.h, S.d, bi); }
+    if (item.type === 'wheels') { addQrStickers(blk, item, S.w, S.h, S.d); if (item === BUILD_ROOT) addBodyPatch(blk, item, S.w, S.h, S.d, bi); }
     addStickerBomb(blk, item, Math.min(S.w, 0.9), S.h, Math.min(S.d, 0.9), bi);
   }
   // the hips sit where the old body's centre was, so the legs still reach the floor

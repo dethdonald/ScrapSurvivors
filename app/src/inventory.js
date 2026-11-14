@@ -112,16 +112,6 @@ function refLabel(r) {
   if (r.key === 'slots') return `the ${FACE_ORDER[r.i]} of your ${r.owner === L.body ? 'bottom body' : itemName(r.owner)}`;
   return r.key;
 }
-function predictReceive(it) {
-  return { how: 'store', text: 'Goes to storage' };
-  const m = freeMount(it);
-  if (m) return { how: 'place', text: `Mounts on ${refLabel(m)}` };
-  const t = findCombineTarget(it);
-  if (t) return { how: 'combine', text: `Combines with your ${itemName(t)}` };
-  const f = firstFree(it);
-  if (f) return { how: 'place', text: `Goes to ${refLabel(f)}` };
-  return { how: 'hand', text: 'No room · it lands on your workbench' };
-}
 /* Put a part in storage. An arm and the gun in its wrist are stored as two separate parts.
    Returns whatever did not fit (storage holds storeCap() parts). */
 function storePut(it) {
@@ -148,13 +138,6 @@ function receiveItem(it) {
   storePut(it);
   if (!$('#inv').hidden) renderBench();
   return storeOver() === 0;
-}
-/* What changed between the old and new level, read straight off the hover-window rows. */
-function upgradeText(it) {
-  const from = it.prevLvl || it.lvl;
-  const a = partInfo({ ...it, lvl: from }), b = partInfo(it);
-  const diff = b.filter((r, i) => a[i] && String(a[i][1]) !== String(r[1]) && r[0] !== 'Weight').map((r, i) => `${r[0].toLowerCase()} ${r[1]}`);
-  return diff.length ? diff.slice(0, 3).join(', ') : 'stronger';
 }
 function scrapValue(it) { return Math.max(1, Math.round([it, ...childrenOf(it)].reduce((v, x) => v + x.lvl * 0.8 + 1, 0))); }
 
@@ -835,7 +818,7 @@ function stepDrag(dt) {
   $('#scrapZone').classList.toggle('hot', overScrap(d.x, d.y));
 }
 
-const benchActive = () => S.mode === 'hangar' || S.mode === 'inv';
+const benchActive = () => booted() && (S.mode === 'hangar' || S.mode === 'inv');
 canvas.addEventListener('pointerdown', e => { if (!benchActive()) return; IN.device = 'kbm'; benchDown(e.clientX, e.clientY, e.button); });
 $('#partsPanel').addEventListener('pointerdown', e => {
   if (!benchActive() || e.target.closest('button')) return;
@@ -982,7 +965,7 @@ function sparkBurst(el, color = '#ffd27a', n = 26) {
   }
 }
 function ensureAudio() { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {} }
-const sfxGap = { tink: 0.04, squeak: 0.035, hurt: 0.09,  flame: 0.07, roar: 0.1, slash: 0.05, swish: 0.08, unfold: 0.5, unfold: 0.5, zap: 0.06, slot: 0.05, reload: 0.08, reloaded: 0.08, jet: 0.07, autogun: 0.055, step: 0.07, chirp: 0.09, land: 0.12, hit: 0.045, kill: 0.04, xp: 0.03, coin: 0.04, pistol: 0.03, shotgun: 0.05 };
+const sfxGap = { tink: 0.04, squeak: 0.035, hurt: 0.09,  flame: 0.07, roar: 0.1, slash: 0.05, swish: 0.08, unfold: 0.5, zap: 0.06, slot: 0.05, reload: 0.08, reloaded: 0.08, jet: 0.07, autogun: 0.055, step: 0.07, chirp: 0.09, land: 0.12, hit: 0.045, kill: 0.04, xp: 0.03, coin: 0.04, pistol: 0.03, shotgun: 0.05 };
 const sfxLast = {};
 const GUN_LAYERS = { pistol: { crack: 0.8, thump: 0.5 }, autogun: { crack: 0.6, thump: 0.35 }, shotgun: { crack: 1, thump: 1.1 }, sniper: { crack: 1.2, thump: 1.2 }, rocket: { crack: 0.5, thump: 0.9 }, zap: { crack: 0.5, thump: 0.25 } };
 const TAILS = { boom: 1, shotgun: 0.45, sniper: 0.6, rocket: 0.5, nukefall: 0.4 };

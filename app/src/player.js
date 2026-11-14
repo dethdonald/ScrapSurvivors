@@ -143,11 +143,6 @@ function buildProblems() {
   if (!mountedArms().length) p.push('an arm');          // a weapon is optional
   return p;
 }
-function fitArray(arr, cap) {
-  const overflow = arr.length > cap ? arr.splice(cap).filter(Boolean) : [];
-  while (arr.length < cap) arr.push(null);
-  return overflow;
-}
 function syncCaps() {
   L.store = L.store.filter(Boolean);      // storage has no limit
 }

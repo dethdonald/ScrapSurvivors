@@ -37,8 +37,6 @@ const TIER_START = [0, 1, 2, 3, 4, 5];
 const LEGACY_LV = [0, 1, 10, 30, 60, 100];
 const sLv = lvl => LEGACY_LV[Math.max(1, Math.min(5, Math.round(lvl) || 1))];
 function tierOf(lvl) { return Math.max(1, Math.min(5, Math.round(lvl) || 1)); }
-/* An old save or dev-shelf item may carry a level on the old 1..100 scale (or part experience): bring it onto Level 1..5. */
-function migrateLvl(lvl) { lvl = Math.round(lvl) || 1; if (lvl <= 5 && lvl >= 1) return lvl; return lvl >= 60 ? 5 : lvl >= 30 ? 4 : lvl >= 10 ? 3 : lvl >= 5 ? 2 : 1; }
 const rarityOf = lvl => RARITY[tierOf(lvl)];
 /* 0 at Lv 1, rising toward 1 by about Lv 60: used for stats that must not run away (speeds, turn rates). */
 const lvlCurve = (lvl, k = 22) => 1 - Math.exp(-(lvl - 1) / k);
@@ -64,7 +62,10 @@ const STAT_UPGRADES = {
 
 /* ---------- Loot ----------
    Targets and elite enemies can drop a part. Its Mk (rarity) is rolled with your luck. */
-function rollLootOf(kinds, luck = 0) { let it; for (let i = 0; i < 40; i++) { it = rollLoot(luck); if (kinds.includes(it.kind)) break; } return it; }
+/* Loot of the given kinds only. This used to re-roll rollLoot() up to 40 times and hand back whatever the last roll was:
+   for a rare kind (an arm is ~8% of the pool, an adapter ~2%) that regularly ran out of tries and returned the WRONG kind.
+   A case then built e.g. an 'arm' of type 'pistol', which crashed the moment its name was looked up. */
+function rollLootOf(kinds, luck = 0) { return rollLoot(luck, kinds); }
 const isLimb = kind => kind === 'arm' || kind === 'leg';
 /* Loot lying around the world rolls a rarity-based level like everything else, luck-scaled, same as store/case/terminal rewards. */
 function rollWorldLoot(luck = 0) { return rollLoot(luck); }
@@ -75,15 +76,16 @@ function equippedTypeSet() {
   return set;
 }
 const EQUIPPED_LOOT_BUMP = 1.35;                       // slightly more likely to find parts matching what you already have on
-function rollLoot(luck = 0) {
+function rollLoot(luck = 0, kinds = null) {
   const eq = equippedTypeSet();
-  const pool = [];
+  let pool = [];
   for (const t of Object.keys(WEAPONS)) if (weaponLootUnlocked(t)) pool.push(['weapon', t, 3 * (WEAPONS[t].lootWeight ?? 1) * (eq.has('weapon:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);
   for (const t of Object.keys(ARMS)) pool.push(['arm', t, 1.5 * (eq.has('arm:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);
   if (!BUILD_V2) for (const t of Object.keys(LEGS)) pool.push(['leg', t, 1 * (eq.has('leg:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);       // V2: the lower half never drops
   for (const t of Object.keys(MODULES)) pool.push(['module', t, 1.2 * (eq.has('module:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);
   if (BUILD_V2) for (const t of Object.keys(ADAPTERS)) pool.push(['adapter', t, 0.5 * (eq.has('adapter:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);
   if (!BUILD_V2) for (const t of Object.keys(BLOCKS)) if (!BLOCKS[t].body) pool.push(['block', t, 0.8 * (eq.has('block:' + t) ? EQUIPPED_LOOT_BUMP : 1)]);    // V2: no free sockets for bricks
+  if (kinds) { const only = pool.filter(p => kinds.includes(p[0])); if (only.length) pool = only; }
   let x = Math.random() * pool.reduce((a, p) => a + p[2], 0), pickd = pool[0];
   for (const p of pool) { x -= p[2]; if (x <= 0) { pickd = p; break; } }
   // a rolled rarity gives exactly the first level of that rarity
@@ -720,7 +722,6 @@ const LEG_GEM = {
   lifesteal: 'Blood miles: every 20 m you run with an enemy within 12 m heals 1-3 HP (once per 2 s at most).',
   poison:    'Toxic wake: you leave a poison patch every 3 m (3 s, 12 at most) that poisons enemies standing in it.',
 };
-const ATTR_CHANCE = 0.06;    // per dropped arm
 /* Gems: each attribute is now a gem you socket into an arm (every arm has two gem slots).
    They change whatever gun the arm holds. Rare drops from enemies, sometimes from crates, targets and locked cases. */
 const GEMS = {};
@@ -1097,8 +1098,6 @@ function upgradeItem(it, by = 1) {
   creditUnlockProgress(it);
   return c;
 }
-/* Same kind, same type, same level, below the cap: the rule for merging two parts. */
-const sameLevelPair = (a, b) => !!a && !!b && a !== b && a.kind === b.kind && a.type === b.type && (a.lvl || 1) === (b.lvl || 1);
 const DEFS = { orb: () => ORBS, adapter: () => ADAPTERS, lower: () => LOWERS, leg: () => LEGS, arm: () => ARMS, weapon: () => WEAPONS, module: () => MODULES, block: () => BLOCKS, gem: () => GEMS };
 function itemDef(it) { return DEFS[it.kind]()[it.type]; }
 function itemName(it) { return itemDef(it).name + (it.kind === 'gem' ? ' ' + ROMAN[it.lvl || 1] : ''); }

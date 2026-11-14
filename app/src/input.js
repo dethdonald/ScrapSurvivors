@@ -11,7 +11,10 @@ const IN = {
 let mouseFire = false, mouseLook = false, mouseZoom = false;
 
 function menuOpen() { return ['catalog', 'wcase', 'devpanel', 'roulette', 'title', 'custom', 'hangar', 'inv', 'levelup', 'perk', 'pause', 'over', 'shop', 'terminal'].includes(S.mode); }
-function playing() { return S.mode === 'play' || S.mode === 'drop'; }   // (the drop countdown is not 'playing': nothing moves yet)
+/* (typeof S: mouse and key events can arrive while the later scripts are still loading, before game.js has made S.
+   That threw "S is not defined" hundreds of times in the log on a slow start.) */
+const booted = () => typeof S !== 'undefined';
+function playing() { return booted() && (S.mode === 'play' || S.mode === 'drop'); }   // (the drop countdown is not 'playing': nothing moves yet)
 
 addEventListener('keydown', e => {
   IN.device = 'kbm';

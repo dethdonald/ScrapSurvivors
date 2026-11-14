@@ -207,17 +207,6 @@ function clipVel(v, n, bounce = 0) {
   if (vn < 0) { v.x -= (1 + bounce) * vn * n.x; v.z -= (1 + bounce) * vn * n.z; }
   return true;
 }
-/* Simple body integration for enemies */
-function moveBody(b, dt) {
-  b.bumped = false; b.landed = false;
-  const nx = b.pos.x + b.vel.x * dt; if (!blockedAt(nx, b.pos.z, b.pos.y, b.r)) b.pos.x = nx; else { b.vel.x = 0; b.bumped = true; }
-  const nz = b.pos.z + b.vel.z * dt; if (!blockedAt(b.pos.x, nz, b.pos.y, b.r)) b.pos.z = nz; else { b.vel.z = 0; b.bumped = true; }
-  b.vel.y -= ENEMY_GRAV * dt; b.pos.y += b.vel.y * dt;
-  const g = footGround(b);
-  if (b.pos.y <= g) { if (!b.onGround) b.landed = true; b.pos.y = g; if (b.vel.y < 0) b.vel.y = 0; b.onGround = true; }
-  else if (b.onGround && b.vel.y <= 0 && b.pos.y - g < 0.25) { b.pos.y = g; b.vel.y = 0; }
-  else b.onGround = false;
-}
 const jumpVE = h => Math.sqrt(2 * ENEMY_GRAV * Math.max(0.1, h));
 
 /* Ray march against the heightfield. Returns distance or -1. */

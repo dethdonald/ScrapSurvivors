@@ -103,6 +103,32 @@ async function updateStatus() {
   return res;
 }
 ipcMain.handle('update-status', () => updateStatus());
+/* Linux / Steam Deck: update in place, with progress, from inside the game (updater.js: no curl, no shell).
+   When only the game's own files changed (nearly always) the window simply reloads into the new version: no restart
+   of the program at all. If main.js / preload.js changed, the program restarts itself; the files are already
+   switched, so a plain relaunch of the binary is enough. */
+let updBusy = false;
+ipcMain.handle('update-apply', async () => {
+  if (process.platform !== 'linux' || !app.isPackaged) return { ok: false, reason: 'not available on this build' };
+  if (updBusy) return { ok: false, reason: 'already updating' };
+  updBusy = true;
+  const send = (stage, detail) => { try { if (win && !win.isDestroyed()) win.webContents.send('update-progress', { stage, detail }); } catch (e) {} };
+  try {
+    const binDir = path.dirname(process.execPath);
+    let token = ''; try { token = fs.readFileSync(path.join(binDir, 'github-token.txt'), 'utf8').trim(); } catch (e) {}
+    const { applyUpdate } = require('./updater');
+    const r = await applyUpdate({ appDir: __dirname, binDir, repo: UPD_REPO, token, fetchFn: (u, o) => net.fetch(u, Object.assign({ signal: AbortSignal.timeout(120000) }, o)), onProgress: send });
+    log(`in-app update: now ${r.version} (${r.files} files, ${r.relaunch ? 'restarting the program' : 'reloading the window'})`);
+    updCache = null;
+    send('done', r.version);
+    setTimeout(() => {
+      if (r.relaunch) { app.relaunch({ args: process.argv.slice(1) }); app.exit(0); }
+      else if (win && !win.isDestroyed()) win.webContents.reloadIgnoringCache();
+      updBusy = false;
+    }, 900);
+    return { ok: true, version: r.version, relaunch: r.relaunch };
+  } catch (e) { updBusy = false; log('in-app update failed: ' + (e && e.message)); return { ok: false, reason: String((e && e.message) || e) }; }
+});
 // restart into the downloaded update.
 // Windows: tools/bootstrap.js (the real entry point) does the download+switch itself, so a plain relaunch
 // of the same exe picks up the new copy.

@@ -737,3 +737,20 @@ All in player.js unless noted. Tunable live from the dev panel ("Legs & stomp");
 - **Footfall**: stronger dip/camera bob/sway, thud sound at speed or on heavy frames, slight shake for heavy frames. Spider legs: light skitter, small puffs.
 - **Dust**: `footDust` (every step, ground-tinted via the tile colour), `landDust` (ring, scales with impact, from impact > 4), skid cloud on hard stops/reversals, wheel/tread trails above 4 m/s. All pooled (`PFX.lit`).
 - **Footprints**: `footPrint/footTick/clearFootprints`, one 160-instance quad mesh, prints shrink away after 14 s.
+
+## 0.46.0 — quality pass + in-app Deck updater (Nov 13)
+**Bugs fixed** (found by linting all scripts as one program — `eslint` with `no-redeclare`/`no-undef` on the concatenated files in index.html order — plus the PC's `scrapsurvivors-log.txt`):
+- **Duplicate global function names** (classic scripts share one scope; the later file silently wins):
+  - `thrownTick` existed in bosses.js (enemy hurled by the Warden) and title.js (title-screen toys). The title one won, so hurled enemies never hit the player and stayed flagged `thrown` forever. Title's is now `titleThrownTick`.
+  - `addPatch` existed in robot.js (the player's custom patch sticker on the hull) and gemfx.js (poison ground patch). The gem one won: the hull patch never appeared and each robot rebuild added a junk poison patch. Robot's is now `addBodyPatch`.
+  - **Before adding any top-level name, grep for it across src/.**
+- `rollLootOf(kinds)` re-rolled 40 times and returned the last roll even if it was the wrong kind (arms ~3% of the time, adapters ~47%). `rollCasePart` then built e.g. `mkItem('arm', 'pistol')` → "Cannot read properties of undefined (reading 'name')" in `itemName`. Now `rollLoot(luck, kinds)` filters the pool. (Adapters now really are 6% of case parts.)
+- "S is not defined" spam at start-up: input handlers fired before game.js had loaded. `booted()` guard in input.js (`playing`), inventory.js (`benchActive`), title.js.
+- Used-up weapons were never greyed in the hangar list (0.45.1). Duplicate `unfold` key in `sfxGap`.
+- **Dead code removed**: `lob`, `FIXED_CONE`, `AUTO_ALIGN`, `predictReceive`, `upgradeText`, `deathSting`, `fitArray`, `dropUpgrade`, `moveBody`, `openPerk`, `ownedTypes`, `migrateLvl`, `sameLevelPair`, `ATTR_CHANCE`, `overCustPanel`, `renderXhLeft` timer.
+
+**Deck updater**
+- `updater.js` (new, plain Node: fs/zlib + a small tar reader): downloads the repo tarball with Electron's `net.fetch`, unpacks `app/` to `resources/app.new`, swaps folders, copies `deck/*.sh` next to the binary. main.js `update-apply` IPC (Linux packaged only) sends `update-progress` {stage: connect/download/unpack/install/done}. If main.js/preload.js/package.json/updater.js are unchanged the window just reloads (no program restart); otherwise `app.relaunch()`.
+- Title screen: "UPDATE NOW" button with live progress; on failure shows the reason + the old "RESTART TO UPDATE".
+- `deck/update-lib.sh`: curl/tar run via `clean()` (`env -u LD_PRELOAD -u LD_LIBRARY_PATH`), and curl failures are logged with their message (it used to report "offline" silently). Suspected cause of Gaming Mode not updating — **unconfirmed**, needs the Deck's update-log.txt.
+- publish.sh now also copies `updater.js`.

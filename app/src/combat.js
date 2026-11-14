@@ -1700,9 +1700,7 @@ function fireW(W, c) {
   CUR_KICK = 0; CUR_WTYPE = null; CUR_RANGE = 1;
   if (W.sound) sfxP(W.sound, c.manual ? 0.55 : c.fixed ? 0.18 : 0.35, wfxShotPitch(c));
 }
-const FIXED_CONE = 0.4;   // radians either side of its barrel that a block-mounted weapon will fire at
 const AUTO_CONE = 1.45;   // an auto arm only engages enemies within this angle of the way it is mounted (~83°)
-const AUTO_ALIGN = 0.22;  // and only fires once its barrel has swung this close to the target
 function updateWeapons(dt) { updateWeapons_(dt); DMG_SRC = null; }
 function updateWeapons_(dt) {
   const ud = player.model.userData;
@@ -1957,12 +1955,6 @@ function tracer(a, b) {
   // a thin smoke trail left hanging along the shot
   const L = a.distanceTo(b), n = Math.min(14, Math.floor(L / 5));
   for (let i = 1; i <= n; i++) puff(a.clone().lerp(b, i / (n + 1)), 0.14, 0.9, new THREE.Vector3(rand(-0.2, 0.2), rand(0.1, 0.4), rand(-0.2, 0.2)));
-}
-function lob(o, tp, dmg, radius) {
-  const T = clamp(o.distanceTo(tp) / 18, 0.8, 1.6), g = 30;
-  const v = new THREE.Vector3((tp.x - o.x) / T, (tp.y - o.y + 0.5 * g * T * T) / T, (tp.z - o.z) / T);
-  const m = new THREE.Mesh(geoShell, B(0xd8cfb4)); m.position.copy(o); scene.add(m);
-  shots.push({ mesh: m, pos: o.clone(), last: o.clone(), vel: v, life: 4, r: 0.5, dmg, explode: radius, grav: g, mortar: true, hit: new Set(), pierce: 0, src: DMG_SRC });
 }
 function explode(p, radius, dmg, manual, selfHurt) {
   blast(p, radius, ORANGE);

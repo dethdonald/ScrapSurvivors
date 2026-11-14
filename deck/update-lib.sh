@@ -7,28 +7,35 @@
 #   updated:<ver>   - downloaded and switched to <ver>
 #   failed:<reason> - looked for an update but something went wrong (see reason)
 #   offline         - couldn't reach GitHub at all (no internet, or GitHub down)
+# Steam starts games with its own libraries switched in (LD_LIBRARY_PATH) and its overlay preloaded (LD_PRELOAD).
+# The system's curl and tar can fail to start under those, and in Gaming Mode that looked exactly like "no internet":
+# the old version just started, with nothing logged. So both always run with a clean environment here, and every
+# curl failure is written to update-log.txt with its exit code and message.
+clean() { env -u LD_PRELOAD -u LD_LIBRARY_PATH "$@"; }
 update() {
-  local remote local_v tmp src
+  local remote local_v tmp src cerr
   local tok="" auth=()
   [ -f "$HERE/github-token.txt" ] && tok="$(tr -d ' \r\n' < "$HERE/github-token.txt")"
   if [ -n "$tok" ]; then
     auth=(-H "Authorization: Bearer $tok")
-    remote="$(curl -fsSL --max-time 5 "${auth[@]}" -H "Accept: application/vnd.github.raw" "https://api.github.com/repos/$REPO/contents/VERSION?ref=main" 2>/dev/null | head -c 64 | tr -d '\r\n')" || { UPD_RESULT="offline"; return 0; }
+    remote="$(clean curl -fsSL --max-time 8 "${auth[@]}" -H "Accept: application/vnd.github.raw" "https://api.github.com/repos/$REPO/contents/VERSION?ref=main" 2>"$HERE/.curl-err" | head -c 64 | tr -d '\r\n')"
   else
-    remote="$(curl -fsSL --max-time 5 "https://raw.githubusercontent.com/$REPO/main/VERSION?t=$(date +%s)" 2>/dev/null | head -c 64 | tr -d '\r\n')" || { UPD_RESULT="offline"; return 0; }
+    remote="$(clean curl -fsSL --max-time 8 "https://raw.githubusercontent.com/$REPO/main/VERSION?t=$(date +%s)" 2>"$HERE/.curl-err" | head -c 64 | tr -d '\r\n')"
   fi
+  cerr="$(head -c 300 "$HERE/.curl-err" 2>/dev/null | tr '\n' ' ')"; rm -f "$HERE/.curl-err"
   if [ -z "$remote" ]; then
     UPD_RESULT="failed:couldn't read the remote VERSION (no internet, GitHub down, or the token/repo access is wrong)"
-    echo "$(date) update check: couldn't read remote VERSION (no token? private repo needs github-token.txt)" >> "$LOG"
+    echo "$(date) update check failed: ${cerr:-no answer} [token: $([ -n "$tok" ] && echo yes || echo no), LD_LIBRARY_PATH was: ${LD_LIBRARY_PATH:+set}${LD_LIBRARY_PATH:-empty}]" >> "$LOG"
     return 0
   fi
   local_v="$(cat "$APP/VERSION" 2>/dev/null | tr -d '\r\n')"
   if [ "$remote" = "$local_v" ]; then UPD_RESULT="current"; return 0; fi
   echo "$(date) updating $local_v -> $remote" >> "$LOG"
+  echo "Updating Scrap Survivors $local_v -> $remote ..."
   tmp="$(mktemp -d)" || { UPD_RESULT="failed:couldn't create a temp folder"; return 0; }
   local url="https://codeload.github.com/$REPO/tar.gz/refs/heads/main"
   [ -n "$tok" ] && url="https://api.github.com/repos/$REPO/tarball/main"
-  if curl -fsSL --max-time 120 "${auth[@]}" "$url" -o "$tmp/u.tgz" && tar -xzf "$tmp/u.tgz" -C "$tmp"; then
+  if clean curl -fsSL --max-time 120 "${auth[@]}" "$url" -o "$tmp/u.tgz" 2>>"$LOG" && clean tar -xzf "$tmp/u.tgz" -C "$tmp" 2>>"$LOG"; then
     src="$(find "$tmp" -mindepth 2 -maxdepth 2 -type d -name app | head -1)"
     if [ -n "$src" ] && [ -f "$src/index.html" ] && [ -f "$src/main.js" ]; then
       rm -rf "$APP.new" "$APP.old"

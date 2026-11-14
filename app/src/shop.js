@@ -304,19 +304,6 @@ function startRoulette(c, at) {
   requestAnimationFrame(step);
 }
 
-/* ---------- an upgrade pickup: a spinning glowing chip that grants a random level-up upgrade ---------- */
-function dropUpgrade(p) {
-  const offer = makeOffers()[0], R = RARITY[offer.rarity], col = new THREE.Color(R.css).getHex();
-  const g = new THREE.Group(), spin = new THREE.Group(); g.add(spin);
-  spin.add(bx(0.6, 0.6, 0.12, 0x1a1f24));
-  spin.add(bx(0.66, 0.08, 0.14, col, 0, 0.3, 0, col)); spin.add(bx(0.66, 0.08, 0.14, col, 0, -0.3, 0, col));
-  spin.add(bx(0.08, 0.66, 0.14, col, 0.3, 0, 0, col)); spin.add(bx(0.08, 0.66, 0.14, col, -0.3, 0, 0, col));
-  spin.add(bx(0.12, 0.36, 0.16, 0xffffff, 0, 0, 0, 0xaaaaaa)); spin.add(bx(0.36, 0.12, 0.16, 0xffffff, 0, 0, 0, 0xaaaaaa));      // a plus sign
-  const beam = new THREE.Mesh(geoBox, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.35, depthWrite: false }));
-  beam.scale.set(0.14, 6, 0.14); beam.position.y = 2.6; g.add(beam);
-  const pos = p.clone(); g.position.copy(pos); scene.add(g);
-  gems.push({ kind: 'upgrade', offer, mesh: g, spin, pos, vel: new THREE.Vector3(rand(-2, 2), 7, rand(-2, 2)), val: 0, pull: false });
-}
 function claimUpgrade(c) {
   const U = STAT_UPGRADES[c.key], R = RARITY[c.rarity];
   L.bonus[c.key] = (L.bonus[c.key] || 0) + c.value;

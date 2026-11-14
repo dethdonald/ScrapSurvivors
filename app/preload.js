@@ -5,4 +5,6 @@ contextBridge.exposeInMainWorld('desktop', {
   toggleFullscreen: () => ipcRenderer.send('toggle-fullscreen'),
   updateStatus: () => ipcRenderer.invoke('update-status'),
   restart: () => ipcRenderer.send('restart'),
+  applyUpdate: () => ipcRenderer.invoke('update-apply'),
+  onUpdateProgress: cb => ipcRenderer.on('update-progress', (e, d) => cb(d)),
 });

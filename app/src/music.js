@@ -149,20 +149,6 @@ function heartbeat(t) {
   }
 }
 
-function deathSting(t) {
-  // a deep, slow minor swell and a flatline tone that fades into the reverb
-  const A = actx;
-  for (const m of [33, 40, 45, 48, 52]) {
-    const o = A.createOscillator(), g = A.createGain(), f = A.createBiquadFilter();
-    o.type = 'sawtooth'; o.frequency.value = mtof(m); o.detune.value = (Math.random() - 0.5) * 10;
-    f.type = 'lowpass'; f.frequency.setValueAtTime(300, t); f.frequency.linearRampToValueAtTime(1100, t + 2.5); f.frequency.linearRampToValueAtTime(250, t + 7);
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05, t + 1.5); g.gain.linearRampToValueAtTime(0, t + 7.5);
-    o.connect(f); f.connect(g); g.connect(MUSIC.bus.pad); o.start(t); o.stop(t + 7.6);
-  }
-  const fl = A.createOscillator(), fg = A.createGain(); fl.type = 'sine'; fl.frequency.value = 1000;
-  fg.gain.setValueAtTime(0, t + 0.3); fg.gain.linearRampToValueAtTime(0.03, t + 0.35); fg.gain.setValueAtTime(0.03, t + 2.2); fg.gain.linearRampToValueAtTime(0, t + 3.2);
-  fl.connect(fg); fg.connect(MUSIC.bus.pad); fl.start(t + 0.3); fl.stop(t + 3.3);
-}
 
 /* ---------- the sequencer: 16th-note steps, 2 bars per chord ---------- */
 /* ---------- COIN FRENZY: a bouncy, bright major-key tune (C G Am F) that takes over while it lasts ---------- */

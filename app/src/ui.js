@@ -63,7 +63,6 @@ function gemSlotDialog(it, added) {
 }
 const ICONS_GEM = '<svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/><path d="M2 9h20M9 3l3 6 3-6M12 9v12"/></svg>';
 /* part levels, listed to the left of the crosshair (with a thin xp bar under each) */
-let xhLeftT = 0;
 function renderXhLeft() {
   // the part bar along the top of the screen, split either side of the timer: each part's icon and its level bar
   const order = { weapon: 0, arm: 1, leg: 2, module: 3, block: 4 };
@@ -266,7 +265,6 @@ function updateHUD(dt) {
   const ch = $('#crosshair');
   { const cn = 'xh' + (hitT > 0 ? ' hit' : aim.enemy ? ' on' : ''); if (ch.className !== cn) ch.className = cn; }
   XH.bloom = Math.max(0, XH.bloom - dt * (1.6 + XH.bloom * 2));
-  if ((xhLeftT -= dt) <= 0) { xhLeftT = 0.5; if (false) renderXhLeft(); }
   hudCss('#crosshair', 'transform', `translate(-50%, -50%) scale(${(1 + XH.bloom * 0.85).toFixed(2)})`);
   hudCss('#crosshair', 'filter', XH.bloom > 0.02 ? `drop-shadow(0 0 ${(XH.bloom * 6).toFixed(1)}px rgba(255,190,120,${(XH.bloom * 0.9).toFixed(2)}))` : '');
   { const hid = S.mode !== 'play'; if (ch.hidden !== hid) ch.hidden = hid; }
@@ -351,31 +349,6 @@ function openLevelUp(chained) {
   wrap.classList.remove('armed'); void wrap.offsetWidth; wrap.classList.add('locked');
   setTimeout(() => { wrap.classList.remove('locked'); wrap.classList.add('armed'); }, 750);
   focusFirst();
-}
-function openPerk() {
-  S.mode = 'perk'; unlockPointer();
-  const pool = PERKS.filter(p => !L.perks.has(p.id)), picks = [];
-  // one reward is always a fresh main body (chest) part
-  picks.push({ id: 'chest', name: 'Frame Body', desc: `A new main body block: +${BLOCKS.body.hp} health, +${BLOCKS.body.shield} shield and five more sockets once mounted. Goes to storage.`, chest: true });
-  while (picks.length < 3 && pool.length) picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
-  if (!picks.length) picks.push({ id: 'none', name: 'Full Refit', desc: 'Every perk claimed. Start the next stage fully repaired.' });
-  const wrap = $('#perkCards'); wrap.innerHTML = '';
-  picks.forEach(p => {
-    const b = document.createElement('button'); b.className = 'card nav combine symcard';
-    const key = p.chest ? 'chest' : p.id === 'none' ? 'refit' : p.id;
-    b.dataset.tip = `${p.name}: ${p.desc}`;
-    b.innerHTML = `<div class="tag"><b>${p.chest ? 'Part' : 'Perk'}</b></div><div class="bigsym">${sym(key, `${p.name}: ${p.desc}`)}</div><div class="nm sm">${p.name}</div>`;
-    b.addEventListener('click', () => {
-      if (p.chest) receiveItem(mkItem('block', 'body'));
-      else if (p.id !== 'none') L.perks.add(p.id);
-      refreshLoadout();
-      $('#perk').hidden = true;
-      S.total += S.t; S.stage++;
-      startStage(); lockPointer();
-    });
-    wrap.appendChild(b);
-  });
-  $('#perk').hidden = false; focusFirst();
 }
 
 /* ---------- pause ---------- */
