@@ -43,7 +43,7 @@ function clearWorld() {
   targets.forEach(t => scene.remove(t.mesh)); targets = []; shots.forEach(s => scene.remove(s.mesh)); gems.forEach(g => scene.remove(g.mesh)); fx.forEach(f => scene.remove(f.obj));
   CULL.q = []; enemies = []; shots = []; gems = []; fx = []; egReset(); pfxClear(); WRECKS = 0; clearSkyRings(); wdClear(); wfxClear(); S.streak = 0; S.streakT = 0; $('#killMul').hidden = true; S.frenzyT = 0; $('#fzBar').hidden = true;
   if (S.gate) { scene.remove(S.gate.group); S.gate = null; }
-  dmgReset();
+  dmgReset(); LS.on = false; LS.phase = '';
   clearSpectators(); clearShop(); clearTerminal(); clearHazards(); TERM.nextAt = 0; TERM.checkT = 0; clearCases(); clearLegTrail(); clearStains(); clearFootprints();
   if (S.nuke) { scene.remove(S.nuke.obj); S.nuke = null; }
   physDestroyRobot();
@@ -75,6 +75,7 @@ function startStage() {
   P.hp = stats.maxHp; P.shield = stats.maxShield; P.slideT = P.dashT = 0;
   cam.pitch = 1.2; cam.dist = 30;
   scene.fog.near = 220; scene.fog.far = 520;
+  lsSchedule();
   S.mode = 'countdown'; S.countT = 3.99; S.countShown = -1;
   drawLevelQR();
   $('#stageTxt').textContent = S.stage; $('#bossbar').hidden = true;
@@ -149,6 +150,7 @@ function updateTimeline() {
     if (S.t >= h.t) { spawnHorde(h); S.hordeIdx++; if (S.hordeIdx >= S.hordes.length) S.hordes.push({ t: S.t + rand(150, 200) / TIME_K }); }
   }
   if (!S.bossSpawned && S.t >= BOSS_AT) { if (!S.gate) placeGate(); spawnBoss(); setGateState('sealed'); }
+  lsTimeline();      // the arena rebuilds itself once a stage
 }
 function updateInteract() {
   let prompt = shopPrompt() || casePrompt() || terminalPrompt();
@@ -252,6 +254,8 @@ function frame(now) {
       }
     }
     updateFx(playing() || ['dying', 'over', 'levelup', 'countdown'].includes(S.mode) ? dt : 0);
+    // the arena rebuilding itself keeps going whatever screen is up, so it can never be left half-shifted
+    if (S.inRun && LS.on && S.mode !== 'pause' && S.mode !== 'inv') lsTick(dt);
     if (S.bannerT > 0) { S.bannerT -= dt; if (S.bannerT <= 0) $('#banner').hidden = true; }
     const pulse = 0.5 + 0.5 * Math.sin(now / 300);
     padMeshes.forEach(m => m.material.emissive.setRGB(0.1, 0.35 + 0.25 * pulse, 0.38 + 0.25 * pulse));

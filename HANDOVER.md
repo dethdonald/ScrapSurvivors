@@ -804,3 +804,15 @@ New file `src/damage.js` (loaded after player.js). Everything in it is decoratio
 ## 0.47.3 — the landing cloud dissipates (Nov 14)
 - `landSmoke(p, k)` (player.js): ~27 big, slow smoke particles (PFX.glow, mode 2, 5-10 s lives) that roll outward from the impact, swell for a second or so and then shrink away. Mode 2 sizes by `sin()` over the first half of a particle's life, so a long life reads as slowly thinning out.
 - The landing's single 5.5 m scorch stain (permanent for the stage — the big dark slab under the robot) is replaced by seven small marks scattered around the crater.
+
+## 0.48.0 — Level Shift (Nov 14)
+New file `src/levelshift.js` (`LS` state; loaded after damage.js). Once a stage the arena rebuilds itself into a freshly generated level while you fight in it.
+- **Schedule**: `lsSchedule()` from `startStage` picks `S.shiftAt = rand(110, 380)`; `lsTimeline()` (called from `updateTimeline`) starts it, never within 40 s of the boss. Dev panel → Arena → "Trigger a Level Shift".
+- **Start** (`lsStart`): copies H to `LS.H0`, runs `genTerrain(newSeed)` into H to get `LS.H1`, restores H, and holds the new `padSet`/`redPads` back until the end. Pads are removed (puff) for the duration.
+- **The wave**: a plane sweep along a random compass direction. `LS_WARN 3.2 s` rumble, `LS_MOVE 11.5 s` crossing, `LS_SETTLE 1.2 s`; each column takes `LS_RISE 2.6 s` to travel once the wave reaches it (smoothstep).
+- **Drawing**: `lsWriteTerrain(lo, hi, colours)` rewrites only the band of columns the wave is crossing (`LS.state`: 0 waiting / 1 travelling / 2 arrived), at ~30 Hz, with `instanceMatrix.updateRange` limited to that slice. Colours every 5th redraw. **Writing all 7,056 columns every frame was most of the cost.**
+- **Enemies** (`lsThrow`): anything standing on a column rising more than 2 m is thrown (up to ~21 m/s up) and stunned, once each (`e.lsThrown`).
+- **The player is never hurt**: the ground carries them (`pushOutTerrain`/`footGround` already handle it).
+- **Things that can't ride**: physics props, cases, crates, world detail and spectators puff into smoke at the start (`lsVanish`) and are re-placed at the end; props rain in from 18-34 m up (`lsRainProps`). Shop, gate and terminal ride the ground (`lsCarry`).
+- **Settling** (`lsFinish`): `H.set(H1)`, new pads, one `buildTerrainMesh()`, `computeFlow`, terrain colliders rebuilt (`PHYS.cells` cleared + `physStreamTerrain`).
+- `lsTick` is called from the frame loop outside the gameplay branch, so a death mid-shift can't leave the arena half-built.

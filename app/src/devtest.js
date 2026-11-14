@@ -73,6 +73,10 @@ function devRender() {
       </div>
       <small>Changes apply straight away: close the panel and walk around.</small>
     </div>
+    <div class="dsec"><h3>Arena</h3>
+      <button class="btn ghost nav dbtn" data-act="shift">Trigger a Level Shift</button>
+      <small>The ground rebuilds itself into a new level. Works in a run or on the test range.</small>
+    </div>
     <div class="dsec"><h3>Stress test</h3>
       <button class="btn nav" data-act="stress">Run the horde stress test</button>
       <small>Fills the range with a bigger and bigger horde while your guns fire, and reports how many enemies this machine holds at 60 and at 30 frames a second. Takes a minute or two.${STRESS.last ? '<br><b>Last run:</b> ' + stressLine(STRESS.last) : ''}</small>
@@ -194,6 +198,7 @@ devPanel.addEventListener('click', e => {
     case 'resetparts': devSetLevels(false); say('All parts Lv 1'); break;
     case 'unlockall': unlockAll(); say('Everything unlocked'); break;
     case 'resetunlocks': resetUnlocks(); say('All unlocks reset'); break;
+    case 'shift': devPanelClose(); if (!LS.on) { S.shifted = false; lsStart(); } return;
     case 'stress': devPanelClose(); stressStart(); return;
     case 'prints': GAIT.prints = GAIT.prints ? 0 : 1; saveGait(); break;
     case 'gaitreset': Object.assign(GAIT, { stride: 1, stepTime: 1, lift: 1, stomp: 1, dust: 1, prints: 1 }); saveGait(); break;
