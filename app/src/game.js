@@ -110,7 +110,9 @@ function land() {
   const lp = P.pos.clone(), hi = lp.clone().setY(lp.y + 1);
   blast(hi, 7, 0xffb24a); blast(hi, 4.5, 0xff6a2a);
   ring(lp, 15, 0.55, ORANGE); ring(lp, 9, 0.75, 0xffd25a); ring(lp, 22, 0.9, 0x8a6a4a);
-  dust(lp, 26); landDust(lp, 34); stain(lp.x, lp.z, 5.5, 0x1a1512);
+  dust(lp, 26); landDust(lp, 34); landSmoke(lp, 1.25);
+  // scorch: a few small marks around the crater instead of one big slab of shadow
+  for (let i = 0; i < 7; i++) { const a2 = Math.random() * Math.PI * 2, r2 = rand(0.2, 3.2); stain(lp.x + Math.cos(a2) * r2, lp.z + Math.sin(a2) * r2, rand(0.7, 1.8), 0x1a1512); }
   propsBlast(lp, 14, 9);
   for (const e of enemies) {
     if (e.dead || e.boss) continue;

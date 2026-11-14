@@ -800,3 +800,7 @@ New file `src/damage.js` (loaded after player.js). Everything in it is decoratio
 - Vertical list instead of three columns: art, name, blurb, status chip per row, with a dark scrim behind so the panel reads over the title scene.
 - The two unbuilt levels have no names ("? ? ?", "Not built yet").
 - A **Hard mode** row sits below the list, shown and disabled ("Locked"); `#lvHard` just plays the deny sound for now.
+
+## 0.47.3 — the landing cloud dissipates (Nov 14)
+- `landSmoke(p, k)` (player.js): ~27 big, slow smoke particles (PFX.glow, mode 2, 5-10 s lives) that roll outward from the impact, swell for a second or so and then shrink away. Mode 2 sizes by `sin()` over the first half of a particle's life, so a long life reads as slowly thinning out.
+- The landing's single 5.5 m scorch stain (permanent for the stage — the big dark slab under the robot) is replaced by seven small marks scattered around the crater.

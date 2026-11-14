@@ -817,6 +817,23 @@ function landDust(p, impact) {
   }
   for (let i = 0; i < n / 3; i++) PFX.lit.add(p.x + rand(-.4, .4), p.y + 0.1, p.z + rand(-.4, .4), rand(-3, 3), rand(2, 5), rand(-3, 3), rand(0.35, 0.6), rand(0.05, 0.1), hex, 14, 0, 0, rand(0, 3), rand(0, 3), rand(-8, 8), rand(-8, 8), 0.8);
 }
+/* The cloud a hard landing leaves behind: big, slow, low smoke that rolls outward, swells, and then thins
+   away over several seconds rather than snapping off. (Dust is the quick part of an impact; this is the part
+   that hangs in the air afterwards.) */
+function landSmoke(p, k) {
+  if (!S.inRun || GAIT.dust <= 0) return;
+  pfxInit(); if (PFX.glow.n > 9000) return;
+  const n = Math.round(22 * k * GAIT.dust);
+  for (let i = 0; i < n; i++) {
+    const a = (i + Math.random()) / n * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a), sp = rand(1.4, 4.2) * k;
+    // life 5-9 s: it swells for about the first second and a half, then shrinks away to nothing
+    PFX.glow.add(p.x + c * rand(0.3, 1.8), p.y + rand(0.15, 1.1), p.z + sn * rand(0.3, 1.8),
+      c * sp, rand(0.25, 0.9), sn * sp, rand(5, 9), rand(0.9, 1.9) * k, 0x6a6257, 0, 1.25, 2, rand(0, 3), rand(0, 3), 0, rand(-0.5, 0.5), rand(0.7, 1));
+  }
+  // a couple of slower, darker ones right at the point of impact
+  for (let i = 0; i < Math.round(5 * k); i++)
+    PFX.glow.add(p.x + rand(-0.6, 0.6), p.y + rand(0.2, 0.9), p.z + rand(-0.6, 0.6), rand(-0.5, 0.5), rand(0.4, 1.1), rand(-0.5, 0.5), rand(6, 10), rand(1.6, 2.6) * k, 0x4a453e, 0, 1.1, 2, rand(0, 3), rand(0, 3), 0, rand(-0.4, 0.4), 0.85);
+}
 /* ---------- footprints: a dark scuff where each foot lands, fading out (shrinking away) after a while ----------
    One instanced quad for all of them, written round-robin: 160 prints is plenty to trail behind you. */
 const FOOT_MAX = 160, FOOT_LIFE = 14;
