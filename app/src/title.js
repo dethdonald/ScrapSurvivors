@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.46.1 · BUILD NOV 13';
+const VERSION = '0.46.2 · BUILD NOV 13';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -718,7 +718,7 @@ function setCosmetic(type, data) {
 }
 function renderCosShelf() {
   const el = $('#cosShelf'); if (!el) return;
-  el.innerHTML = Object.entries(COSMETICS).filter(([, c]) => !c.hidden).map(([k, c]) =>
+  el.innerHTML = Object.entries(COSMETICS).filter(([k]) => cosUnlocked(k)).map(([k, c]) =>
     `<button class="cos nav${CUSTOM.cosmetics.some(x => x.type === k) ? ' on' : ''}" data-cos="${k}" title="${c.name}">${c.icon}<span>${c.name}</span></button>`).join('');
 }
 renderCosShelf();
@@ -799,15 +799,24 @@ function cosmeticPointerUp(e) {
       TITLE.clickDown = null; return;
     }
   }
-  // five quick clicks on the robot: light one up (or put it out)
+  /* the secrets: keep clicking the robot (each click within 1.2 s of the last). The 5th lights a cigarette where you
+     clicked, the 15th swaps it for a joint. Finding one unlocks it for good in the Cosmetics shelf. */
   const d = TITLE.clickDown; TITLE.clickDown = null;
   if (!d || !d.hit || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return;
   const now = performance.now();
-  TITLE.clicks = (TITLE.clicks || []).filter(t => now - t < 1800); TITLE.clicks.push(now);
-  if (TITLE.clicks.length < 5) return;
-  TITLE.clicks = [];
-  if (CUSTOM.cosmetics.some(c => c.type === 'cig')) { setCosmetic('cig', null); sfx('pop', 0.5); }
-  else { const data = hitToCosmetic(d.hit, 'cig'); if (data) { setCosmetic('cig', data); sfx('fuse', 0.5); } }
+  TITLE.clickN = (now - (TITLE.clickAt || 0) < 1200 ? (TITLE.clickN || 0) : 0) + 1; TITLE.clickAt = now;
+  for (const [type, c] of Object.entries(COSMETICS)) {
+    if (!c.secret || TITLE.clickN !== c.clicks) continue;
+    const data = hitToCosmetic(d.hit, type); if (!data) continue;
+    const fresh = unlockCosmetic(type);
+    for (const [other, oc] of Object.entries(COSMETICS)) if (oc.secret && other !== type) CUSTOM.cosmetics = CUSTOM.cosmetics.filter(x => x.type !== other);   // one smoke at a time
+    setCosmetic(type, data); sfx('fuse', 0.5);
+    if (fresh) { sfx('celebrate', 0.6); titleToast(`${c.name.toUpperCase()} UNLOCKED · find it in Customize → Cosmetics`); }
+  }
+}
+function titleToast(txt) {
+  let el = $('#titleToast'); if (!el) { el = document.createElement('div'); el.id = 'titleToast'; ($('#title') || document.body).appendChild(el); }
+  el.textContent = txt; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
 }
 
 /* ---------- Customize tabs ---------- */

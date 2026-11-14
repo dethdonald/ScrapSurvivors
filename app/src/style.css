@@ -1001,3 +1001,7 @@ body.berserk #vignette{box-shadow:inset 0 0 160px 30px rgba(255,20,20,.45);anima
 #stressHud b{color:var(--orange);font-size:13px}#stressHud table{margin:6px auto;border-collapse:collapse}#stressHud td{padding:1px 8px;text-align:right}#stressHud small{opacity:.7}
 
 .devpanel .drow.gait{display:grid;grid-template-columns:150px 1fr 44px;align-items:center;gap:10px;margin:3px 0}.devpanel .drow.gait input{width:100%}.devpanel .drow.gait b{text-align:right}
+
+#titleToast{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);z-index:20;padding:8px 16px;background:rgba(5,8,10,.86);border:2px solid var(--sec);color:var(--text);font-size:12px;letter-spacing:.12em;white-space:nowrap;pointer-events:none;opacity:0}
+#titleToast.show{animation:titleToast 3.6s ease forwards}
+@keyframes titleToast{0%{opacity:0;transform:translate(-50%,8px)}8%,82%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-6px)}}

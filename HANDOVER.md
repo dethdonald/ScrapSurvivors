@@ -754,3 +754,7 @@ All in player.js unless noted. Tunable live from the dev panel ("Legs & stomp");
 - Title screen: "UPDATE NOW" button with live progress; on failure shows the reason + the old "RESTART TO UPDATE".
 - `deck/update-lib.sh`: curl/tar run via `clean()` (`env -u LD_PRELOAD -u LD_LIBRARY_PATH`), and curl failures are logged with their message (it used to report "offline" silently). Suspected cause of Gaming Mode not updating — **unconfirmed**, needs the Deck's update-log.txt.
 - publish.sh now also copies `updater.js`.
+
+## 0.46.2 — cosmetics fix + secret unlocks (Nov 13)
+- **Cosmetic placement on other frames** (`cosmeticAuto` in cosmetics.js): a cosmetic stores the part it was stuck to on the title robot (a random build). On a frame without that part it was dropped at a fixed point that is usually inside the torso (the "cigarette clips into the player" bug). Now a ray is cast at the finished model (down from above for `up` cosmetics, at the upper front — the robot faces **-Z** — otherwise) and it is placed where that lands.
+- **Secret cosmetics**: `COSMETICS[k].secret` + `clicks`. Clicking the robot in Customize (each click within 1.2 s of the last): 5th → cigarette, 15th → joint (replaces the cigarette). `unlockCosmetic` adds to `CUSTOM.cosUnlocked` (saved with the other custom data); unlocked ones appear in the Cosmetics shelf (`cosUnlocked(k)`). `titleToast()` announces a first unlock.

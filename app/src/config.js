@@ -123,7 +123,7 @@ function accentSafe(hex) {
   return { hex: '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join(''), on };
 }
 function applyThemeColor() { try { const a = accentSafe(CUSTOM.color2 || '#ff7a1a'); const r = document.documentElement.style; r.setProperty('--sec', a.hex); r.setProperty('--orange', a.hex); r.setProperty('--accent', a.hex); r.setProperty('--on-accent', a.on); } catch (e) {} }
-function saveCustom() { CUSTOM.rev++; applyThemeColor(); try { localStorage.setItem('scrapsurvivors.custom', JSON.stringify({ color: CUSTOM.color, color2: CUSTOM.color2, patch: CUSTOM.patch, patches: CUSTOM.patches, cur: CUSTOM.cur, bomb: CUSTOM.bomb, stickers: CUSTOM.stickers, layout: CUSTOM.layout, cosmetics: CUSTOM.cosmetics, titleScene: CUSTOM.titleScene })); } catch (e) {} }
+function saveCustom() { CUSTOM.rev++; applyThemeColor(); try { localStorage.setItem('scrapsurvivors.custom', JSON.stringify({ color: CUSTOM.color, color2: CUSTOM.color2, patch: CUSTOM.patch, patches: CUSTOM.patches, cur: CUSTOM.cur, bomb: CUSTOM.bomb, stickers: CUSTOM.stickers, layout: CUSTOM.layout, cosmetics: CUSTOM.cosmetics, cosUnlocked: CUSTOM.cosUnlocked, titleScene: CUSTOM.titleScene })); } catch (e) {} }
 
 if (typeof THREE !== 'undefined' && CUSTOM.color2) CUSTOM.color2 = brightAccent(CUSTOM.color2);
 applyThemeColor();
