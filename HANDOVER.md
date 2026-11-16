@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.50.2 · BUILD NOV 15|
+| **Version** | 0.50.3 · BUILD NOV 15|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -1024,3 +1024,14 @@ into walls leaves **2,720** live cubes across 134 faces. An untouched arena draw
   the old settings piled up into a solid white lump in the hole.
 - Measured after 200 rounds of sustained fire: 8,489 live cubes, 21,694 destroyed, 109 faces across
   86 cells, about 0.85 ms a shot on the software renderer. The drop crater alone leaves 1,871.
+
+## 0.50.3 — a refresh button beside the version (Nov 15)
+A small circled glyph next to the version on the title screen asks GitHub again instead of waiting for
+the next launch. It spins while it waits, shows CHECKING... and then whatever the answer is, and the
+UPDATE NOW / RESTART TO UPDATE buttons appear under it exactly as they do on the automatic check.
+- `updateStatus(force)` in main.js skips its one-minute cache when the button asked; the IPC handler
+  and `preload.js` pass the flag through. The automatic check on opening the title still uses the cache.
+- On the Play.bat dev copy it answers DEV BUILD rather than going quiet, so the button always does
+  something visible.
+- **`#title` has `pointer-events:none`**, so the button did nothing at all until `.tref` turned them
+  back on. Third time this has caught something: anything clickable added under `#title` needs it.

@@ -369,6 +369,15 @@ em.attr{font-style:normal;font-size:11px;font-weight:600;margin-left:2px}
 .tver{position:absolute;left:clamp(16px,3vw,36px);bottom:22px;font-size:12px;color:#8b9499;letter-spacing:.06em}
 /* update status after the version number (packaged builds only; see checkUpdate in title.js) */
 .tupd:empty{display:none}
+.tref{pointer-events:auto;   /* #title turns pointer events off: anything clickable under it must turn them back on */
+  display:inline-grid;place-items:center;width:22px;height:22px;margin:0 0 1px .5em;padding:0;
+  border:1px solid currentColor;border-radius:50%;background:transparent;color:inherit;
+  font:inherit;font-size:13px;line-height:1;cursor:pointer;opacity:.55;vertical-align:middle;
+  transition:opacity .12s,color .12s}
+.tref:hover,.tref:focus-visible{opacity:1;color:#ffb347;outline:none}
+.tref.spin{opacity:1;color:#ffb347;animation:trefSpin .9s linear infinite}
+@keyframes trefSpin{to{transform:rotate(360deg)}}
+
 .tupd .dot{display:inline-block;width:7px;height:7px;margin:0 7px 1px 16px;background:currentColor}
 .tupd .ok{color:#7fbf8a}.tupd .new{color:#ffb347}.tupd .err{color:#6f787d}
 .tupd .updBtn{margin-left:10px;padding:3px 9px;font:inherit;font-size:11px;letter-spacing:.06em;color:#14181b;background:#ffb347;border:0;cursor:pointer}

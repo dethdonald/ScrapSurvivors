@@ -80,10 +80,10 @@ const UPD_REPO = 'dethdonald/ScrapSurvivors';
 const verIn = dir => { try { return fs.readFileSync(path.join(dir, 'VERSION'), 'utf8').trim(); } catch (e) { return ''; } };
 const verNewer = (a, b) => { const x = String(a).split('.').map(n => +n || 0), y = String(b).split('.').map(n => +n || 0); for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
 let updCache = null;
-async function updateStatus() {
+async function updateStatus(force) {
   const local = verIn(__dirname);
   if (!app.isPackaged) return { state: 'dev', local };
-  if (updCache && Date.now() - updCache.at < 60000 && updCache.res.state !== 'downloading') return updCache.res;
+  if (!force && updCache && Date.now() - updCache.at < 60000 && updCache.res.state !== 'downloading') return updCache.res;
   let tok = ''; try { tok = fs.readFileSync(path.join(path.dirname(process.execPath), 'github-token.txt'), 'utf8').trim(); } catch (e) {}
   let res;
   try {
@@ -102,7 +102,7 @@ async function updateStatus() {
   updCache = { at: Date.now(), res };
   return res;
 }
-ipcMain.handle('update-status', () => updateStatus());
+ipcMain.handle('update-status', (e, force) => updateStatus(force));   // force: the refresh button by the version
 /* Linux / Steam Deck: update in place, with progress, from inside the game (updater.js: no curl, no shell).
    When only the game's own files changed (nearly always) the window simply reloads into the new version: no restart
    of the program at all. If main.js / preload.js changed, the program restarts itself; the files are already

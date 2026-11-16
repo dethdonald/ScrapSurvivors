@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.50.2 · BUILD NOV 15';
+const VERSION = '0.50.3 · BUILD NOV 15';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -382,13 +382,17 @@ function titleInfernoGuns(dt) {
 /* ---------- update status (title screen) ----------
    Asks the desktop side (main.js update-status) whether GitHub has a newer version. Nothing is shown in the dev copy. */
 const UPD = { busy: false, polls: 0 };
-async function checkUpdate() {
-  const el = $('#updTxt');
+async function checkUpdate(force) {
+  const el = $('#updTxt'), btn = $('#tRefresh');
+  if (btn) btn.hidden = !(window.desktop && window.desktop.updateStatus);
   if (!el || !window.desktop || !window.desktop.updateStatus || UPD.busy) return;
   UPD.busy = true;
-  let r = null; try { r = await window.desktop.updateStatus(); } catch (e) {}
+  if (btn) btn.classList.add('spin');
+  if (force) el.innerHTML = '<span class="dot"></span><span>CHECKING…</span>';
+  let r = null; try { r = await window.desktop.updateStatus(force); } catch (e) {}
   UPD.busy = false;
-  if (!r || r.state === 'dev') { el.innerHTML = ''; return; }
+  if (btn) btn.classList.remove('spin');
+  if (!r || r.state === 'dev') { el.innerHTML = force ? '<span class="dot ok"></span><span class="ok">DEV BUILD</span>' : ''; return; }
   const v = String(r.remote || '').replace(/[^0-9.]/g, '');
   const line = (cls, txt) => `<span class="dot ${cls}"></span><span class="${cls}">${txt}</span>`;
   if (r.state === 'current') el.innerHTML = line('ok', 'UP TO DATE');
@@ -429,6 +433,12 @@ function openTitle() {
   $('#title').hidden = false;
   $('#verTxt').textContent = 'VERSION ' + VERSION;
   checkUpdate();
+  // the refresh button asks GitHub again, skipping the one-minute cache the automatic check uses
+  const rf = $('#tRefresh');
+  if (rf && !rf.dataset.wired) {
+    rf.dataset.wired = '1';
+    rf.addEventListener('click', () => { if (UPD.busy) return; sfx('tick', 0.5); UPD.polls = 0; checkUpdate(true); });
+  }
   clearTitlePieces();
   spawnTitleRobot();
   if (typeof logoOpen === 'function') logoOpen();
