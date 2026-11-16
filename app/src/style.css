@@ -1055,6 +1055,9 @@ body.berserk #vignette{box-shadow:inset 0 0 160px 30px rgba(255,20,20,.45);anima
 /* ---------- level select: the drop zone is picked before the build bay ----------
    A vertical list, one level per row. (#title turns pointer events off for the 3D scene behind it, so this
    panel has to turn them back on or nothing in it can be clicked.) */
+/* the TEST chip beside a level that is an experiment rather than a finished stage */
+.lvtest{display:inline-block;margin-left:7px;padding:1px 6px;border:1px dashed var(--orange);border-radius:2px;
+  font-size:.62em;font-style:normal;letter-spacing:.14em;color:var(--orange);vertical-align:middle;opacity:.9}
 .levelsel{position:absolute;inset:0;display:grid;align-content:center;justify-items:center;gap:12px;padding:24px;pointer-events:auto;zoom:var(--uiz,1)}
 .levelsel::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(5,8,10,.82) 0 42%,rgba(5,8,10,.45) 100%);pointer-events:none}
 .levelsel>*{position:relative}
@@ -1076,3 +1079,66 @@ body.berserk #vignette{box-shadow:inset 0 0 160px 30px rgba(255,20,20,.45);anima
 .padmap{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px 12px}
 .pmrow{display:flex;align-items:center;gap:2px;font-size:12px;color:var(--dim)}
 .pmrow em{font-style:normal;color:var(--text)}
+
+/* ---------- controller: one highlight at a time ----------
+   While a controller is in charge, only the button the stick has selected is lit. Anything the mouse pointer
+   happens to be resting on (the Steam Deck always leaves one on screen) stays as it was. */
+body.padnav .tbtn:hover:not(:focus){color:#cfd5d8}
+body.padnav .tbtn:hover:not(:focus)::before{width:0;left:-8px}
+body.padnav .tbtn:hover:not(:focus)::after{--dx:0%;--dy:0%}
+body.padnav .btn.ghost:hover:not(:focus),
+body.padnav .card:hover:not(:focus),
+body.padnav .cos:hover:not(:focus),
+body.padnav .scenecard:hover:not(:focus),
+body.padnav .lvcard:hover:not(:focus),
+body.padnav .lvmod:hover:not(:focus){border-color:var(--frame-dim)}
+body.padnav .catcard:hover:not(:focus):not(.on){border-color:var(--frame-dim);background:transparent}
+body.padnav .lvcard:hover:not(:focus){background:rgba(9,13,17,.96)}
+body.padnav .prow:hover:not(:focus){border-color:var(--frame-dim);background:transparent}
+body.padnav .prow:hover:not(:focus)::after,
+body.padnav .card:hover:not(:focus)::after,
+body.padnav .btn.ghost:hover:not(:focus)::after,
+body.padnav .setting:hover::after{--dx:0%;--dy:0%}
+
+/* ---------- the cosmetics store ---------- */
+.storescreen{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr) 0px;grid-template-rows:minmax(0,1fr);gap:14px;padding:clamp(16px,4vh,44px) clamp(16px,5vw,70px);pointer-events:auto;zoom:var(--uiz,1)}
+.storescreen::before{content:'';position:absolute;inset:0;background:rgba(5,8,10,.82);pointer-events:none}
+.storescreen>*{position:relative}
+.stmain{display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:12px;min-width:0}
+/* the clerk stands in this gap: it holds no DOM, it just reserves the space the 3D robot is fitted into */
+.stnook{display:none;pointer-events:none}
+@media (min-width:760px){
+  /* stock on the left, the rest of the screen is the clerk's stall */
+  .storescreen{grid-template-columns:minmax(0,44%) minmax(0,1fr)}
+  .storescreen::before{background:linear-gradient(90deg,rgba(5,8,10,.88) 0,rgba(5,8,10,.88) 44%,rgba(5,8,10,.3) 60%,rgba(5,8,10,.12) 100%)}
+  .stgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stnook{display:block}
+}
+@media (min-width:900px){ .stgrid{grid-template-columns:repeat(3,minmax(0,1fr))} }
+.sthead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.sthead h2{margin:0;font-size:clamp(24px,3vw,38px);letter-spacing:.2em}
+.stbal{display:grid;justify-items:end;gap:2px}
+.stbal b{font-size:22px;color:var(--sec)}
+.stgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(132px,11vw,190px),1fr));gap:clamp(10px,1vw,14px);overflow-y:auto;overflow-x:hidden;align-content:start;padding:2px;-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent)}
+.stcard{display:grid;justify-items:center;gap:6px;padding:12px 8px 10px;background:rgba(10,15,19,.92);border:2px solid var(--frame-dim,#3a444c);color:var(--text);font:inherit;cursor:pointer}
+.stcard svg{width:clamp(42px,4vw,62px);height:clamp(42px,4vw,62px)}
+.stcard .nm{font-size:clamp(12px,1vw,14px);letter-spacing:.08em;text-align:center}
+.stcard .pr{font-family:var(--f-mono);font-size:12px;color:var(--sec);display:flex;flex-direction:row;align-items:center;gap:5px;white-space:nowrap}
+.stcard .pr .sym{display:inline-flex;width:13px;height:13px;flex:none}
+.stcard .pr .sym svg{width:13px;height:13px}
+.stcard .pr .sym{width:12px;height:12px}
+@media (max-height:860px){.stcard{padding:8px 6px 7px;gap:4px}.stcard svg{width:38px;height:38px}.stcard .nm{font-size:12px}}
+.stcard.owned{opacity:.75}
+.stcard.owned .pr{color:var(--dim)}
+.stcard.poor .pr{color:var(--hostile)}
+.stcard:hover,.stcard:focus{border-color:var(--sec);outline:none;background:rgba(18,26,32,.96)}
+.stcard.owned:hover,.stcard.owned:focus{border-color:var(--frame-dim)}
+body.padnav .stcard:hover:not(:focus){border-color:var(--frame-dim);background:rgba(10,15,19,.92)}
+.stfoot{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.stfoot small{color:var(--dim);font-size:12px}
+.stfoot .btn{min-width:160px}
+
+/* confetti for a secret found on the title screen */
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:600;overflow:hidden}
+#confetti i{position:absolute;top:-20px;display:block;border-radius:1px;animation-name:confFall;animation-timing-function:linear;animation-fill-mode:forwards}
+@keyframes confFall{0%{transform:translate3d(0,-20px,0) rotate(0)}100%{transform:translate3d(var(--sp),105vh,0) rotate(var(--rot))}}

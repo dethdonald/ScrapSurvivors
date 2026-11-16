@@ -198,6 +198,40 @@ function logoTick(dt) {
   if (!allHome) LOGO.wasAway = true; else if (LOGO.wasAway) { LOGO.wasAway = false; LOGO.total = 0; }   // the count starts over once everything is back
 }
 
+/* ---------- the S ----------
+   The logo's pieces come out of Blender with names like "Curve.013", so the S is found by where it sits:
+   the leftmost piece on the upper of the two lines (SCRAP over SURVIVORS). Knocking it off on its own is a
+   secret: the first time, it unlocks the Crap cosmetic; after that it just makes the noise. */
+function logoSPart() {
+  if (LOGO.sPart !== undefined) return LOGO.sPart;
+  LOGO.sPart = null;
+  if (!LOGO.parts.length) return null;
+  /* Each piece's home position is the same for all of them; where a letter actually sits comes from its
+     geometry. The logo is two lines (SCRAP over SURVIVORS) with the height in y, so: take the top line,
+     then its leftmost letter. */
+  const c = new THREE.Vector3(), at = [];
+  for (const p of LOGO.parts) {
+    const g = p.mesh.geometry; if (!g.boundingBox) g.computeBoundingBox();
+    g.boundingBox.getCenter(c);
+    at.push({ p, x: c.x + p.home.x, y: c.y + p.home.y });
+  }
+  let maxY = -Infinity;
+  for (const a of at) maxY = Math.max(maxY, a.y);
+  let best = null;
+  for (const a of at) { if (a.y < maxY - 0.3) continue; if (!best || a.x < best.x) best = a; }
+  LOGO.sPart = best ? best.p : null;
+  return LOGO.sPart;
+}
+function logoSKnocked() {
+  sfx('fart', 0.9);
+  if (typeof unlockCosmetic !== 'function' || CUSTOM.cosUnlocked.includes('crap')) return;
+  unlockCosmetic('crap'); saveCustom();
+  if (typeof renderCosShelf === 'function') renderCosShelf();
+  if (typeof titleToast === 'function') titleToast('CRAP UNLOCKED! · find it in Customize → Cosmetics');
+  if (typeof confettiBurst === 'function') confettiBurst();
+  sfx('jackpot', 0.6);
+}
+
 /* ---------- clicking ---------- */
 const logoOk = e => S.mode === 'title' && LOGO.ready && LOGO.root.visible && !$('#title').hidden && !(e.target.closest && e.target.closest('button, input, .custpanel, .tip, a'));
 function logoPick(e) {
@@ -221,6 +255,7 @@ function logoHit(p, point) {
     if (typeof TITLE !== 'undefined') TITLE.shake = Math.max(TITLE.shake || 0, 0.5);
   } else if (last) {
     logoRelease(p, 0);
+    if (p === logoSPart()) logoSKnocked();          // the S on its own: the secret
     if (typeof TITLE !== 'undefined') TITLE.shake = Math.max(TITLE.shake || 0, 0.2);
   }
 }

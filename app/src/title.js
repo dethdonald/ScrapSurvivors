@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.48.0 · BUILD NOV 14';
+const VERSION = '0.50.2 · BUILD NOV 15';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -447,6 +447,7 @@ function renderTitle(dt) {
   if (TITLE.shake > 0) { TITLE.cam.position.x += rand(-1, 1) * TITLE.shake * 0.3; TITLE.cam.position.y += rand(-1, 1) * TITLE.shake * 0.3; TITLE.shake -= dt * 1.5; }
   updateTitleRobot(dt);
   cosmeticTick(TITLE.robot, dt);
+  clerkTick(dt);
   titleGunTick(dt);
   stepTitlePieces(dt);
   stepObservers(dt);
@@ -473,7 +474,10 @@ function leaveTitle() {
 }
 /* ---------- level select ----------
    Start opens the drop-zone picker first; only the Arena is built, the other two are shown as what is coming. */
-const LEVELS = { arena: { name: 'The Arena', ready: true } };
+const LEVELS = {
+  arena: { name: 'The Arena', ready: true },
+  arena_d: { name: 'Arena (Destructible)', ready: true, crust: true },   // test level: shootable armour plating
+};
 function openLevelSelect() {
   ensureAudio();
   S.mode = 'levelsel';
@@ -491,6 +495,304 @@ function pickLevel(id) {
   sfx('tick');
   asciiWipe(() => { $('#levelSel').hidden = true; $('.tmain').hidden = false; leaveTitle(); freshHangarLoadout(); openInventory(true); });
 }
+/* ---------- the cosmetics store ----------
+   Circuits (earned from kill streaks, kept between runs) buy the cosmetics; what you own turns up in
+   Customize > Cosmetics. The two secrets are never sold here: they have to be found. */
+function openStore() {
+  ensureAudio();
+  S.mode = 'store';
+  TITLE.tipPart = null; hideTitleTip();
+  renderStore();
+  asciiWipe(() => {
+    $('.tmain').hidden = true; $('#tRandom').hidden = true; $('#custPanel').hidden = true;
+    $('#storeScreen').hidden = false;
+    // the store keeps its own look: whatever scene the main menu is set to, the shop is the workshop
+    STORE_SCENE.was = TITLE.sceneName; setTitleScene(STORE_SCENE.name);
+    clerkShow(true); focusFirst();
+  });
+}
+function closeStore() {
+  S.mode = 'title';
+  clerkShow(false);
+  asciiWipe(() => {
+    $('#storeScreen').hidden = true; $('#tRandom').hidden = false; $('.tmain').hidden = false;
+    if (STORE_SCENE.was != null) { setTitleScene(STORE_SCENE.was); STORE_SCENE.was = null; }
+    focusFirst();
+  });
+}
+const STORE_SCENE = { name: 'workshop', was: null };
+
+/* ---------- the clerk ----------
+   A plain frame with no guns, in a store smock, cap and name tag, stood behind a market stall beside
+   the shelves. It points at the stock, chirps about it, and hops when something sells.
+   Tap its cap five times and the cap is yours. */
+const CLERK = { obj: null, rig: null, cap: null, clicks: 0, t: 0, arms: [], point: 0, aim: 0, next: 0, cheer: 0, hop: 0, chirp: 0 };
+/* the stall: counter, posts and a painted STORE board over the top */
+function clerkStall() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x3b4650, roughness: 0.9, metalness: 0.05 });
+  const trim = new THREE.MeshStandardMaterial({ color: 0x2a323a, roughness: 0.95 });
+  const top = new THREE.MeshStandardMaterial({ color: 0x59656f, roughness: 0.8 });
+  const bx2 = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
+  bx2(3.9, 1.25, 0.12, wood, 0, 0.64, 0.46);                           // counter front
+  bx2(4.15, 0.16, 1.05, top, 0, 1.33, 0.1);                            // counter top slab
+  bx2(3.9, 0.12, 0.1, trim, 0, 0.1, 0.46);                             // kick board
+  for (const s of [-1, 1]) {
+    bx2(0.17, 4.5, 0.17, trim, s * 2.0, 2.25, 0.2);                    // corner posts
+    bx2(0.1, 0.45, 0.1, trim, s * 1.45, 0.35, 0.46);
+  }
+  bx2(4.3, 0.9, 0.14, wood, 0, 4.1, 0.2);                              // sign board
+  bx2(4.5, 0.12, 0.3, trim, 0, 4.62, 0.2);                             // board cap
+  // STORE painted on the board, drawn into a canvas so it keeps the menu's typeface
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+  const x2 = c.getContext('2d');
+  x2.fillStyle = '#1b222a'; x2.fillRect(0, 0, 512, 128);
+  const face = (getComputedStyle(document.body).getPropertyValue('--f-display') || '').trim() || 'ui-monospace, monospace';
+  x2.fillStyle = '#d7dde3'; x2.font = `bold 74px ${face}`; x2.textAlign = 'center'; x2.textBaseline = 'middle';
+  x2.fillText('S T O R E', 256, 70);
+  const tex = new THREE.CanvasTexture(c); if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 0.78), new THREE.MeshBasicMaterial({ map: tex }));
+  sign.position.set(0, 4.1, 0.28); g.add(sign);
+  // a couple of crates on the counter so it reads as a stall
+  for (const [x, s] of [[-1.5, 0.42], [1.55, 0.34]]) {
+    const cr = bx2(s, s, s, wood, x, 1.41 + s / 2, 0.1); cr.rotation.y = (Math.random() - 0.5) * 0.6;
+  }
+  return g;
+}
+function clerkBuild() {
+  if (CLERK.rig) return CLERK.rig;
+  // the standard frame, minus anything that shoots
+  // freshHangarLoadout() overwrites the live loadout AND empties INV.shelf, so both are put back afterwards
+  const save = typeof L !== 'undefined' ? L : null, shelf = (typeof INV === 'object' && INV) ? INV.shelf : null;
+  freshHangarLoadout();
+  const CL = L;
+  for (const a of mountedArms()) a.weapon = null;
+  const m = buildRobot(CL);
+  if (shelf) INV.shelf = shelf;
+  if (save) { L = save; stats = null; refreshLoadout(); }
+  const reg = m.userData;
+  const torso = reg.torso || m;
+  // the smock: a panel down the front of the chest with a pocket and a tie at the back
+  const smock = new THREE.Group();
+  const cloth = new THREE.MeshStandardMaterial({ color: 0x2f6f52, roughness: 0.85, metalness: 0.02 });
+  const front = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.15, 0.07), cloth); front.position.set(0, -0.1, 0.52); smock.add(front);
+  const bib = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.42, 0.06), cloth); bib.position.set(0, 0.6, 0.53); smock.add(bib);
+  const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.28, 0.05), new THREE.MeshStandardMaterial({ color: 0x275c44, roughness: 0.85 }));
+  pocket.position.set(0, -0.3, 0.58); smock.add(pocket);
+  for (const sgn of [-1, 1]) { const strap = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.06), cloth); strap.position.set(sgn * 0.26, 0.95, 0.42); strap.rotation.x = 0.2; smock.add(strap); }
+  torso.add(smock);
+  // the cap and the name tag, built from the cosmetics the store sells
+  const cap = cosmeticModel('clerkcap');
+  const bb = new THREE.Box3().setFromObject(m), topY = bb.max.y - m.position.y;
+  cap.position.set(0, topY + 0.02, 0); cap.scale.setScalar(1.15); m.add(cap);
+  const tag = cosmeticModel('nametag');
+  tag.position.set(0.28, 0.35, 0.56); tag.rotation.x = Math.PI / 2; tag.scale.setScalar(0.75); torso.add(tag);
+  m.userData.cosmetics = [cap, tag];
+  CLERK.cap = cap; CLERK.obj = m;
+  // the arms, kept so it can point at the stock: rest pose first, then a swing about the shoulder
+  CLERK.arms = (reg.parts || []).filter(p => p.userData.item && p.userData.item.kind === 'arm').map(p => {
+    p.updateMatrixWorld(true);
+    return { p, rest: p.quaternion.clone(), x: p.getWorldPosition(new THREE.Vector3()).x, ang: 0 };
+  }).sort((a, b) => a.x - b.x);
+  const rig = new THREE.Group();
+  m.position.set(0, 0, -0.75); m.rotation.y = 0.12;                    // stood behind the counter
+  rig.add(clerkStall()); rig.add(m);
+  rig.position.set(3, 0, 0.4);
+  rig.visible = false; TITLE.scene.add(rig);
+  CLERK.rig = rig;
+  return rig;
+}
+/* Fit the clerk into the empty column the store panel leaves on its right: the alcove's rect is
+   cast onto the ground plane for the feet, then the model is scaled to fill most of that height.
+   Derived from the DOM so it lands correctly at any window size or UI zoom; too narrow, no clerk. */
+/* Where on the screen the stall goes. Normally the empty column the store panel leaves (#stNook), put back
+   into real screen pixels — the panel carries its own zoom (--uiz, and fitPanel can scale it again). If that
+   column cannot be measured (too narrow a window, a layout that has not settled, anything unexpected), the
+   right-hand slice of the window is used instead, so there is always somewhere to stand. */
+function clerkRect() {
+  const nook = $('#stNook'), scr = $('#storeScreen');
+  const nr = !CLERK.forceFb && nook && nook.offsetParent ? nook.getBoundingClientRect() : null;
+  if (nr && nr.width > 60 && nr.height > 120) {
+    let z = 1, ox = 0, oy = 0;
+    if (scr) { const sr = scr.getBoundingClientRect(); if (sr.width > 1) { z = innerWidth / sr.width; ox = sr.left; oy = sr.top; } }
+    if (!(z > 0.1 && z < 10)) z = 1;
+    const r = { left: (nr.left - ox) * z, top: (nr.top - oy) * z, width: nr.width * z, height: nr.height * z, fallback: 0 };
+    if (r.width > 60 && r.height > 120 && r.left + r.width <= innerWidth + 4) { r.right = r.left + r.width; r.bottom = r.top + r.height; return r; }
+  }
+  const w = Math.min(innerWidth * 0.44, innerWidth - 240), pad = Math.min(36, innerWidth * 0.03);
+  if (w < 120 || innerHeight < 320) return null;
+  const r = { left: innerWidth - w - pad, top: innerHeight * 0.06, width: w, height: innerHeight * 0.86, fallback: 1 };
+  r.right = r.left + r.width; r.bottom = r.top + r.height;
+  return r;
+}
+function clerkPlace() {
+  const m = CLERK.rig; if (!m || !TITLE.cam) { if (CLERK.say > 0) { CLERK.say--; console.warn('clerk: no rig or camera'); } return false; }
+  const r = clerkRect();
+  if (!r) { if (CLERK.say > 0) { CLERK.say--; console.warn('clerk: nowhere to stand ' + JSON.stringify({ win: [innerWidth, innerHeight] })); } return false; }
+  const cam = TITLE.cam, plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), rc = new THREE.Raycaster();
+  const toScr = v => { const q = v.clone().project(cam); return { x: (q.x + 1) / 2 * innerWidth, y: (1 - q.y) / 2 * innerHeight }; };
+  if (!CLERK.lbox) {                                                  // its own size, measured once (the rig never changes shape)
+    const p0 = m.position.clone(), s0 = m.scale.clone();
+    m.position.set(0, 0, 0); m.scale.setScalar(1); m.updateMatrixWorld(true);
+    CLERK.lbox = new THREE.Box3().setFromObject(m);
+    m.position.copy(p0); m.scale.copy(s0); m.updateMatrixWorld(true);
+  }
+  const onScreen = () => {                                            // the model's projected extent
+    const bb = CLERK.lbox, s = m.scale.x, p = m.position, xs = [], ys = [];
+    for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) {
+      const q = toScr(new THREE.Vector3(p.x + x * s, p.y + y * s, p.z + z * s)); xs.push(q.x); ys.push(q.y);
+    }
+    return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  };
+  const midX = r.left + r.width * 0.5, footY = r.bottom - r.height * 0.1, room = footY - r.top;
+  let aimX = midX, foot = null;
+  m.scale.setScalar(1);
+  for (let i = 0; i < 4; i++) {                                       // feet on the ground, then fit, then re-centre
+    rc.setFromCamera({ x: (aimX / innerWidth) * 2 - 1, y: -(footY / innerHeight) * 2 + 1 }, cam);
+    foot = new THREE.Vector3();
+    if (!rc.ray.intersectPlane(plane, foot)) {                        // the aim point is above the horizon
+      if (CLERK.say > 0) { CLERK.say--; console.warn('clerk: aim misses the floor ' + JSON.stringify({ aimX: aimX | 0, footY: footY | 0, cam: [+cam.position.y.toFixed(2), +cam.position.z.toFixed(2)], scene: TITLE.sceneName })); }
+      return false;
+    }
+    m.position.copy(foot); m.updateMatrixWorld(true);
+    let b = onScreen();
+    const fit = Math.min(room * 0.94 / Math.max(1, b.y1 - b.y0), r.width * 0.98 / Math.max(1, b.x1 - b.x0));
+    m.scale.setScalar(Math.min(2.2, Math.max(0.12, m.scale.x * fit))); m.updateMatrixWorld(true);
+    b = onScreen();
+    const err = midX - (b.x0 + b.x1) / 2;
+    if (Math.abs(err) < 4) break;
+    aimX += err;
+  }
+  CLERK.home = foot;
+  const b = onScreen();
+  const seen = Math.min(b.x1, innerWidth) - Math.max(b.x0, 0) > 40 && Math.min(b.y1, innerHeight) - Math.max(b.y0, 0) > 40;
+  if (CLERK.say > 0) {
+    CLERK.say--;
+    console.warn('clerk placed ' + JSON.stringify({ win: [innerWidth, innerHeight], dpr: +(devicePixelRatio || 1).toFixed(2), uiz: (typeof UIZ === 'object' ? UIZ.z : '?'),
+      rect: [r.left | 0, r.top | 0, r.width | 0, r.height | 0], fallback: r.fallback, scale: +m.scale.x.toFixed(2),
+      at: [+foot.x.toFixed(1), +foot.z.toFixed(1)], box: [b.x0 | 0, b.y0 | 0, b.x1 | 0, b.y1 | 0], onScreen: seen, scene: TITLE.sceneName }));
+  }
+  return seen;
+}
+function clerkShow(on) {
+  let rig = null;
+  try { rig = clerkBuild(); } catch (e) { console.warn('clerk build failed', e); }
+  if (!rig) { if (TITLE.robot) TITLE.robot.visible = true; return; }
+  CLERK.clicks = 0; CLERK.cheer = 0; CLERK.hop = 0; CLERK.next = 0.6;
+  CLERK.want = !!on; CLERK.refit = on ? 2.5 : 0; if (on) CLERK.say = 3;                       // keep trying for a moment: the panel may still be settling
+  rig.visible = !!on && clerkTry();
+  if (TITLE.robot) TITLE.robot.visible = !on;                          // one robot on screen at a time
+}
+/* placing it must never take the store down with it */
+function clerkTry() {
+  try {
+    if (clerkPlace()) return true;
+    CLERK.forceFb = 1;                                                 // the alcove did not work out: stand him in the window's right-hand slice
+    const ok = clerkPlace();
+    CLERK.forceFb = 0;
+    return ok;
+  } catch (e) { CLERK.forceFb = 0; if (!CLERK.warned) { CLERK.warned = 1; console.warn('clerk place failed', e); } return false; }
+}
+/* which card it is showing off: whatever the player is hovering or has focused, else one of its own
+   choosing every couple of seconds. The arm angle follows how high up the shelf that card sits. */
+function clerkAimAt(el) {
+  const grid = $('#stGrid'); if (!grid) return;
+  const card = el || grid.querySelector('.stcard:not(.owned)') || grid.querySelector('.stcard');
+  if (!card) return;
+  const r = card.getBoundingClientRect(), gr = grid.getBoundingClientRect();
+  const up = gr.height > 1 ? 1 - (r.top + r.height / 2 - gr.top) / gr.height : 0.5;
+  const aim = 0.75 + Math.max(0, Math.min(1, up)) * 0.75;
+  if (Math.abs(aim - CLERK.aim) > 0.08 && CLERK.chirp <= 0) { sfx('chirp', 0.22); CLERK.chirp = 0.55; }
+  CLERK.aim = aim; CLERK.point = 1;
+}
+function clerkCheer() {
+  CLERK.cheer = 1.25; CLERK.hop = 0; CLERK.point = 0;
+  sfx('celebrate', 0.5); sfx('chirp', 0.3);
+}
+function clerkTick(dt) {
+  const rig = CLERK.rig, m = CLERK.obj; if (!rig || !m) return;
+  if (CLERK.want && CLERK.refit > 0) {                                 // retry the fit while the store settles, hidden or not
+    CLERK.refit -= dt; CLERK.refitT = (CLERK.refitT || 0) + dt;
+    if (CLERK.refitT > 0.1) { CLERK.refitT = 0; rig.visible = clerkTry(); }
+  }
+  if (!rig.visible) return;
+  CLERK.t += dt;
+  if (CLERK.home) { rig.position.x = CLERK.home.x; rig.position.z = CLERK.home.z; }
+  CLERK.chirp -= dt;
+  // pick something to point at: hovered card first, then the focused one, else its own pick
+  if (CLERK.cheer <= 0) {
+    const el = $('#stGrid') && ($('#stGrid').querySelector('.stcard:hover') || (document.activeElement && document.activeElement.closest ? document.activeElement.closest('.stcard') : null));
+    CLERK.next -= dt;
+    if (el) { clerkAimAt(el); CLERK.next = 1.6; }
+    else if (CLERK.next <= 0) {
+      const all = $$('#stGrid .stcard');
+      if (all.length) clerkAimAt(all[Math.floor(Math.random() * all.length)]);
+      CLERK.next = 1.8 + Math.random() * 1.8;
+    } else CLERK.point = Math.max(0, CLERK.point - dt * 0.35);
+  }
+  let y = Math.sin(CLERK.t * 1.4) * 0.03;                              // idling on the spot
+  m.rotation.y = 0.12 + Math.sin(CLERK.t * 0.7) * 0.05;
+  if (CLERK.cheer > 0) {                                               // a sale: two hops, arms up
+    CLERK.cheer -= dt; CLERK.hop += dt;
+    y += Math.abs(Math.sin(CLERK.hop * 9.5)) * 0.42 * Math.min(1, CLERK.cheer * 2);
+    m.rotation.y += Math.sin(CLERK.hop * 11) * 0.12;
+    if (CLERK.cheer <= 0) { CLERK.cheer = 0; CLERK.next = 0.4; }
+  }
+  if (CLERK.bump > 0) { CLERK.bump -= dt * 3; y -= Math.sin(Math.max(0, CLERK.bump) * Math.PI) * 0.12; }
+  m.position.y = y;
+  // the arms: the shelf-side one points, both go up for a cheer
+  const cheering = CLERK.cheer > 0;
+  for (let i = 0; i < CLERK.arms.length; i++) {
+    const a = CLERK.arms[i], shelfSide = i === 0;                      // arms sorted left to right
+    const want = cheering ? 1.5 + Math.sin(CLERK.hop * 9.5 + i) * 0.2 : shelfSide ? CLERK.aim * CLERK.point : 0;
+    a.ang += (want - a.ang) * Math.min(1, dt * 9);
+    if (Math.abs(a.ang) < 0.002) a.p.quaternion.copy(a.rest);
+    else a.p.quaternion.copy(a.rest).premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (shelfSide ? 1 : -1) * a.ang));
+  }
+  cosmeticTick(m, dt);
+}
+addEventListener('resize', () => { if (S.mode === 'store' && CLERK.rig) { CLERK.rig.visible = clerkTry(); CLERK.refit = Math.max(CLERK.refit || 0, 0.6); } });
+/* clicking the cap. It is small and it sways, so a near miss around it counts too. */
+function clerkPick(e) {
+  const m = CLERK.rig; if (!m || !m.visible || !CLERK.cap || !TITLE.cam) return false;
+  if (stickerRay(e).intersectObject(CLERK.cap, true)[0]) return true;
+  const cam = TITLE.cam, w = CLERK.cap.getWorldPosition(new THREE.Vector3());
+  const q = w.clone().project(cam); if (q.z > 1) return false;
+  const sx = (q.x + 1) / 2 * innerWidth, sy = (1 - q.y) / 2 * innerHeight;
+  const edge = w.clone().add(new THREE.Vector3(0.38 * m.scale.x, 0, 0)).project(cam);
+  const wide = Math.abs((edge.x + 1) / 2 * innerWidth - sx);
+  return Math.hypot(e.clientX - sx, e.clientY - sy) < Math.max(16, wide * 1.5);
+}
+function clerkHitCap() {
+  CLERK.clicks++; CLERK.bump = 1;
+  sfx('tink', 0.7);
+  if (CLERK.clicks < 5) return;
+  CLERK.clicks = 0;
+  if (CUSTOM.cosUnlocked.includes('clerkcap')) { sfx('squeak', 0.6); return; }
+  unlockCosmetic('clerkcap'); saveCustom(); renderCosShelf(); renderStore('Clerk cap unlocked · find it in Customize');
+  titleToast('CLERK CAP UNLOCKED! · find it in Customize → Cosmetics');
+  confettiBurst(50); sfx('jackpot', 0.6); sfx('coin', 0.6);
+}
+function renderStore(msg) {
+  const bal = META.circuits || 0;
+  $('#stBal').textContent = bal;
+  $('#stGrid').innerHTML = Object.entries(COSMETICS).filter(([, c]) => !c.secret).map(([k, c]) => {
+    const owned = cosOwned(k), poor = !owned && bal < c.price;
+    return `<button class="stcard nav${owned ? ' owned' : poor ? ' poor' : ''}" data-buy="${k}">${c.icon}<span class="nm">${c.name}</span>` +
+      `<span class="pr">${owned ? 'OWNED' : sym('circuits', '') + '<span>' + c.price + '</span>'}</span></button>`;
+  }).join('');
+  if (msg !== undefined) $('#stMsg').textContent = msg;
+}
+function storeBuy(k) {
+  const c = COSMETICS[k]; if (!c) return;
+  const r = buyCosmetic(k);
+  if (r === 'bought') { sfx('combine', 0.7); sfx('coin', 0.6); clerkCheer(); renderStore(`${c.name} bought · find it in Customize`); renderCosShelf(); }
+  else if (r === 'poor') { sfx('deny', 0.5); renderStore(`${c.name} costs ${c.price} circuits · you have ${META.circuits || 0}`); }
+  else { sfx('tick'); renderStore(`${c.name} is already yours`); }
+}
+$('#tStore').addEventListener('click', () => { sfx('tick'); openStore(); });
+$('#stBack').addEventListener('click', () => { sfx('tick'); closeStore(); });
+$('#stGrid').addEventListener('click', e => { const b = e.target.closest('[data-buy]'); if (b) storeBuy(b.dataset.buy); });
 $('#tStart').addEventListener('click', () => { sfx('tick'); openLevelSelect(); });
 $('#lvBack').addEventListener('click', () => { sfx('tick'); closeLevelSelect(); });
 $('#lvGrid').addEventListener('click', e => { const b = e.target.closest('[data-level]'); if (b) pickLevel(b.dataset.level); });
@@ -544,6 +846,12 @@ function stickerAt(e) {
   return hit && hit.object.userData.patch ? hit.object : null;
 }
 const stickerOk = e => booted() && S.mode === 'custom' && !(e.target.closest && e.target.closest('.custpanel, button, input, .tip'));
+/* clicking the clerk's cap in the store (anywhere outside the panels) */
+addEventListener('pointerdown', e => {
+  if (!booted() || S.mode !== 'store' || e.button !== 0) return;
+  if (e.target.closest && e.target.closest('button, input, .stmain')) return;   // .stnook lets the ray through
+  if (clerkPick(e)) { e.preventDefault(); clerkHitCap(); }
+});
 addEventListener('pointerdown', e => {
   if (!stickerOk(e) || (e.button !== 0 && e.button !== 2)) return;
   if (e.button === 0) TITLE.clickDown = { x: e.clientX, y: e.clientY, hit: robotHit(e) };
@@ -835,6 +1143,20 @@ function cosmeticPointerUp(e) {
     for (const [other, oc] of Object.entries(COSMETICS)) if (oc.secret && other !== type) CUSTOM.cosmetics = CUSTOM.cosmetics.filter(x => x.type !== other);   // one smoke at a time
     setCosmetic(type, data); sfx('fuse', 0.5);
     if (fresh) { sfx('celebrate', 0.6); titleToast(`${c.name.toUpperCase()} UNLOCKED · find it in Customize → Cosmetics`); }
+  }
+}
+/* a shower of paper over the title screen (CSS only, cleaned up after itself) */
+function confettiBurst(n = 70) {
+  let box = $('#confetti');
+  if (!box) { box = document.createElement('div'); box.id = 'confetti'; document.body.appendChild(box); }
+  const cols = ['#ffd23a', '#58cfd6', '#e2465c', '#4fd06b', '#f4f1ea', '#ff7a1a'];
+  for (let i = 0; i < n; i++) {
+    const b = document.createElement('i');
+    b.style.cssText = `left:${rand(8, 92)}%;background:${cols[(Math.random() * cols.length) | 0]};` +
+      `animation-duration:${rand(1.6, 3).toFixed(2)}s;animation-delay:${rand(0, 0.5).toFixed(2)}s;` +
+      `--sp:${rand(-120, 120).toFixed(0)}px;--rot:${rand(360, 1200).toFixed(0)}deg;width:${rand(5, 11).toFixed(0)}px;height:${rand(8, 16).toFixed(0)}px`;
+    box.appendChild(b);
+    setTimeout(() => b.remove(), 3600);
   }
 }
 function titleToast(txt) {

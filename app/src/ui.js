@@ -43,11 +43,21 @@ function fitPanel(el) {
   el.style.zoom = '';
   const base = parseFloat(getComputedStyle(el).zoom) || 1;
   el.style.zoom = '1';
-  const n = naturalSize(el), r = el.getBoundingClientRect();
+  if (el.dataset.fitgrew) { el.style.width = ''; el.style.maxWidth = ''; el.style.maxHeight = ''; delete el.dataset.fitgrew; }
+  let n = naturalSize(el), r = el.getBoundingClientRect();
   // the room it has: the window less the gap it already keeps from the edges
   const mx = Math.max(8, Math.min(r.left, innerWidth - r.right, 24)), my = Math.max(8, Math.min(r.top, innerHeight - r.bottom, 24));
   const availW = innerWidth - mx * 2, availH = innerHeight - my * 2;
-  const z = Math.max(0.62, Math.min(base, n.w > 0 ? availW / n.w : base, n.h > 0 ? availH / n.h : base));
+  /* A panel that cannot hold its contents is given more room FIRST: shrinking the type was making menus
+     hard to read when there was still empty window around them. Only what will not fit even then is zoomed. */
+  if ((n.w > r.width + 2 && r.width < availW - 2) || (n.h > r.height + 2 && r.height < availH - 2)) {
+    const w = Math.min(availW, Math.max(r.width, n.w + 2)), h = Math.min(availH, Math.max(r.height, n.h + 2));
+    if (w > r.width + 2) { el.style.maxWidth = Math.round(w) + 'px'; el.style.width = Math.round(w) + 'px'; }
+    if (h > r.height + 2) el.style.maxHeight = Math.round(h) + 'px';
+    el.dataset.fitgrew = '1';
+    n = naturalSize(el); r = el.getBoundingClientRect();
+  }
+  const z = Math.max(0.78, Math.min(base, n.w > 0 ? availW / n.w : base, n.h > 0 ? availH / n.h : base));
   el.style.zoom = Math.abs(z - 1) < 0.004 ? '' : z.toFixed(3);
 }
 let _fitQ = 0;

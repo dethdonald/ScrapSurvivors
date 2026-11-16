@@ -827,10 +827,10 @@ function stepDrag(dt) {
 }
 
 const benchActive = () => booted() && (S.mode === 'hangar' || S.mode === 'inv');
-canvas.addEventListener('pointerdown', e => { if (!benchActive()) return; IN.device = 'kbm'; benchDown(e.clientX, e.clientY, e.button); });
+canvas.addEventListener('pointerdown', e => { if (!benchActive()) return; setDevice('kbm'); benchDown(e.clientX, e.clientY, e.button); });
 $('#partsPanel').addEventListener('pointerdown', e => {
   if (!benchActive() || e.target.closest('button')) return;
-  IN.device = 'kbm'; e.preventDefault(); benchDown(e.clientX, e.clientY, e.button);
+  setDevice('kbm'); e.preventDefault(); benchDown(e.clientX, e.clientY, e.button);
 });
 addEventListener('pointermove', e => { if (benchActive()) benchMove(e.clientX, e.clientY, e.movementX, e.movementY); });
 addEventListener('pointerup', e => { if (benchActive()) benchUp(e.clientX, e.clientY); });
@@ -1074,6 +1074,20 @@ function sfxPlay(kind, vol, live) {
 
     if (kind === 'whoops') { tone(720, 300, 0.22, 'triangle', 0.6); tone(420, 640, 0.14, 'triangle', 0.5, 0.24); tone(640, 560, 0.1, 'sine', 0.3, 0.38); }
     if (kind === 'hurt') { tone(320, 120, 0.16, 'square', 0.35); noise(0.08, 0.5, 900); tone(90, 50, 0.18, 'sine', 0.8); }            // a dull clank + buzz
+    /* the fart: a wobbling low buzz that sags and tails off, with a breathy rasp over it */
+    if (kind === 'fart') {
+      const f0 = 95 + Math.random() * 45, len = 0.34 + Math.random() * 0.22;
+      const o = actx.createOscillator(), e = actx.createGain(), lfo = actx.createOscillator(), lg = actx.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0 * 1.35, t); o.frequency.exponentialRampToValueAtTime(f0 * 0.55, t + len);
+      lfo.type = 'square'; lfo.frequency.setValueAtTime(26 + Math.random() * 16, t); lfo.frequency.linearRampToValueAtTime(11, t + len);
+      lg.gain.value = f0 * 0.38; lfo.connect(lg); lg.connect(o.frequency); lfo.start(t); lfo.stop(t + len + 0.05);
+      const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(260, t + len);
+      e.gain.setValueAtTime(0.0001, t); e.gain.exponentialRampToValueAtTime(0.9, t + 0.03); e.gain.exponentialRampToValueAtTime(0.001, t + len);
+      o.connect(lp); lp.connect(e); e.connect(out); o.start(t); o.stop(t + len + 0.05);
+      noise(len * 0.8, 0.22, 420, 0.02);
+      return;
+    }
     if (kind === 'squeak') { const f = 900 + Math.random() * 500; tone(f, f * 1.9, 0.06, 'triangle', 0.5); tone(f * 1.9, f * 1.4, 0.05, 'sine', 0.3, 0.05); }
     if (kind === 'nukefall') { tone(2200, 160, 2.3, 'sine', 0.55); tone(2240, 170, 2.3, 'triangle', 0.18); }                      // the long falling 'zoooooo'
     if (kind === 'vacuum') { tone(180, 900, 1.1, 'sine', 0.4); tone(270, 1350, 1.1, 'triangle', 0.15); }

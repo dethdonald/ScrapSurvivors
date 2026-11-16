@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.43.19 · BUILD NOV 6|
+| **Version** | 0.50.2 · BUILD NOV 15|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -816,3 +816,211 @@ New file `src/levelshift.js` (`LS` state; loaded after damage.js). Once a stage 
 - **Things that can't ride**: physics props, cases, crates, world detail and spectators puff into smoke at the start (`lsVanish`) and are re-placed at the end; props rain in from 18-34 m up (`lsRainProps`). Shop, gate and terminal ride the ground (`lsCarry`).
 - **Settling** (`lsFinish`): `H.set(H1)`, new pads, one `buildTerrainMesh()`, `computeFlow`, terrain colliders rebuilt (`PHYS.cells` cleared + `physStreamTerrain`).
 - `lsTick` is called from the frame loop outside the gameplay branch, so a death mid-shift can't leave the arena half-built.
+
+## 0.48.1 / 0.48.2 — sniper slow-motion out, one controller highlight, coins stay put (Nov 14)
+- **Coins**: `COIN_PULL = 2` (was the shared `BASE_PULL = 4`), so bolts only hop in from very close; health and the rest keep the 4 m reach, and the Magnet Coil still only moves experience (that was already true — `stats.magnet` has only ever applied to `kind === 'xp'`).
+- **Sniper**: the quarter-second of slow motion on a sniper kill is gone (`S.slowT` set in weaponfx.js and consumed in game.js's catch-up loop — both removed).
+- **Controller highlight**: `setDevice(d)` in input.js now owns `IN.device` and puts `.padnav` on the body while a controller is in charge; a real pointer move (with movement deltas) hands it back. CSS at the end of style.css neutralises `:hover` styling for menu controls while `.padnav` is set, so only the focused control is lit. **The Steam Deck always leaves a mouse pointer on screen, which is why two buttons looked selected at once.**
+
+## 0.49.0 — the cosmetics store, 20 new cosmetics, the clerk's stall, two more secrets (Nov 14)
+**What a stage pays.** Measured with a strong four-gun build: ~0.29 circuits/s, so **about 200 circuits per
+10-minute stage** (circuits only pay out when a kill streak *ends*, so a single long streak can hold the
+number down for minutes). Everything in the store is priced at **400 circuits = two stages**
+(`COSMETIC_PRICE` in `src/cosmetics.js`; every non-secret entry gets `c.price` from it).
+
+- **Store** (`#storeScreen`, `openStore/renderStore/storeBuy/closeStore` in title.js): 23 cards, the circuit
+  balance in the header, a message line, Back. Buying calls `buyCosmetic(type)` (cosmetics.js), which spends
+  `META.circuits` and pushes the key to **`META.cosOwned`** (saved metadata, so purchases survive runs).
+  `cosUnlocked(type)` = owned (shop items) or found (secrets); the Customize shelf only shows those.
+- **20 new cosmetics**, all built in code in `COS_BUILD`: party hat, crown, top hat, fedora, spinner cap
+  (propeller spins via `ud.spin`), umbrella hat, traffic cone, halo (bobs via `ud.bob`), devil horns, rubber
+  duck, cowboy hat, satellite dish, tie, bow tie, name tag, brown splat, kick me sign, googly eyes,
+  moustache, plunger. Existing santa hat / pumpkin / police badge are sold at the same price.
+- **Secrets are never sold** (`c.secret`): cigarette (5 taps on the title robot), joint (15), **crap** and
+  **clerk cap** (below). They are filtered out of the grid and out of the price pass.
+- **The S secret**: `logoSPart()` (logo3d.js) finds the S of SCRAP by geometry bounding-box centres — top
+  line, leftmost piece. Knock just that letter off and `logoSKnocked()` plays the new **`fart`** sound
+  (inventory.js), toasts "CRAP UNLOCKED!", throws 70 confetti pieces and unlocks the crap cosmetic. Once it
+  is unlocked, knocking the S off again just farts. Dropping the whole logo does not (only the `last` branch
+  of `logoHit` calls it).
+- **The clerk and the stall** (title.js, `CLERK` + `clerkStall/clerkBuild/clerkPlace/clerkShow/clerkTick/
+  clerkAimAt/clerkCheer/clerkPick/clerkHitCap`): the default frame with `a.weapon = null` on every arm, in a
+  green smock, name tag and clerk cap, stood behind a market stall (counter, posts, crates and a painted
+  STORE board) in the gap the store panel leaves on its right.
+  - **Placement is derived from the DOM**: `#stNook` is an empty grid column in the store screen; `clerkPlace()`
+    casts its centre-bottom onto the ground plane for the feet, then scales the whole rig to the alcove and
+    re-centres it (up to 4 passes). Works at any resolution or `--uiz`; under 900 px wide there is no column,
+    the grid takes the full width and the clerk stays hidden.
+  - **It points** at whatever card is hovered or focused, else at one of its own choosing every ~2 s, with the
+    arm angle following how high up the shelf the card sits, and a `chirp` when the target changes.
+  - **It cheers** when something sells: both arms up, two hops, `celebrate`. Five taps on its cap unlock the
+    clerk cap (`clerkHitCap`).
+  - The title robot is hidden while the store is open, and restored on Back.
+- **Store layout**: cards scale with the viewport (`clamp(132px,11vw,190px)`), tighten under 860 px tall so all
+  23 fit the Steam Deck without scrolling, and the scrim fades out over the alcove so the stall is lit.
+- Tested: 23 cards and no secrets shown, buy/owned/can't-afford states and the balance, all 27 cosmetic models
+  build, the S secret (5 knocks), the cap secret (5 clicks through the alcove), placement at 1920x1080,
+  1280x800 and 860x700, no page errors, lint clean (no new globals).
+
+## 0.49.1 — the stall fills the screen, the store keeps its own scene (Nov 14)
+- **Three columns of stock**, and the stall gets everything to the right of them: the store screen is
+  `minmax(0,44%) minmax(0,1fr)` above 900 px wide, the grid is `repeat(3,1fr)`, and the scrim fades out
+  across the right-hand half so the stall is lit. The grid scrolls, with a soft fade at its bottom edge.
+- **The store has its own scene.** `openStore` records `TITLE.sceneName` in `STORE_SCENE.was` and calls
+  `setTitleScene(STORE_SCENE.name)` ('workshop'); `closeStore` puts the menu's own scene back. So the
+  Inferno (or any later menu theme) no longer follows you into the shop — change `STORE_SCENE.name` to give
+  the store a scene of its own.
+- **Fitting is cheaper and self-correcting**: the rig's size is measured once into `CLERK.lbox` (local, at
+  scale 1) instead of walking the whole model every pass, and `clerkTick` re-fits every 0.1 s for the first
+  second after the store opens — a theme swap moves the title camera a frame or two after the switch, which
+  used to leave the stall scaled for the old camera and hanging off the screen.
+- **The cap is easier to tap**: `clerkPick` still ray-tests the cap, but a miss within about one cap-width of
+  its projected centre counts too (it is small, it sways, and it ducks when tapped).
+
+## 0.49.2 — Level Shift moves as one, props stop freezing, menus grow instead of shrinking (Nov 14)
+**Level Shift: the whole floor travels at once** (levelshift.js). The sweeping wave is gone, with it
+`lsColumnK`, `LS_RISE`, `LS.state` and the direction vectors. `lsStart` now lists the columns whose height
+actually changes (`LS.ch`, about 5,900 of 7,056 in testing, plus `LS.lo`/`LS.hi` for the GPU range) and
+`lsTick` moves every one of them together on one smoothstep over `LS_MOVE` (9.5 s, after the 3.2 s rumble).
+The meshes are rewritten 24 times a second; one full rewrite measured 1.4 ms on the headless software
+renderer and the whole event averaged 0.6 ms a frame there, so a real GPU has plenty of room.
+- `lsThrow(f)` now throws everyone standing on ground that is coming up, in the first moments of the move
+  (115 of 120 enemies in the bench), instead of as the wave reached each one.
+- Shake and roar follow `sin(pi*u)` — loudest halfway through, when the floor is moving fastest — and the
+  dust is kicked up all around you rather than along a line.
+
+**Props stopped freezing after a shift** (props.js, levelshift.js). Two separate faults:
+- A block was put to sleep the moment its speed dropped below 2, so a crate raining in after a shift froze
+  mid-bounce. Sleeping now needs linear speed under 0.6 **and** angular under 1.2 for 0.6 s, and
+  `p.noSleep` (set to 6 s by `lsRainProps`) blocks it entirely while the fresh set is still falling.
+- **Terrain colliders only exist in a 15 m ring around the frame** (`physStreamTerrain`, R = 5 cells), so
+  anything dropped from the sky further out fell straight through the floor and sank. `lsRainProps` now only
+  rains what is within 12 m of you; everything else is left where `placeProps` put it, asleep on the new
+  ground. The fell-through catch is tighter for far blocks (0.8 m instead of 2 m) and puts them back to sleep.
+
+**Menus grow before they shrink** (`fitPanel`, ui.js). A panel that cannot hold its contents is now given
+more room first — `width`/`max-width`/`max-height` are raised toward the space the window actually has
+(tracked with `data-fitgrew` so the next pass starts clean) — and only what still does not fit is zoomed.
+The zoom floor went from 0.62 to **0.78**, so menu text can no longer shrink to two thirds of normal.
+
+**The clerk**: `clerkShow` wraps the build, `clerkTry()` wraps every placement, and the fit is retried every
+0.1 s for 2.5 s after the store opens **whether or not it is currently hidden** — a first fit that failed used
+to be final, because `clerkTick` returned early while the rig was invisible. `clerkPlace` also converts the
+alcove's rect out of the store screen's own zoom (`--uiz`, and `fitPanel` can scale it again) before
+projecting into it. If the Inferno menu scene was what hid him, 0.49.1's scene swap already fixed that.
+
+## 0.49.3 — the clerk always has somewhere to stand, and says where (Nov 14)
+Reported missing on the owner's PC. His copy of every file was staged back and checksummed against this one
+(identical), and `scrapsurvivors-log.txt` showed **no error or warning at all** from that session, so the build
+succeeded and `clerkPlace()` simply returned false. It could not be reproduced here at 1264x769 (his window:
+`main.js` opens 1280x800), 1280x800, 1920x1080, 720x560, with `--uiz` 1, 1.25, 1.4 and 2, from the Inferno or
+the Workshop menu scene, on a first open, a second open, after Customize, or after a run. So the fix is
+belt-and-braces rather than a diagnosis:
+- **`clerkRect()`** is now the single source of the alcove. If `#stNook` cannot be measured (too narrow a
+  window, a layout that has not settled, anything unexpected) it falls back to the right-hand 44% of the
+  window, so there is always somewhere to stand. `clerkTry()` runs the fit again with the fallback forced
+  whenever the alcove fit fails or lands off screen, and `clerkPlace` now returns **whether the stall is
+  actually on screen**, not merely that the maths completed.
+- **It logs what it did** (up to three lines per store opening, `console.warn` → `scrapsurvivors-log.txt`):
+  window size, dpr, `--uiz`, the alcove rect, whether the fallback was used, the scale, the ground point, the
+  projected box, whether it is on screen, and the scene. The two failure paths say so in the same way
+  ("nowhere to stand", "aim misses the floor" with the camera's height).
+- The stall column now appears from 760 px wide (two columns of stock from 760, three from 900).
+- **Bug found on the way**: `clerkBuild()` calls `freshHangarLoadout()` to get a plain frame, and that function
+  **empties `INV.shelf`**. The shelf is saved and put back now — opening the store used to clear the hangar's
+  spare parts.
+
+## 0.50.0 — Arena (Destructible), a test level (Nov 15)
+New file `src/crust.js` (loaded before levelshift.js) and a second entry on the level select,
+**Arena (Destructible) — TEST**: the same generator and the same arena, wearing armour.
+
+**What it is.** Every exposed face of every column is covered in 1.5 m plates about three inches
+thick. Shoot them off and the rusted metal underneath shows through. The shape of the world never
+changes, so `H`, collision, the flow field, the physics ring, the props and the minimap all see the
+arena they always saw: you cannot fall or fly through a hole, and the enemies never get confused.
+That is the whole reason this is affordable — it was going to need a 3D flow field and per-voxel
+colliders until the crust got thin.
+
+- **Plates**: ~69,000 on medium and high, in one instanced draw of 138k triangles and 5 MB. The low
+  graphics preset switches to cell-sized 3 m plates instead (~18,000), which is the dial to reach for
+  if the Deck struggles (`PLATE` / `PLATE_LOW` at the top of the file).
+- **Cost measured** on the headless software renderer, so a real GPU is well inside these: building
+  the crust 100-175 ms at stage start, a pistol hit 0.2 ms, a rocket 0.4 ms, the landing crater
+  0.3 ms, the debris 0.22 ms a frame.
+- **What each thing does to it** (`crustShot` / `crustBlast` / `crustStomp`, one place to tune):
+  pistol one plate, heavier rounds two or three, a shotgun's pellets strip a patch of six or so, a
+  rocket tears out about seventy, the flamethrower only scorches. A round that lands between plates
+  still takes the nearest one, so no shot ever feels like it missed the wall.
+- **Landing**: a hard landing (impact over 11) shatters the plate under your feet and out a little
+  further the harder you come down; the drop in from the sky blows a 9.5 m crater; the mega-jump
+  landing clears everything inside its blast.
+- **Debris and sparks**: each lost plate throws a real plate that tumbles, skitters when it lands and
+  fades after six seconds (220 in the air at once), plus sparks and grey dust from the pool.
+- **Under the plating**: the terrain's own instance colours are repainted a patchy rust at build
+  time rather than tinted, because the arena palette changes from stage to stage and a multiply made
+  "rust" come out whatever colour the level happened to be. `buildTerrainMesh` repaints from scratch
+  on the next stage, so nothing has to put them back.
+- **Level Shift**: the plating is shaken loose as the ground starts to move (`crustShatterAll`, a
+  burst of debris near you) and a fresh set is bolted on once the new shape has settled, so the
+  arena comes back repaired. `CRUST_WAS` carries the flag across the shift.
+- Everything is behind `CRUST.on`, which is only set for the `arena_d` level, so the normal arena is
+  untouched. Lint clean, smoke test passes.
+
+**Known limits of the test**: holes are skin deep by design, the plating is a flat colour rather
+than a damaged-metal texture, and nothing structural can be cut away. If it earns its place, the
+next steps are a proper worn-metal look under the plates and weapons that leave their own marks.
+
+## 0.50.1 — the crust is voxels now (Nov 15)
+0.50.0 covered the arena in flat 1.5 m plates. Replaced with real cubes, Teardown-style, at 0.5 m
+(1 m on the low graphics preset). `src/crust.js` was rewritten; every hook from 0.50.0 is unchanged.
+
+**Nothing is cubed until it is hit.** A wall stands as the single stretched box it has always been.
+The first round to land on one of its faces *chunkifies* that face: the column is pulled back by one
+cube (asymmetrically - a box can be shrunk away from one side by scaling and shifting its centre),
+and the slab of space that opens up is filled with a shell of cubes, minus the ones the shot took.
+From then on that face is voxels. So the cost follows how much has been shot, not how big the arena
+is: cubing all 7,056 columns up front would be ~600,000 instances, and 200 rounds of sustained fire
+into walls leaves **2,720** live cubes across 134 faces. An untouched arena draws none at all.
+
+- **Geometry per cell**: a 6x6 top face and four 6-wide sides up to 14 rows deep (7 m), 372 voxel
+  slots, allocated only for cells that have been hit. Pulling the column back is what gives a hole
+  real depth instead of a painted mark, and the column's own colour is repainted rust on first
+  contact, so what shows through a hole is bare metal.
+- **Costs** on the headless software renderer (a real GPU is well inside these): a shot about 1.2 ms
+  including its debris and dust, a 30-frame idle step 1.6 ms a frame with 2,700 cubes up. Build at
+  stage start is now free — there is nothing to build.
+- **What each weapon does**: pistol takes two to four cubes, heavier rounds more, a shotgun's pellets
+  chew a patch, a rocket about 600, the drop crater 700-1400. `crustShot` / `crustBlast` /
+  `crustStomp` are still the one place to tune it.
+- **Debris** are cubes that keep the colour of the surface they came off, tumble, bounce once or
+  twice and settle on the ground before fading (360 in the air at once).
+- **Dust has its own pool.** The three shared pools are all opaque, and opaque particles at this size
+  render as a pile of cream boxes rather than a cloud — the first attempt filled every hole with a
+  solid lump. `CRUST.dust` is the same `ParticlePool` class with a transparent material at 0.22
+  opacity, ticked from `crustTick`.
+- **Instance colours have to exist before the first draw.** An `InstancedMesh` that gains
+  `instanceColor` after it has been rendered once keeps the shader it compiled with, and every cube
+  stays white however many times `setColorAt` is called. Both meshes now allocate the attribute up
+  front — worth remembering for any future instanced mesh that gets colours later.
+- **Level Shift** still works: the cubes are shaken loose as the ground starts to move and the crust
+  is rebuilt empty once the new shape settles (verified end to end - shift starts, crust clears,
+  shift finishes, crust comes back).
+
+## 0.50.2 — quarter-metre cubes, three layers deep (Nov 15)
+- **CUBE 0.5 -> 0.25 m** (0.5 on the low preset): twelve across a 3 m cell instead of six.
+- **LAYERS = 3.** The crust is three cubes deep (0.75 m), so a hole has real thickness and digging
+  into it shows stepped layers with the bare metal at the bottom. The deeper a layer sits, the more
+  its colour is pulled toward the rust underneath.
+- **Only cubes with nothing in front of them are drawn.** This is what makes three layers free: a
+  face chunkifies with just its outer layer instanced, and when a cube is destroyed the one directly
+  behind it is revealed and gets its instance then. Without that rule the same crust would cost three
+  times the instances to show the same surface.
+- **The blast only walks the slice of a face it can reach** - rows and columns are clamped to the
+  sphere's own footprint before the loop. At 0.25 m a face holds 864 voxels and a rocket touches
+  dozens of faces, so walking all of them per hit was not an option.
+- **Debris pinches out on landing** (DEB_SHRINK 0.28 s) instead of lying around for seven seconds,
+  and anything still airborne after six seconds goes the same way.
+- Dust is dimmer and shorter-lived (0.15 opacity, 0x8d8478): with four times as many cubes per hit
+  the old settings piled up into a solid white lump in the hole.
+- Measured after 200 rounds of sustained fire: 8,489 live cubes, 21,694 destroyed, 109 faces across
+  86 cells, about 0.85 ms a shot on the software renderer. The drop crater alone leaves 1,871.

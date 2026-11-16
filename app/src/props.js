@@ -74,7 +74,7 @@ function makeProp(type, spec, col, x, gy, z, dropY) {
   if (dropY === undefined) body.sleep();
   scene.add(g);
   const r = new THREE.Box3().setFromObject(g).getSize(new THREE.Vector3()).length() / 2;
-  const pr = { body, group: g, r, home: { x, y: gy + bottom + 0.02, z }, explosive: !!spec.explosive, hp: 30, padCd: 0 };
+  const pr = { body, group: g, r, home: { x, y: gy + bottom + 0.02, z }, explosive: !!spec.explosive, hp: 30, padCd: 0, noSleep: 0, calm: 0 };
   props.push(pr);
   return pr;
 }
@@ -159,7 +159,16 @@ function propsTick(dt) {
     }
     if (p.fuse > 0) { p.fuse -= dt; if (p.fuse <= 0) detonate(p); continue; }
     if (p.falling) { fallingBarrel(p, t, dt); continue; }
-    if (d > 13) { if (!p.body.isSleeping()) { const v = p.body.linvel(); if (Math.hypot(v.x, v.y, v.z) < 2) p.body.sleep(); } }
+    // far blocks sleep to save physics, but only once they have really come to rest: a block put to sleep the
+    // instant it touched down (the fresh rain after a Level Shift) froze mid-bounce, half in the ground
+    if (p.noSleep > 0) p.noSleep -= dt;
+    if (d > 13 && p.noSleep <= 0) {
+      if (!p.body.isSleeping()) {
+        const v = p.body.linvel(), w = p.body.angvel();
+        if (Math.hypot(v.x, v.y, v.z) < 0.6 && Math.hypot(w.x, w.y, w.z) < 1.2) { p.calm = (p.calm || 0) + dt; if (p.calm > 0.6) p.body.sleep(); }
+        else p.calm = 0;
+      }
+    }
     else if (enemies.length) {
       // enemies shove blocks they walk into
       for (const e of enemies) {
@@ -168,10 +177,11 @@ function propsTick(dt) {
         if (dd < rr && dd > 1e-3) { const k = (rr - dd) * e.mass * 0.6; p.body.applyImpulse({ x: dx / dd * k + e.vel.x * 0.02 * e.mass, y: 0.05, z: dz / dd * k + e.vel.z * 0.02 * e.mass }, true); }
       }
     }
-    // fell through the world (it was thrown out past the loaded terrain): put it back down
-    if (t.y < groundAt(t.x, t.z) - 2 || t.y < -30) {
+    // fell through the world (it was out past the ring of terrain colliders): put it back down
+    if (t.y < groundAt(t.x, t.z) - (d > 13 ? 0.8 : 2) || t.y < -30) {
       p.body.setTranslation({ x: t.x, y: groundAt(t.x, t.z) + p.r + 0.1, z: t.z }, true);
       p.body.setLinvel({ x: 0, y: 0, z: 0 }, true); p.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      if (d > 13) { p.noSleep = 0; p.calm = 1; p.body.sleep(); }
     }
   }
 }

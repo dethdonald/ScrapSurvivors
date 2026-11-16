@@ -1964,6 +1964,7 @@ function tracer(a, b) {
 }
 function explode(p, radius, dmg, manual, selfHurt) {
   blast(p, radius, ORANGE);
+  crustBlast(p, radius);
   { const d = Math.hypot(player.pos.x - p.x, player.pos.z - p.z); if (d < radius * 4 + 6) camKick(new THREE.Vector3(player.pos.x - p.x, 0.3, player.pos.z - p.z), 0.22 * (1 - d / (radius * 4 + 6)) * Math.min(1.5, radius / 3)); }
   physBlast(p, radius * 1.8 + 2, 1.2 + radius * 0.5);
   propsBlast(p, radius * 2 + 2, 1.5 + radius * 0.6);
@@ -2053,7 +2054,7 @@ function updateShots_(dt) {
         continue;
       }
       if (s.explode) { if (s.rocket && !s.pod) wfxRocketBoom(s.pos, s.explode); explode(s.pos, s.explode, s.dmg, s.manual, s.selfHurt); blastAttrs(s); } else if (s.miniBoom) { explode(s.pos, s.miniBoom, s.dmg * 0.6, s.manual); comboBoom(s, s.pos, s.miniBoom); }
-      else { spark(s.pos, s.hostile ? COL.red : COL.bone); if (s.wk) wfxHitGround(s); if ((s.wt || 0) > 1.1) { for (let i = 0; i < 3; i++) spark(s.pos, 0xffe6a0); dust(s.pos, 2); } }   // heavy rounds kick up a bigger ricochet
+      else { spark(s.pos, s.hostile ? COL.red : COL.bone); if (s.wk) wfxHitGround(s); if ((s.wt || 0) > 1.1) { for (let i = 0; i < 3; i++) spark(s.pos, 0xffe6a0); dust(s.pos, 2); } crustShot(s, s.pos); }   // heavy rounds kick up a bigger ricochet
       s.life = 0; continue;
     }
     if (s.hostile) {
@@ -2184,7 +2185,8 @@ function bonusDrop() {
   S.mode = 'drop'; startDive(); cam.pitch = 1.2; cam.dist = 30; cam.shake = 0.5;
 }
 /* ---------- scrap ---------- */
-const BASE_PULL = 4;    // bolts, loot and other pickups come to you only from this close; the Magnet module pulls XP only
+const BASE_PULL = 4;    // health and the rest come to you only from this close; the Magnet module pulls XP only
+const COIN_PULL = 2;    // bolts barely reach for you at all: walk over them (the Magnet Coil never helps here)
 const SKY_PICK = 7;    // pickup reach while falling (shown as a glowing ring around you)
 let pickRing = null;
 /* a tiny gold mote drawn from a bolt into the frame */
@@ -2227,7 +2229,7 @@ function updateGems(dt) {
       if (d < 1.4) { g.float = null; g.pull = true; }
       g.mesh.position.copy(g.pos); g.mesh.rotation.y += dt * 4; continue;
     }
-    if (g.kind !== 'loot' && g.kind !== 'case' && g.kind !== 'upgrade' && d < (g.sky ? SKY_PICK : g.kind === 'xp' ? stats.magnet : BASE_PULL)) g.pull = true;
+    if (g.kind !== 'loot' && g.kind !== 'case' && g.kind !== 'upgrade' && d < (g.sky ? SKY_PICK : g.kind === 'xp' ? stats.magnet : g.kind === 'bolt' ? COIN_PULL : BASE_PULL)) g.pull = true;
     if (g.pull && g.sky) {
       // falling: the bolt eases in (faster the closer it gets), shrinking, with a thin stream of motes ahead of it
       g.pullT = (g.pullT || 0) + dt;

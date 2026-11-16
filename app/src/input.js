@@ -10,14 +10,22 @@ const IN = {
 };
 let mouseFire = false, mouseLook = false, mouseZoom = false;
 
-function menuOpen() { return ['catalog', 'levelsel', 'wcase', 'devpanel', 'roulette', 'title', 'custom', 'hangar', 'inv', 'levelup', 'perk', 'pause', 'over', 'shop', 'terminal'].includes(S.mode); }
+function menuOpen() { return ['catalog', 'levelsel', 'store', 'wcase', 'devpanel', 'roulette', 'title', 'custom', 'hangar', 'inv', 'levelup', 'perk', 'pause', 'over', 'shop', 'terminal'].includes(S.mode); }
 /* (typeof S: mouse and key events can arrive while the later scripts are still loading, before game.js has made S.
    That threw "S is not defined" hundreds of times in the log on a slow start.) */
 const booted = () => typeof S !== 'undefined';
+/* Which input is in charge. The Steam Deck leaves a mouse pointer sitting on the screen, so whatever button it
+   happened to be over lit up at the same time as the one the stick had selected: two buttons looking chosen at
+   once. While the controller is in charge the body carries .padnav and hovering stops highlighting anything. */
+function setDevice(d) {
+  if (IN.device === d) return;
+  IN.device = d;
+  try { document.body.classList.toggle('padnav', d === 'pad'); } catch (e) {}
+}
 function playing() { return booted() && (S.mode === 'play' || S.mode === 'drop'); }   // (the drop countdown is not 'playing': nothing moves yet)
 
 addEventListener('keydown', e => {
-  IN.device = 'kbm';
+  setDevice('kbm');
   const first = !keys[e.code];
   keys[e.code] = true;
   if (S.test && (e.code === 'F1' || e.code === 'Backquote') && first && (S.mode === 'play' || S.mode === 'devpanel')) { devPanelToggle(); e.preventDefault(); return; }
@@ -44,7 +52,7 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 canvas.addEventListener('mousedown', e => {
-  IN.device = 'kbm';
+  setDevice('kbm');
   ensureAudio();
   if (!playing()) return;
   if (document.pointerLockElement !== canvas) { lockPointer(); mouseLook = true; }
@@ -88,6 +96,8 @@ document.addEventListener('pointerlockchange', () => {
   if (!LOCK_WANT || NO_CAPTURE.has(S.mode)) { ownUnlock = true; document.exitPointerLock(); }
 });
 
+/* a real mouse move (not the pointer drifting under a thumbstick) hands control back to the mouse */
+addEventListener('pointermove', e => { if (e.movementX || e.movementY) setDevice('kbm'); }, { passive: true });
 /* Gamepad */
 const gp = { axes: [0, 0, 0, 0], btn: [], prev: [], rt: 0, repeat: 0 };
 function pollInput(dt) {
@@ -100,7 +110,7 @@ function pollInput(dt) {
     gp.axes = [dz(pad.axes[0] || 0), dz(pad.axes[1] || 0), dz(pad.axes[2] || 0), dz(pad.axes[3] || 0)];
     gp.btn = pad.buttons.map(b => b.pressed);
     gp.rt = pad.buttons[7] ? pad.buttons[7].value : 0;
-    if (gp.btn.some(Boolean) || gp.axes.some(a => a !== 0)) IN.device = 'pad';
+    if (gp.btn.some(Boolean) || gp.axes.some(a => a !== 0)) setDevice('pad');
   } else { gp.axes = [0, 0, 0, 0]; gp.btn = []; gp.rt = 0; }
   const pressed = i => gp.btn[i] && !gp.prev[i];
   const released = i => !gp.btn[i] && gp.prev[i];
@@ -197,6 +207,7 @@ function navMove(dx, dy) {
 function menuBack() {
   if (S.mode === 'catalog') closeCatalog();
   else if (S.mode === 'levelsel') closeLevelSelect();
+  else if (S.mode === 'store') closeStore();
   else if (S.mode === 'devpanel') devPanelClose();
   else if (S.mode === 'terminal') { if (TERM.sel >= 0) { TERM.sel = -1; renderTerminal(); focusFirst(); } else closeTerminal(); }
   else if (S.mode === 'pause') pauseBack();
