@@ -1064,9 +1064,6 @@ body.berserk #vignette{box-shadow:inset 0 0 160px 30px rgba(255,20,20,.45);anima
 /* ---------- level select: the drop zone is picked before the build bay ----------
    A vertical list, one level per row. (#title turns pointer events off for the 3D scene behind it, so this
    panel has to turn them back on or nothing in it can be clicked.) */
-/* the TEST chip beside a level that is an experiment rather than a finished stage */
-.lvtest{display:inline-block;margin-left:7px;padding:1px 6px;border:1px dashed var(--orange);border-radius:2px;
-  font-size:.62em;font-style:normal;letter-spacing:.14em;color:var(--orange);vertical-align:middle;opacity:.9}
 .levelsel{position:absolute;inset:0;display:grid;align-content:center;justify-items:center;gap:12px;padding:24px;pointer-events:auto;zoom:var(--uiz,1)}
 .levelsel::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(5,8,10,.82) 0 42%,rgba(5,8,10,.45) 100%);pointer-events:none}
 .levelsel>*{position:relative}

@@ -5,7 +5,7 @@
    at one of its parts at a time. Every so often it blows apart and a new random frame drops in.
    ============================================================ */
 const TITLE = { scene: null, cam: null, robot: null, L: null, t: 0, life: 0, pieces: [], tipT: 0, tipPart: null, pose: 0, poseT: 0, fromOptions: false };
-const VERSION = '0.50.3 · BUILD NOV 15';
+const VERSION = '0.51.0 · BUILD NOV 16';
 
 /* a back wall behind the frame, with a lit window a little crowd of onlooker robots watches through */
 const TITLE_WALL_Z = -6.5;
@@ -484,10 +484,7 @@ function leaveTitle() {
 }
 /* ---------- level select ----------
    Start opens the drop-zone picker first; only the Arena is built, the other two are shown as what is coming. */
-const LEVELS = {
-  arena: { name: 'The Arena', ready: true },
-  arena_d: { name: 'Arena (Destructible)', ready: true, crust: true },   // test level: shootable armour plating
-};
+const LEVELS = { arena: { name: 'The Arena', ready: true } };
 function openLevelSelect() {
   ensureAudio();
   S.mode = 'levelsel';

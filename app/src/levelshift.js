@@ -35,8 +35,6 @@ function lsTimeline() {
 
 /* ---------- start ---------- */
 function lsStart() {
-  CRUST_WAS = CRUST.on;
-  if (CRUST.on) { crustShatterAll(); crustClear(); }   // the plating comes off while the ground moves
   if (LS.on) return;
   S.shifted = true;
   // the level we are heading for: genTerrain writes straight into H, so take a copy of the old one first
@@ -213,7 +211,6 @@ function lsFinish() {
   H.set(LS.H1);
   padSet = LS.pads; redPads = LS.redPads;
   buildTerrainMesh();                       // one clean rebuild: pads, colours and weathering all come back properly
-  if (CRUST_WAS) { crustBuild(); CRUST_WAS = false; }   // fresh plating on the new shape
   computeFlow(player.pos.x, player.pos.z);
   if (PHYS.world) { for (const [, c] of PHYS.cells) PHYS.world.removeCollider(c, false); PHYS.cells.clear(); PHYS.cellAt = -1; physStreamTerrain(); }
   // the frame and everything alive settle onto the new ground

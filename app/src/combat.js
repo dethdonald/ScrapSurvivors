@@ -1964,7 +1964,7 @@ function tracer(a, b) {
 }
 function explode(p, radius, dmg, manual, selfHurt) {
   blast(p, radius, ORANGE);
-  crustBlast(p, radius);
+  decalBlast(p, radius);
   { const d = Math.hypot(player.pos.x - p.x, player.pos.z - p.z); if (d < radius * 4 + 6) camKick(new THREE.Vector3(player.pos.x - p.x, 0.3, player.pos.z - p.z), 0.22 * (1 - d / (radius * 4 + 6)) * Math.min(1.5, radius / 3)); }
   physBlast(p, radius * 1.8 + 2, 1.2 + radius * 0.5);
   propsBlast(p, radius * 2 + 2, 1.5 + radius * 0.6);
@@ -2054,7 +2054,7 @@ function updateShots_(dt) {
         continue;
       }
       if (s.explode) { if (s.rocket && !s.pod) wfxRocketBoom(s.pos, s.explode); explode(s.pos, s.explode, s.dmg, s.manual, s.selfHurt); blastAttrs(s); } else if (s.miniBoom) { explode(s.pos, s.miniBoom, s.dmg * 0.6, s.manual); comboBoom(s, s.pos, s.miniBoom); }
-      else { spark(s.pos, s.hostile ? COL.red : COL.bone); if (s.wk) wfxHitGround(s); if ((s.wt || 0) > 1.1) { for (let i = 0; i < 3; i++) spark(s.pos, 0xffe6a0); dust(s.pos, 2); } crustShot(s, s.pos); }   // heavy rounds kick up a bigger ricochet
+      else { decalShot(s); if (s.wk) wfxHitGround(s); if ((s.wt || 0) > 1.1) { for (let i = 0; i < 3; i++) spark(s.pos, 0xffe6a0); dust(s.pos, 2); } }   // heavy rounds kick up a bigger ricochet
       s.life = 0; continue;
     }
     if (s.hostile) {

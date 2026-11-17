@@ -43,7 +43,7 @@ function clearWorld() {
   targets.forEach(t => scene.remove(t.mesh)); targets = []; shots.forEach(s => scene.remove(s.mesh)); gems.forEach(g => scene.remove(g.mesh)); fx.forEach(f => scene.remove(f.obj));
   CULL.q = []; enemies = []; shots = []; gems = []; fx = []; egReset(); pfxClear(); WRECKS = 0; clearSkyRings(); wdClear(); wfxClear(); S.streak = 0; S.streakT = 0; $('#killMul').hidden = true; S.frenzyT = 0; $('#fzBar').hidden = true;
   if (S.gate) { scene.remove(S.gate.group); S.gate = null; }
-  dmgReset(); crustClear(); LS.on = false; LS.phase = '';
+  dmgReset(); decalClear(); LS.on = false; LS.phase = '';
   clearSpectators(); clearShop(); clearTerminal(); clearHazards(); TERM.nextAt = 0; TERM.checkT = 0; clearCases(); clearLegTrail(); clearStains(); clearFootprints();
   if (S.nuke) { scene.remove(S.nuke.obj); S.nuke = null; }
   physDestroyRobot();
@@ -57,7 +57,6 @@ function startStage() {
   genTerrain((Math.random() * 1e9) | 0);
   setLevelPalette(); _skyCol.copy(LEVEL_PAL.sky);
   buildTerrainMesh(); mmBuild();
-  if (typeof LEVELS === 'object' && LEVELS[S.level0 || 'arena'] && LEVELS[S.level0 || 'arena'].crust) crustBuild();
   physResetWorld();
   try { warmRender(); } catch (err) { console.warn('warm-up', err); }
   Object.assign(S, {
@@ -101,7 +100,6 @@ function land() {
     MASS_KILL = false;
     blast(P.pos.clone().setY(P.pos.y + 1), 6, 0xff5a3a); ring(P.pos, R, 0.8, 0xff3a3a); ring(P.pos, R * 0.6, 0.6, ORANGE); dust(P.pos, 20);
     propsBlast(P.pos.clone(), R, 8); sfx('boom', 1); cam.shake = 1;
-    crustHit(P.pos, R * 0.8, { debris: 40, force: 2.1 });
     enemies = enemies.filter(e => !e.dead);
   }
   endDive();
@@ -114,7 +112,6 @@ function land() {
   blast(hi, 7, 0xffb24a); blast(hi, 4.5, 0xff6a2a);
   ring(lp, 15, 0.55, ORANGE); ring(lp, 9, 0.75, 0xffd25a); ring(lp, 22, 0.9, 0x8a6a4a);
   dust(lp, 26); landDust(lp, 34); landSmoke(lp, 1.25);
-  crustHit(lp, 9.5, { debris: 40, force: 1.9 });            // the drop tears the plating off a good circle
   // scorch: a few small marks around the crater instead of one big slab of shadow
   for (let i = 0; i < 7; i++) { const a2 = Math.random() * Math.PI * 2, r2 = rand(0.2, 3.2); stain(lp.x + Math.cos(a2) * r2, lp.z + Math.sin(a2) * r2, rand(0.7, 1.8), 0x1a1512); }
   propsBlast(lp, 14, 9);
@@ -258,7 +255,6 @@ function frame(now) {
     updateFx(playing() || ['dying', 'over', 'levelup', 'countdown'].includes(S.mode) ? dt : 0);
     // the arena rebuilding itself keeps going whatever screen is up, so it can never be left half-shifted
     if (S.inRun && LS.on && S.mode !== 'pause' && S.mode !== 'inv') lsTick(dt);
-    if (CRUST.on && S.mode !== 'pause' && S.mode !== 'inv') crustTick(dt);
     if (S.bannerT > 0) { S.bannerT -= dt; if (S.bannerT <= 0) $('#banner').hidden = true; }
     const pulse = 0.5 + 0.5 * Math.sin(now / 300);
     padMeshes.forEach(m => m.material.emissive.setRGB(0.1, 0.35 + 0.25 * pulse, 0.38 + 0.25 * pulse));

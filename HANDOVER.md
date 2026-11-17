@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.50.3 · BUILD NOV 15|
+| **Version** | 0.51.0 · BUILD NOV 16|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -1035,3 +1035,33 @@ UPDATE NOW / RESTART TO UPDATE buttons appear under it exactly as they do on the
   something visible.
 - **`#title` has `pointer-events:none`**, so the button did nothing at all until `.tref` turned them
   back on. Third time this has caught something: anything clickable added under `#title` needs it.
+
+## 0.51.0 — destructible arena out, bullet marks in (Nov 16)
+**The destructible test level is gone.** `src/crust.js` is emptied to a note (nothing loads it; the file
+on disk can be deleted), the `arena_d` entry is out of `LEVELS`, the level-select card is back to
+"? ? ?  Under construction", and every hook is removed: `crustBuild/Clear/Tick` from game.js,
+`crustShot` and `crustBlast` from combat.js, `crustStomp` from player.js, and the shatter-and-rebuild
+pair from levelshift.js. The `.lvtest` chip style went with it. Lint is clean and the smoke test passes.
+
+**New: bullet marks on terrain** (`src/decals.js`, loaded after weaponfx.js). Every round that ends on
+the arena leaves a mark - and unlike the old ground-only stains, it works on the side of a wall.
+- One instanced quad per mark in a ring buffer of 420, cleared with the world. The art is a canvas
+  texture: a dark pit with a chipped, slightly brighter lip and bitten-out edges, so it reads as
+  something knocked out of the surface rather than a sticker.
+- **The surface normal** comes from the same two probes the ricochet code uses - if the ground is
+  higher at (new x, old z) than the round was, it hit a wall facing x. Inside corners go with whichever
+  axis it was moving into harder.
+- **Two things that had to be right before any of this was visible.** A round is never standing on the
+  surface when it stops: at 40 m/s a step carries it most of a metre, so the impact point is usually
+  *inside* the block it hit, and the mark was being buried in solid geometry. It is now pulled back out
+  to that block's face. And the material is deliberately **unlit** - a lit decal takes the shading of
+  the face it sits on, and most land on walls in shadow, where the mark went as dark as the wall.
+- Colour is sampled from the right mesh for the surface (the cap tile for floors, the column for
+  walls, from the cell *behind* the mark) and held near mid-grey so it stays legible either way.
+- Sizes per weapon in `DEC_SIZE`: sniper 0.6 m down to shotgun pellets at 0.2 m.
+
+**Sparks on everything.** `decalShot` runs for every non-explosive round that lands, throwing two to six
+sparks that bounce off along the surface normal plus a puff of grit - previously only the sniper sparked
+on terrain and the pistol left a smudge. `wfxHitGround` keeps each weapon's own flavour on top (dust for
+the autogun and shotgun, a light flash for the gatling, blue sparks for the arc caster). Explosions
+scorch what they went off against through `decalBlast`.

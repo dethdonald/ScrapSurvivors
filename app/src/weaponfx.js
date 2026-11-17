@@ -112,12 +112,15 @@ function wfxHitEnemy(s, e, wasAlive) {
   if (t === 'sniper') { burst(c, 0xfff0d0, 8); impactLight(c, 0.8, 0xfff0d0); }
   if (t === 'pistol' && wasAlive && e.dead) { for (let i = 0; i < 6; i++) mote(c, WM.pistol, new THREE.Vector3(rand(-2, 2), rand(5, 9), rand(-2, 2)), 0.5, 0.12, 22); }
 }
+/* The mark and the sparks are the same for every weapon now (decalShot, called for every round that
+   lands). What is left here is each weapon's own flavour on top of that. */
 function wfxHitGround(s) {
   const t = s.wk, p = s.pos;
-  if (t === 'pistol') { stain(p.x, p.z, 0.22, new THREE.Color(0x1c1a18)); }
-  else if (t === 'autogun') { dust(p, 1); }
-  else if (t === 'shotgun') { dust(p, 2); stain(p.x, p.z, 0.18, new THREE.Color(0x1c1a18)); }
-  else if (t === 'sniper') { dust(p, 4); for (let i = 0; i < 4; i++) spark(p, 0xffe6a0); impactLight(p, 0.5); stain(p.x, p.z, 0.4, new THREE.Color(0x141210)); }
+  if (t === 'autogun') dust(p, 1);
+  else if (t === 'shotgun') dust(p, 2);
+  else if (t === 'gatling') { dust(p, 1); impactLight(p, 0.25); }
+  else if (t === 'sniper') { dust(p, 4); for (let i = 0; i < 4; i++) spark(p, 0xffe6a0); impactLight(p, 0.5); }
+  else if (t === 'arc') { for (let i = 0; i < 3; i++) spark(p, 0x9fd8ff); impactLight(p, 0.35, 0x8fcfff); }
 }
 /* rocket impact: a fireball that swells then collapses, a shockwave, a scorch and flying chunks */
 function wfxRocketBoom(p, radius) {
