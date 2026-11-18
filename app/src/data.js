@@ -880,6 +880,33 @@ Object.assign(MODULES, {
       return {};
     },
   },
+  monkey: {
+    name: 'Scrap Monkey', mass: 0.45,
+    /* Carry, reach and legs all grow with the level, but carry is the one that matters: a Lv 1 monkey
+       fills up after three pickups and spends most of his time running back to you, while a Lv 5 one
+       can clear a whole firefight's worth of drops in a single trip. */
+    carry: lvl => Math.round(3 + 15 * lvlCurve(lvl, 60)),
+    reach: lvl => 11 + 13 * lvlCurve(lvl, 60),
+    speed: lvl => 11 + 5 * lvlCurve(lvl, 60),
+    desc: 'A pet robot monkey on a leash. He ranges around you gathering loose experience and bolts and carries them back by the armful. Nothing can hurt him. He fills up fast at first - levelling him up widens his pockets, his range and his stride.',
+    model(g, { out }) {
+      joint(g, [0, 0, 0], 0.13, JOINT_COL);
+      const c = [out.x * 0.3, out.y * 0.3, out.z * 0.3];
+      g.add(bx(0.36, 0.3, 0.3, 0x505a64, c[0], c[1], c[2]));                       // the perch box
+      g.add(bx(0.4, 0.05, 0.34, COL.dark, c[0], c[1] + 0.17, c[2]));               // worn seat pad
+      // a coil of leash on a drum, and the cleat it pays out from
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.16, 10), M(0x3b3f45));
+      drum.rotation.z = Math.PI / 2; drum.position.set(c[0], c[1] + 0.03, c[2] - 0.2); g.add(drum);
+      for (let k = 0; k < 3; k++) {
+        const coil = new THREE.Mesh(new THREE.TorusGeometry(0.115, 0.022, 5, 12), M(0x6b5a4e));
+        coil.rotation.y = Math.PI / 2; coil.position.set(c[0] - 0.05 + k * 0.05, c[1] + 0.03, c[2] - 0.2); g.add(coil);
+      }
+      g.add(bx(0.09, 0.09, 0.09, ORANGE, c[0], c[1] + 0.06, c[2] + 0.19));         // the cleat
+      g.add(bx(0.07, 0.16, 0.07, 0xe8c24a, c[0] + 0.19, c[1] + 0.1, c[2]));       // a spare banana, clipped on
+      // the cleat doubles as the leash anchor: monkey.js reads it back through reg.muzzleOf
+      return { muzzle: [c[0], c[1] + 0.06, c[2] + 0.24] };
+    },
+  },
   dash: {
     name: 'Dash Thruster', mass: 0.4,
     desc: 'Q / RB to burst a short distance in the direction you\'re steering. One charge, two from Lv 30, three from Lv 70; recharges on landing.',
@@ -1059,6 +1086,7 @@ const PART_ICONS = {
   'arm:sentry': '<circle cx="4" cy="20" r="2.8"/><circle cx="6.8" cy="14.2" r="2"/><circle cx="10.2" cy="9.2" r="2"/><circle cx="14.8" cy="5.8" r="2"/><path fill-rule="evenodd" d="M17 1.5h6v7h-6zm1.8 2.2v2.6h2.4V3.7z"/>',
   'module:jetpack': '<path d="M4 3h6v13H4zM14 3h6v13h-6z"/><path d="M10 6h4v3h-4z"/><path d="M5.2 17h3.6L7 23zM15.2 17h3.6L17 23z"/>',
   'module:magnet': '<path fill-rule="evenodd" d="M3 2h6v10a3 3 0 0 0 6 0V2h6v10a9 9 0 0 1-18 0z"/><path d="M3 2h6v3H3zM15 2h6v3h-6z" opacity=".55"/>',
+  'module:monkey': '<circle cx="5.5" cy="9" r="3"/><circle cx="18.5" cy="9" r="3"/><path d="M12 2.5a7.5 7.5 0 0 1 7.5 7.5v3a7.5 7.5 0 0 1-15 0v-3A7.5 7.5 0 0 1 12 2.5z"/><ellipse cx="12" cy="15.4" rx="4.6" ry="3.6" fill="#000" fill-opacity=".5"/><circle cx="9.5" cy="10.2" r="1.2" fill="#000" fill-opacity=".6"/><circle cx="14.5" cy="10.2" r="1.2" fill="#000" fill-opacity=".6"/>',
   'module:dash': '<path d="M10 6h7.5l5 6-5 6H10z"/><path d="M1 7.5h7V9H1zM0 11.2h8v1.6H0zM1 15h7v1.5H1z"/>',
   'module:radar': '<path d="M2 3a13 13 0 0 0 16 16z"/><path d="M9.6 12.4l7.6-7.6 1.6 1.6-7.6 7.6z"/><circle cx="19.5" cy="4.5" r="2"/><path d="M11 18h2v3h-2zM6 21h12v2H6z"/>',
   'module:whirl': '<circle cx="12" cy="12" r="3"/><path d="M12 1.5c5 0 8.5 3.5 8.5 7l-6.5 2zM20 17c-2.5 4.4-7.5 6-11 4.6l3.2-6zM2.2 13.8C1 8.8 3.6 4.4 7 3.2l2 6.5z"/>',

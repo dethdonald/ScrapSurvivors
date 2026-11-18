@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.51.0 · BUILD NOV 16|
+| **Version** | 0.53.0 · BUILD NOV 17|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -1065,3 +1065,113 @@ sparks that bounce off along the surface normal plus a puff of grit - previously
 on terrain and the pistol left a smudge. `wfxHitGround` keeps each weapon's own flavour on top (dust for
 the autogun and shotgun, a light flash for the gatling, blue sparks for the arc caster). Explosions
 scorch what they went off against through `decalBlast`.
+
+## 0.52.0 — the lighting pass (Nov 17)
+The arena read as flat pink cardboard under a flat green wall. Seven changes, none of which adds a
+render pass: the whole lot costs **one extra draw call and 720 triangles** (the sky dome), everything
+else being extra arithmetic inside shaders that were already running.
+
+**Scrap Ink posterises luminance into six bands and is on by default**, so anything subtler than about
+1/6 of a luminance step is quantised away. Every effect below is deliberately heavy-handed for that
+reason; dialling them back will make them vanish rather than soften.
+
+- **Found: nothing in the game could receive a shadow on a horizontal surface.** The cap tiles are the
+  arena's floor, and `buildTerrainMesh` set `userData.noShadow` on them to keep 7,056 bevelled caps out
+  of the shadow map — correct for *casting*, but `markShadow` returns early on that flag, so it never
+  set `receiveShadow` either. The columns were casting into the shadow map perfectly and the only thing
+  that could have shown it was opted out. It read as "the sun is overhead", which is why it survived
+  this long. One line: `tiles.receiveShadow = true`.
+- **The sun came down from 62° to 30°** (`SUN_ELEV`/`SUN_DIST`/`SUN_OFF`, post.js). A 6 m column threw
+  a 3.2 m shadow, barely one cell; it now throws 10.4 m and every ledge draws its own shape. Each stage
+  swings the sun to its own bearing (`setLevelSun`, called from `setLevelPalette`). The shadow box went
+  34 → 46 to suit the longer shadows (still one instanced draw, same 2048² map, so no real cost).
+- **Light rebalanced 0.78/0.85 → 0.55/1.45** (fill/sun, gfx.js). A shadow used to keep 48% of open-ground
+  light, which after ACES is invisible; it now keeps about 27%, roughly two ink bands down and still
+  bright enough to spot an enemy standing in one. Total light is unchanged, so nothing needed re-exposing.
+  The fill is tinted to the level's sky, and its **ground** half comes off `LEVEL_PAL.mid` rather than
+  `lo`: that half is the only thing lighting a wall facing away from the sun, and off the dark end it
+  crushed those faces to black and took the rust and panel seams with them. A floor's normal points
+  straight up, so this knob cannot wash out the shadows lying on it.
+- **Ambient occlusion out of the height texture** (`WD_AO_WALL`/`WD_AO_TOP`, worlddetail.js). Thousands
+  of boxy columns with nothing darkening where they meet. Real SSAO needs a depth buffer and a second
+  pass; the arena *is* a heightfield, so four to eight extra taps in a shader that already samples that
+  texture buys the same grounding. Tops read eight neighbours (four sides, four corners), walls darken
+  in the gutter at their base and when boxed in by the wall opposite. **It sits outside the "World
+  detail" switch on purpose** — weathering is decoration, grounding is lighting.
+- **The terrain has a surface finish** (`WD_LIGHT`). It is `MeshLambertMaterial`: no specular, no
+  roughness, and it *ignores `scene.environment`*, so the PMREM studio sky lit nothing on 85% of the
+  screen and the robot read as metal while the ground it stood on read as paper. A real Standard
+  material would mean full GGX + image-based lighting over a near-fullscreen surface; this is a Blinn
+  highlight and a sky-tinted fresnel rim instead, a few instructions and no texture lookups. Two things
+  it has to do: the lobe **widens with distance** (a tight highlight on a 3 m cell 80 m out is one pixel
+  flickering between frames), and it is **broken up by noise** (a flat tile with a clean lobe grows one
+  bright disc and reads as a spotlight on lino, not as dulled metal).
+- **Sky dome** (`src/sky.js`, new, loaded after terrain.js): vertical gradient, haze banked along the
+  horizon, broad glow at the sun, no hard disc. It re-reads `scene.background` every frame rather than
+  being set once, so the atmospheric-entry sequence — which lerps that colour toward hot orange while
+  the heat shield burns — drives the sky for free. Camera-locked, drawn first, no depth test.
+- **Height fog** (fog chunk patches, post.js): haze thins with altitude and pools in the gullies. The
+  obvious way to get a fragment's world height is `modelMatrix * transformed`, which **does not compile
+  for sprites** — their vertex shader builds its quad from `mvPosition` alone and has no `transformed`,
+  and every glow and muzzle flash in the game is a sprite. The height is pulled back out of view space
+  instead: the view matrix is rigid, so its inverse rotation is its transpose and world Y is one dot
+  product plus the camera's height. Works in every material family (verified: Sprite, Points, Line,
+  Basic, Lambert, Standard, Phong), and instancing is already folded into `mvPosition`. The height band
+  is baked rather than a uniform because three refreshes fog uniforms from `scene.fog` and there is no
+  supported way to add to that set — every stage comes out of the same generator at the same scale, so
+  one band fits them all, while colour and distance still come from the level.
+- **Per-level colour grade and dither in the composite** (`MAT_OUT`, post.js). The grade shader that
+  only existed on the box-art page is now in the game: black/white points, contrast, saturation, warmth
+  and a vignette on a uniform, driven off the level's hue by `skyApply` and swapped to neutral for every
+  scene that is not the arena. Plus ±half an 8-bit step of ordered dither — the buffer is half-float
+  going to an 8-bit screen over big smooth gradients, which stair-steps without it.
+- **Muzzle light accumulates** instead of taking the max (combat.js), capped at 4.2, so six guns firing
+  at once actually light the ground.
+
+**Verified**: zero shader-compile errors and zero page errors across title / Inferno theme / workshop /
+arena / sustained fire / explosions / decals / Level Shift, with Scrap Ink both on and off; every
+fog-bearing material family compiles; lint unchanged at the 4 known pre-existing errors. Headless
+software-GL frame timing was useless here (p90 of 2.3 s against a 2.5 ms median — SwiftShader batching,
+not shader cost), so **real frame cost still wants checking on the Deck**; the structural numbers are
++1 draw call and +720 triangles.
+
+## 0.53.0 — the Scrap Monkey (Nov 17)
+New module, new file `src/monkey.js` (loaded after levelshift.js). A pet robot monkey on a leash who
+ranges around you, picks up loose experience and bolts, and carries them back by the armful.
+
+**Decisions taken with Luke before building**: he is invulnerable (nothing targets him, the module
+always works), the leash is decoration rather than a tether (his range is its own tuned number), and
+he fetches experience and bolts only — he will not run off with your health packs or weapon cases.
+
+- **Levelling widens his pockets first.** `carry` 3 → 15 across Lv 1-5, `reach` 11 → 21.5 m, `speed`
+  11 → 15 m/s. Measured over 14 s with 26 pickups on the floor: a Lv 1 monkey makes 17 trips and
+  spends 28% of his time walking back, a Lv 5 one spends 11% and clears the field with time to spare.
+  That gap is the whole point of the upgrade, so `carry` is the number to tune.
+- **He is not an enemy and not a physics body** — just a group of meshes and a state machine (idle /
+  fetch / return), so nothing targets him, nothing collides with him, and he adds no simulation cost
+  beyond this file. He has no collision against terrain either, which is deliberate: a pet that can
+  get itself stuck behind a wall and left behind is worse than one that walks through it.
+- **What he grabs is spliced straight out of `gems` in `monkeyTick`**, which runs immediately before
+  `updateGems` in the same step. Marking it done instead would leave it in the array for that pass,
+  which credits anything within 1.4 m of you — so a pickup taken at your feet would pay out twice.
+- **Nothing he is holding is ever lost.** `monkeyReset` (from `clearWorld`) banks his load, so a stage
+  ending with a full monkey, or taking the module off mid-run, both pay out. Verified both ways.
+- **The leash** is one instanced draw of 18 links re-posed along a sagging curve each frame. A
+  `THREE.Line` would be a single pixel wide on most hardware and vanish at any distance. It is tied to
+  the module's cleat, which the model names through `muzzle` and `monkey.js` reads back out of
+  `reg.muzzleOf` — the same hook the Missile Pod uses for its launch point.
+- The module itself is a perch with a seat, a drum of coiled cable, the cleat and a spare banana.
+
+**Two bugs found while testing, both worth remembering:**
+- After a grab, the state was still `fetch` with a null target, so `monkeyMove` dereferenced it on the
+  next line. State is now worked out at the *end* of `monkeyThink`, from what is actually true.
+- He would park a stride short of anything standing on a ledge and deadlock there forever. Two causes:
+  the approach eased to zero speed just outside the grab radius, so he never took the last step that
+  would have carried him up onto it, and the grab test used 3D distance, which on terraced ground is
+  dominated by the height difference. Reach is now measured flat with a height allowance, a fetch
+  drives all the way in, and anything he fails to reach for three seconds is written off so he can
+  never lock onto one unreachable bolt for the rest of a stage.
+
+**Bench note for next time**: banking XP can level you up, which flips `S.mode` off `play` — and
+`simStep` returns before the entire combat loop, so everything silently freezes mid-step and looks
+like the feature under test is broken. Any headless test that gains XP must stub `openLevelUp`.

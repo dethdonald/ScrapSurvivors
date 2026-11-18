@@ -82,6 +82,17 @@ function setLevelPalette() {
   LEVEL_PAL.sky.setHSL(comp, rand(0.25, 0.4), 0.2);           // the complementary hue, dark, for the sky and the haze
   scene.background.copy(LEVEL_PAL.sky); scene.fog.color.copy(LEVEL_PAL.sky);
   setLevelEnv(LEVEL_PAL.sky);
+  setLevelSun(Math.random() * Math.PI * 2);                   // every stage lights from its own bearing
+  /* Shadowed ground is lit by the sky fill alone, so the fill takes the sky's colour: shadows go
+     cool and blue-green under a green sky instead of going flat grey. */
+  skyFill.color.copy(LEVEL_PAL.sky).lerp(new THREE.Color(0xffffff), 0.58);
+  /* The ground half of the fill is light bouncing back up off the floor, and it is the only thing
+     lighting a wall that faces away from the sun. Taken from the dark end of the palette it sent
+     those faces to pure black and took the rust and panel seams with them. Off the mid tone they
+     stay dark but legible - and because a floor's normal points straight up, this cannot wash out
+     the cast shadows lying on it. */
+  skyFill.groundColor.copy(LEVEL_PAL.mid).multiplyScalar(0.8);
+  skyApply();                                                 // sky dome + per-level grade (sky.js)
 }
 let terrainMesh = null, tileMesh = null;
 const padMeshes = [];
@@ -128,7 +139,14 @@ function buildTerrainMesh() {
   // the cap tiles sit flush on top of their columns, and the columns already cast the very same shadow:
   // keeping the 7,056 bevelled caps out of the shadow map saves ~200k triangles a frame for no visible change
   tiles.userData.noShadow = true;
-  scene.add(tiles); tiles.castShadow = false; tileMesh = tiles;
+  scene.add(tiles);
+  tiles.castShadow = false;
+  /* ...but noShadow also stopped markShadow turning receiveShadow ON, and these caps ARE the floor of
+     the arena. Nothing cast a shadow onto any horizontal surface in the whole game: the columns were
+     casting into the shadow map correctly and the only thing that could have shown it was opted out.
+     It read as "the sun is directly overhead", which is why it went unnoticed - it nearly was. */
+  tiles.receiveShadow = true;
+  tileMesh = tiles;
   redPadMeshes.forEach(m => scene.remove(m)); redPadMeshes.clear();
   for (const k of redPads) {
     const g = new THREE.Group();

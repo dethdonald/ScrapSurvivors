@@ -2379,7 +2379,11 @@ function muzzleFlash(p, dir, size = 1) {
   const s = new THREE.Sprite(flashMat); s.position.copy(p); if (dir) s.position.addScaledVector(dir, 0.15 * size);
   const sc = (0.7 + Math.random() * 0.4) * (0.6 + 0.5 * size); s.scale.set(sc, sc, sc); s.material.rotation = Math.random() * 6;
   addFx(s, 0.05, f => { f.obj.scale.multiplyScalar(0.8); });
-  MUZZLE_LIGHT.position.copy(p); MUZZLE_LIGHT.intensity = Math.max(MUZZLE_LIGHT.intensity, 1.6 + size * 1.4);
+  /* One light stands in for every barrel. Taking the max meant six guns going off at once lit the
+     ground no harder than one did; adding instead lets a full loadout throw real light, capped so a
+     gatling cannot wash the arena out. The light sits at the newest barrel either way. */
+  MUZZLE_LIGHT.position.copy(p);
+  MUZZLE_LIGHT.intensity = Math.min(4.2, MUZZLE_LIGHT.intensity + 1.6 + size * 1.4);
 }
 function muzzleLightTick(dt) { MUZZLE_LIGHT.intensity *= Math.exp(-dt * 38); if (MUZZLE_LIGHT.intensity < 0.02) MUZZLE_LIGHT.intensity = 0; }
 function burst(p, color, n) {

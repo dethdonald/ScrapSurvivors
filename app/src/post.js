@@ -16,6 +16,40 @@ THREE.ShaderLib.basic.fragmentShader = THREE.ShaderLib.basic.fragmentShader.repl
   'vec3 outgoingLight = reflectedLight.indirectDiffuse;', `vec3 outgoingLight = reflectedLight.indirectDiffuse * ${GFX.glowGain.toFixed(2)};`);
 THREE.ShaderChunk.emissivemap_fragment += `\ntotalEmissiveRadiance *= ${GFX.emissiveGain.toFixed(2)};\n`;
 
+/* --- height fog: haze settles into the low ground instead of hanging in a flat sheet ---
+   The arena is a terraced heightfield, so this is most of what sells it as a place with air in it:
+   the gullies fill up and the mesas stand clear of it.
+
+   Doing this properly usually means a depth buffer and a fullscreen pass. It does not need one -
+   every material already has the fog chunks, and they only lack the fragment's world height. The
+   obvious way to get it is modelMatrix * transformed, which is what the terrain's own patch does,
+   but transformed does not exist in the sprite vertex shader (it builds its quad from mvPosition
+   alone) and every glow and muzzle flash in the game is a sprite: patching it that way compiles
+   nothing. mvPosition is in scope in all of them, so the height is pulled back out of view space
+   instead. The view matrix is rigid, so its inverse rotation is its transpose, and world.y is one
+   dot product plus the camera's own height. Instancing is already folded into mvPosition, so the
+   terrain needs no special case either.
+
+   The band is baked in rather than a uniform: fog uniforms are refreshed by three from scene.fog
+   and there is no supported way to add to that set. It costs nothing to bake, because every stage
+   comes out of the same generator at the same scale - ground sits around 6 m, mesas top out near
+   23 - so one band fits them all. The fog's colour and distance still come from the level. */
+THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n\tvarying float fogDepth;\n\tvarying float fogWY;\n#endif';
+THREE.ShaderChunk.fog_vertex = `#ifdef USE_FOG
+	fogDepth = - mvPosition.z;
+	fogWY = cameraPosition.y + dot(viewMatrix[1].xyz, mvPosition.xyz);
+#endif`;
+THREE.ShaderChunk.fog_pars_fragment = THREE.ShaderChunk.fog_pars_fragment.replace(
+  'varying float fogDepth;', 'varying float fogDepth;\n\tvarying float fogWY;');
+THREE.ShaderChunk.fog_fragment = THREE.ShaderChunk.fog_fragment.replace(
+  'gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );',
+  `fogFactor *= mix(1.0, 0.35, smoothstep(3.0, 26.0, fogWY));                       // thins out with altitude
+	#ifndef FOG_EXP2
+		fogFactor = clamp(fogFactor + (1.0 - smoothstep(-2.0, 7.0, fogWY)) * 0.1
+			* smoothstep(fogNear * 0.25, fogFar, fogDepth), 0.0, 1.0);                   // and pools in the gullies
+	#endif
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );`);
+
 /* --- shadows: solid meshes cast and receive; glows, flames and see-through things don't --- */
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -42,9 +76,24 @@ function setupShadowLight(light, half, far) {
   light.userData.shadowHalf = half;
   if (!light.target.parent && light.parent) light.parent.add(light.target);
 }
-setupShadowLight(sun, 34, 260); scene.add(sun.target);
+/* The box is wider than it used to be because the shadows are much longer: see SUN_OFF. */
+setupShadowLight(sun, 46, 300); scene.add(sun.target);
 setupShadowLight(bsun, 7, 40);
-const SUN_OFF = new THREE.Vector3(40, 90, 25);
+
+/* Where the sun sits relative to whatever it is lighting.
+   This used to be (40, 90, 25): 62 degrees up, near enough high noon, and a 6 m column threw a
+   3.2 m shadow - barely one cell, so the terraces read as flat colour. At 30 degrees the same
+   column throws 10.4 m and every ledge in the arena draws its own shape on the ground. Terraced
+   boxy terrain is exactly the geometry a low sun pays off on.
+   SUN_ELEV is the one number to turn if the shadows ever want to be longer or shorter. */
+const SUN_ELEV = 30, SUN_DIST = 104;
+const SUN_OFF = new THREE.Vector3(90, 52, 34);
+/* Each stage swings the sun to its own compass bearing, so no two levels light the same way. */
+function setLevelSun(az) {
+  const e = SUN_ELEV * Math.PI / 180, r = Math.cos(e) * SUN_DIST;
+  SUN_OFF.set(Math.cos(az) * r, Math.sin(e) * SUN_DIST, Math.sin(az) * r);
+  sun.position.copy(SUN_OFF);
+}
 function followSun(p) {
   // move the shadow box with the player, snapped to whole shadow-map texels so edges don't crawl
   const size = sun.shadow.mapSize.x || 2048, step = (2 * sun.userData.shadowHalf) / size;
@@ -114,17 +163,31 @@ const MAT_UP = shader(`uniform sampler2D tex; uniform sampler2D cur; uniform vec
         + texture2D(tex, vUv + vec2(-1.0, 1.0) * px).rgb + texture2D(tex, vUv + vec2(1.0, 1.0) * px).rgb) * 2.0;
     gl_FragColor = vec4(c / 12.0 + texture2D(cur, vUv).rgb, 1.0);
   }`, { tex: { value: null }, cur: { value: null }, px: { value: new THREE.Vector2() } });
-const MAT_OUT = shader(`uniform sampler2D tex; uniform sampler2D bloom; uniform float useBloom, strength, exposure; varying vec2 vUv;
+/* The composite also carries the colour grade. Each stage gets its own black point, contrast,
+   saturation and warmth (set from the level palette in sky.js), which is what turns the themes from
+   a hue rotation into actual looks: cold industrial, bleached desert, sodium-lit night. */
+const MAT_OUT = shader(`uniform sampler2D tex; uniform sampler2D bloom; uniform float useBloom, strength, exposure;
+  uniform float uContrast, uBlack, uWhite, uSat, uWarm, uVig; varying vec2 vUv;
   vec3 aces(vec3 x){ return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+  // 4x4 ordered dither, +/- half of one 8-bit step: the sky and the fog are big smooth gradients and
+  // this buffer is half-float going into an 8-bit screen, so without it they stair-step into stripes
+  float ditherN(vec2 p){ vec2 q = mod(floor(p), 4.0);
+    float b = mod(q.x * 4.0 + q.y * 7.0 + (mod(q.x, 2.0) * 2.0 + mod(q.y, 2.0)) * 5.0, 16.0); return (b + 0.5) / 16.0 - 0.5; }
   void main(){
     vec3 c = texture2D(tex, vUv).rgb;
     // the game's colours are authored as screen colours: treat them as such, roll the highlights off filmically
     vec3 lin = pow(max(c, vec3(0.0)), vec3(2.2));
     if (useBloom > 0.5) lin += pow(max(texture2D(bloom, vUv).rgb, vec3(0.0)), vec3(2.2)) * strength;
     vec3 o = pow(aces(lin * exposure), vec3(1.0 / 2.2));
-    vec2 d = vUv - 0.5; o *= 1.0 - dot(d, d) * 0.35;                    // light vignette
-    gl_FragColor = vec4(o, 1.0);
-  }`, { tex: { value: null }, bloom: { value: null }, useBloom: { value: 1 }, strength: { value: GFX.bloomStrength }, exposure: { value: GFX.exposure } });
+    o = clamp((o - uBlack) / max(uWhite - uBlack, 0.02), 0.0, 1.0);     // black and white points
+    o = clamp((o - 0.5) * uContrast + 0.5, 0.0, 1.0);
+    float l = dot(o, vec3(0.2126, 0.7152, 0.0722)); o = max(mix(vec3(l), o, uSat), 0.0);
+    o *= vec3(1.0 + uWarm * 0.14, 1.0 + uWarm * 0.02, 1.0 - uWarm * 0.16);
+    vec2 d = vUv - 0.5; o *= 1.0 - dot(d, d) * uVig;
+    o += ditherN(gl_FragCoord.xy) / 255.0;
+    gl_FragColor = vec4(clamp(o, 0.0, 1.0), 1.0);
+  }`, { tex: { value: null }, bloom: { value: null }, useBloom: { value: 1 }, strength: { value: GFX.bloomStrength }, exposure: { value: GFX.exposure },
+    uContrast: { value: 1 }, uBlack: { value: 0 }, uWhite: { value: 1 }, uSat: { value: 1 }, uWarm: { value: 0 }, uVig: { value: 0.35 } });
 
 function postTargets() {
   const Q = GFX_PRESETS[SETTINGS.gfx], v = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -149,6 +212,7 @@ function renderFrame(sc, cam) {
   const Q = GFX_PRESETS[SETTINGS.gfx];
   { const n = performance.now(); partViewTick(Math.min(0.1, (n - _pvLast) / 1000)); _pvLast = n; }
   if (sc === scene && player && player.pos) followSun(player.pos);
+  if (typeof skyTick === 'function') skyTick(sc, cam);     // sky dome follows the camera; grade swaps per scene
   postTargets();
   renderer.setRenderTarget(POST.rt);
   renderer.render(sc, cam);

@@ -26,6 +26,7 @@ function wdHeightTexture() {
 }
 const WD_GLSL = `
   uniform sampler2D uH; uniform float uDetail, uHalf, uCell, uGrid, uHLo, uHHi; uniform vec3 uDirt, uRust, uWear;
+  uniform vec3 uSun, uSunC, uSkyC; uniform float uSpec;
   varying vec3 vWP; varying vec3 vWN;
   float wdH(vec2 xz) { vec2 c = floor((xz + uHalf) / uCell); c = clamp(c, 0.0, uGrid - 1.0); return texture2D(uH, (c + 0.5) / uGrid).r; }
   float wdHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -33,11 +34,75 @@ const WD_GLSL = `
     return mix(mix(wdHash(i), wdHash(i + vec2(1, 0)), f.x), mix(wdHash(i + vec2(0, 1)), wdHash(i + vec2(1, 1)), f.x), f.y); }
   float wdFbm(vec2 p) { return wdNoise(p) * 0.55 + wdNoise(p * 2.13 + 7.1) * 0.3 + wdNoise(p * 4.7 + 3.3) * 0.15; }
 `;
+
+/* ---------- ambient occlusion, read straight out of the height texture ----------
+   Thousands of boxy columns and nothing darkening where they meet, so everything floated. Proper
+   SSAO would need a depth buffer and a second pass; here the arena IS a heightfield, so a handful
+   of extra taps in a shader that already samples that texture gives the same grounding for nothing.
+   It is deliberately heavy-handed: Scrap Ink posterises luminance into six bands, so an occlusion
+   that darkens by five per cent would land inside a band and disappear entirely. */
+const WD_AO_WALL = `
+      float wdAO = 1.0;
+      { vec3 n0 = normalize(vWN);
+        if (abs(n0.y) < 0.5) {
+          vec2 nd = normalize(n0.xz);
+          float hFloor = wdH(vWP.xz + nd * 0.6);                        // the ground this wall rises out of
+          float hFar = wdH(vWP.xz + nd * uCell * 1.5);                  // whatever stands opposite it
+          float above = max(vWP.y - hFloor, 0.0);
+          float foot = 1.0 - smoothstep(0.0, 2.6, above);               // the dark gutter at the base
+          float canyon = clamp((hFar - vWP.y) / 7.0, 0.0, 1.0);         // boxed in by the facing wall
+          wdAO = 1.0 - clamp(foot * 0.36 + canyon * 0.18, 0.0, 0.48);
+        } }`;
+const WD_AO_TOP = `
+      float wdAO = 1.0;
+      { vec2 ac = floor((vWP.xz + uHalf) / uCell), alp = (vWP.xz + uHalf) / uCell - ac - 0.5;
+        float hMe = wdH(vWP.xz), occ = 0.0;
+        for (int s = 0; s < 8; s++) {                                   // 4 sides then 4 corners
+          vec2 d = s == 0 ? vec2(1.0, 0.0) : s == 1 ? vec2(-1.0, 0.0) : s == 2 ? vec2(0.0, 1.0) : s == 3 ? vec2(0.0, -1.0)
+            : s == 4 ? vec2(0.7071, 0.7071) : s == 5 ? vec2(-0.7071, 0.7071) : s == 6 ? vec2(0.7071, -0.7071) : vec2(-0.7071, -0.7071);
+          float w = s < 4 ? 1.0 : 0.55;
+          float hN = wdH(vWP.xz + d * uCell * (s < 4 ? 1.0 : 1.45));
+          float rise = clamp((hN - hMe) / 4.5, 0.0, 1.0);               // how far that neighbour towers over us
+          float edge = max((0.5 - dot(alp, d)) * uCell, 0.0);           // metres from here to that side
+          occ += w * rise * (1.0 - smoothstep(0.0, 2.4, edge));
+        }
+        wdAO = 1.0 - clamp(occ * 0.26, 0.0, 0.52); }`;
+
+/* Keep the shadow term so the specular below can be shadowed too, instead of paying for a second
+   getShadowMask() (PCF soft shadows are several taps, and this runs over most of the screen). */
+const WD_SHADOW = `float wdShadow = getShadowMask();
+	reflectedLight.directDiffuse *= BRDF_Diffuse_Lambert( diffuseColor.rgb ) * wdShadow;`;
+
+/* ---------- the arena gets a surface finish ----------
+   The terrain is MeshLambert: no specular, no roughness, and it ignores scene.environment, so the
+   robot read as metal while the ground it stood on read as matte paper. A real Standard material
+   would fix that and cost a full GGX + image-based lighting evaluation over a near-fullscreen
+   surface. This is a Blinn highlight and a fresnel rim tinted by the sky instead: a few instructions,
+   no texture lookups, and it carries most of the look. */
+const WD_LIGHT = `#include <aomap_fragment>
+	reflectedLight.indirectDiffuse *= wdAO;
+	reflectedLight.directDiffuse *= mix(1.0, wdAO, 0.4);
+	vec3 wdSpecOut = vec3(0.0);
+	{ vec3 nS = normalize(vWN), eye = cameraPosition - vWP;
+	  float dist = length(eye);
+	  vec3 V = eye / max(dist, 1e-4);
+	  // The lobe widens with distance. A tight highlight on a 3 m cell eighty metres out is a single
+	  // pixel flickering between frames; letting it melt into a broad sheen kills the sparkle.
+	  float sharp = mix(20.0, 5.0, smoothstep(12.0, 80.0, dist));
+	  // Roughness blotches. A flat 3 m floor tile with a tight lobe grows one clean bright disc and
+	  // reads as a spotlight shining on lino; breaking the lobe up with noise reads as dulled metal.
+	  float rough = 0.55 + 0.75 * wdFbm(vWP.xz * 0.4 + vWP.y * 0.7);
+	  float sp = pow(max(dot(nS, normalize(uSun + V)), 0.0), sharp) * rough * 0.45;
+	  float fres = pow(1.0 - clamp(dot(nS, V), 0.0, 1.0), 4.0);
+	  wdSpecOut = (uSunC * sp * wdShadow + uSkyC * fres * 0.38) * uSpec * wdAO; }`;
 function wdPatch(mat, kind) {
   const u = {
     uH: { value: WD.hTex }, uDetail: { value: SETTINGS.detail ? 1 : 0 }, uHalf: { value: HALF }, uCell: { value: CELL }, uGrid: { value: GRID },
     uHLo: { value: 0 }, uHHi: { value: 20 }, uDirt: { value: new THREE.Color() }, uRust: { value: new THREE.Color() }, uWear: { value: new THREE.Color() },
     uOff: { value: new THREE.Vector3() },      // where this terrain has been moved to (the title's Inferno scene); zero for the arena
+    uSun: { value: new THREE.Vector3(0.6, 0.5, 0.3).normalize() },   // direction TO the sun, world space
+    uSunC: { value: new THREE.Color(0xffe3b8) }, uSkyC: { value: new THREE.Color(0x6a7a86) },
+    uSpec: { value: 1 },
   };
   WD.uniforms.push(u);
   mat.onBeforeCompile = sh => {
@@ -48,7 +113,15 @@ function wdPatch(mat, kind) {
           im = instanceMatrix;
         #endif
         vWP = (modelMatrix * im * vec4(transformed, 1.0)).xyz - uOff; vWN = normalize(mat3(modelMatrix) * mat3(im) * objectNormal); }`);
-    sh.fragmentShader = WD_GLSL + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+    sh.fragmentShader = WD_GLSL + sh.fragmentShader
+      .replace('reflectedLight.directDiffuse *= BRDF_Diffuse_Lambert( diffuseColor.rgb ) * getShadowMask();', WD_SHADOW)
+      .replace('#include <aomap_fragment>', WD_LIGHT)
+      .replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
+        'vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance + wdSpecOut;')
+      /* Occlusion sits OUTSIDE the "World detail" switch: weathering is decoration and can be turned
+         off for frame rate, but grounding is lighting, and without it the arena floats again. */
+      .replace('#include <color_fragment>', `#include <color_fragment>
+      ${kind === 'wall' ? WD_AO_WALL : WD_AO_TOP}
       if (uDetail > 0.5) {
         vec3 col = diffuseColor.rgb, n = normalize(vWN);
         ${kind === 'wall' ? `
@@ -108,9 +181,15 @@ function wdApplyTerrain(wallMat, topMat) {
   const dirt = LEVEL_PAL.lo.clone().lerp(new THREE.Color(0x2a1d12), 0.6).multiplyScalar(0.55);
   const rust = new THREE.Color(0x8a4a22).lerp(LEVEL_PAL.mid, 0.2);
   const wear = LEVEL_PAL.hi.clone().lerp(new THREE.Color(0xffffff), 0.35);
+  /* The sun only moves with the player, never turns, so its direction is fixed for the whole stage
+     and the highlight can be aimed once here rather than updated every frame. */
+  const sunDir = SUN_OFF.clone().normalize();
+  const sunC = sun.color.clone().multiplyScalar(0.85);
+  const skyC = LEVEL_PAL.sky.clone().lerp(new THREE.Color(0xffffff), 0.55).multiplyScalar(0.55);
   for (const [m, kind] of [[wallMat, 'wall'], [topMat, 'top']]) {
     const u = wdPatch(m, kind);
     u.uHLo.value = lo; u.uHHi.value = hi; u.uDirt.value.copy(dirt); u.uRust.value.copy(rust); u.uWear.value.copy(wear);
+    u.uSun.value.copy(sunDir); u.uSunC.value.copy(sunC); u.uSkyC.value.copy(skyC);
   }
 }
 function wdSetEnabled(on) {

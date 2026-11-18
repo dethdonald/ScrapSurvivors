@@ -26,9 +26,20 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(SKY);
 scene.fog = new THREE.Fog(SKY, 60, 180);
 const camera = new THREE.PerspectiveCamera(CFG.fov, 1, 0.1, 600);
-scene.add(new THREE.HemisphereLight(0xd3e2ea, 0x2b2420, 0.78));
-const sun = new THREE.DirectionalLight(0xfff0d8, 0.85);
-sun.position.set(40, 90, 25);
+/* Sky fill. A low sun (see SUN_OFF in post.js) leaves a lot of the arena in shadow, and those
+   areas are lit by this alone - so it carries more of the picture than it used to, and it is
+   re-tinted to each level's sky in setLevelPalette so shadows take the colour of the air.
+
+   The split between these two is what decides whether shadows read at all. It used to be 0.78 fill
+   against a 0.85 sun - a shadow kept 48% of the light that fell on open ground, which after ACES is
+   near enough invisible, so the arena looked unshadowed even though the shadow map was correct.
+   At 0.55 against 1.45 a shadow keeps about 27%: clearly darker, roughly two of Scrap Ink's
+   luminance bands down, and still bright enough to spot an enemy standing in one. Total light is
+   unchanged, so nothing else needed re-exposing. */
+const skyFill = new THREE.HemisphereLight(0xd3e2ea, 0x2b2420, 0.55);
+scene.add(skyFill);
+const sun = new THREE.DirectionalLight(0xffe3b8, 1.45);
+sun.position.set(90, 52, 34);
 scene.add(sun);
 
 // Hangar / inventory preview scene
