@@ -16,7 +16,7 @@ This file tracks every change, with dates, plus what anyone picking the project 
 | | |
 |---|---|
 | **Name** | Scrap Survivors (formerly *Scrapfall*; folder `ScrapSurvivors`, package `scrapsurvivors`) |
-| **Version** | 0.53.0 · BUILD NOV 17|
+| **Version** | 0.54.0 · BUILD NOV 19|
 | **Build system** | **V2 (lower half + torso)**, switched by `BUILD_V2` in `src/config.js`. To go back: set it to `false`, or check out the GitHub branch `pre-build-revamp` (0.25.1). |
 | **Owner's folder** | `C:\Users\LukeM\Documents\Scrapfall`. The rename to `Documents\ScrapSurvivors` is pending: run `Documents\Rename to ScrapSurvivors.bat` with the game closed. |
 | **Run it** | `Play.bat` (installs three.js, Rapier and Electron on first run, then `npm start`) |
@@ -1175,3 +1175,85 @@ he fetches experience and bolts only — he will not run off with your health pa
 **Bench note for next time**: banking XP can level you up, which flips `S.mode` off `play` — and
 `simStep` returns before the entire combat loop, so everything silently freezes mid-step and looks
 like the feature under test is broken. Any headless test that gains XP must stub `openLevelUp`.
+
+## 0.54.0 — controller menus fixed, punchier guns (Nov 19)
+Luke reported trouble selecting a level on the Deck, and that in the build bay he "had to click on the
+right side of things". Both turned out to be real, and unrelated to each other.
+
+**A controller could not touch the level select or the store at all.**
+`focusables()` looks up `NAV_CONTAINER[S.mode]` and, failing that, falls back to the first visible
+`.overlay`. There were only three entries — title, custom, catalog — and both the level select and the
+store live *inside `#title`* rather than being overlays, so neither the lookup nor the fallback found
+anything. `focusables()` returned an empty list, focus stayed on whatever was behind the screen, and
+pressing A on the level select actually pressed **Randomize** on the hidden title menu. Measured:
+level select 0 reachable controls, store 0. Now 5 and 24.
+**Any menu that is not an `.overlay` must be named in `NAV_CONTAINER` or it is invisible to the pad.**
+
+**The pad cursor was drawn up to 100px from where it clicked.** `.overlay.bench>*{zoom:var(--uiz)}`
+applies to every direct child of `#inv` — including `#vcursor`, which is not a panel but a pointer in
+screen space. `benchPad` positions it with `translate(c.x, c.y)` using the very coordinates it then
+clicks with, so the zoom scaled its position as well as its size: at `--uiz` 1.1 it was drawn 10%
+further from the top-left than it acted. Measured at 1280x800 Deck: 30px out at (300,300), 64px at
+(640,400), **100px at (1000,600)** — which is right over the parts panel. The cursor sat to the right
+of where it would actually click, so you had to aim right of whatever you wanted. Now exactly 0 at
+every position; its size still follows the UI scale, its position no longer does.
+
+**Title focus was stuck on Randomize.** `focusFirst()` took `focusables()[0]` in markup order, and
+`#tRandom` comes first in the HTML while sitting bottom-right on screen — so the menu opened with
+focus down there, and Down had nothing below it to move to. `focusables()` now sorts by reading order
+(rows bucketed to 8px, then left to right). Opening focus is now Start / THE ARENA / first store card,
+and Down walks Start → Customize → Catalog → Store → Options → Quit → Randomize.
+
+**Audited, not guessed.** `bench/hit.js` walks the real flow and, for every control, compares where it
+is drawn against what `elementFromPoint` returns across its width; `bench/nav.js` reports what the pad
+can reach in each menu; `bench/pick3d.js` projects every part in the build bay to screen coords and
+asks `pickAt()` what it would grab there. Worth knowing: **3D picking is exact** — 8/8 parts hit at
+their drawn centres even with the camera's 179px `setViewOffset` — so the robot side of the build bay
+was never the problem.
+
+**Weapon sounds.** `noise()` gained a `punch` parameter: the sample data already carries a cubic fade,
+but the gain on top was flat, so the energy was spread across the burst rather than concentrated at
+its start — a hiss with a tail rather than a crack. The layered gunshot is now three stages (a ~6ms
+top-end transient, the crack body, then a sub that drops away fast). Measured offline with
+`bench/sfx.js`, against 0.53.0: pistol attack **0.9 → 0.1ms**, shotgun **2.1 → 0.9ms** and its decay
+**255 → 114ms**, autogun 0.4 → 0.3ms. Sustained sounds (the flamer's hiss, the nuke) keep `punch: 0`.
+
+`TAILS` — the three darkening echoes at 0.16/0.29/0.47s — now covers thoom, roar, launch, fwoomp,
+zap, land and a light one on the pistol. **Autogun, gatling and the melee swings are deliberately
+left out**: at twenty rounds a second the taps land on top of the next shot and it turns to porridge.
+Energy after 150ms, before → after: thoom 9.1 → 18%, shotgun 1.5 → 3.4%, pistol 0 → 0.3%, autogun 0 → 0.
+
+**A master compressor was tried and rejected**, and the comment in `sfxPlay` says so, because it is
+the obvious thing to reach for next. Explosions peak at ~1.24 against a ceiling of 1.0, so a limiter
+looks right — but a DynamicsCompressor at -3dB/14:1/1ms measured as a disaster: peaks fell to a ninth
+and the sniper's attack went from 1.7ms to **154ms**. WebAudio's DynamicsCompressor is not a brickwall
+limiter and it squashes exactly the transient that makes a gun sound sharp. If the loud ones need
+taming, scale the individual sounds; do not put a compressor across the bus. (The clipping is
+pre-existing and unchanged by this release — worth a listen, not yet a fix.)
+
+### 0.54.0 addendum — decal and stain budget
+Both were capped and, more importantly, de-duplicated. Measured with `bench/decals.js` (90s of normal
+fighting) and a worst case of twelve waves of 220 enemies killed on the spot:
+
+- **Ground stains were the expensive ones**, not bullet marks. A kill leaves about **6.3** of them, the
+  old `STAIN_MAX = 6000` saturated by the fifth wave, and at saturation those 6,000 covered barely
+  **1,850 m2** - two in every three were lying directly on top of another. One instanced draw, so this
+  never cost triangles; it cost drawing the same patch of floor three times over, every frame.
+- **An occupancy grid now allows one stain per ~0.84m of floor** (`STAIN_CELL`, 300x300 over the
+  arena). Fine enough that a single kill's splatter still reads as a cluster, coarse enough that a
+  crowd dying in one place cannot stack forty quads. Result at saturation: **6000 -> 2600 quads, and
+  stacking 3.19x -> 1.44x, while the ground actually covered only fell 1,879 -> 1,810 m2.** 57% fewer
+  quads for 96% of the same coverage.
+- Caps now follow the graphics preset: stains 1100 / 1900 / 2600, bullet marks 130 / 220 / 320
+  (`stainCap()`, `decalCap()`). The `low` preset is a 82% cut on stains.
+- **Bullet marks are blended with depthWrite off**, so they cost more per pixel than stains despite
+  being far fewer. `decalCrowded()` drops a mark that lands within half a mark's width of one of the
+  last 32 placed - emptying a magazine into one spot used to stack a dozen quads inside half a metre.
+- **`wipeStains` has to free the grid cell, not just hide the quad.** The RoboVac cleans stains; a cell
+  left claimed by a wiped stain would stop that patch of floor ever being marked again. Same in
+  `clearStains`.
+
+Worth knowing for whoever tunes this next: in *normal* play the budget is nowhere near the ceiling -
+90 seconds of constant fire with 450 enemies alive left only 122 stains, stacked 1.23x. The ceiling
+only matters for mass-kill moments (nuke, red launch pad, boss death), which is exactly where the
+frame budget is already tightest.

@@ -172,11 +172,23 @@ function readMoveAxes() {
 // title screen isn't a '.overlay' (it's the base screen, not a dimming layer over gameplay), and its
 // customize/catalog subpanels are plain divs nested inside it rather than their own overlay sections -
 // so the generic '.overlay' lookup below never found any of them. Give those three their own container.
-const NAV_CONTAINER = { title: '#title', custom: '#custPanel', catalog: '#catalog' };
+/* Every mode whose menu is NOT an .overlay has to be named here, because the fallback below only
+   looks at .overlay elements. Level select and the store both live inside #title, so neither had an
+   entry and neither had a fallback: focusables() returned nothing at all and a controller could not
+   touch either screen. Focus stayed on whatever was behind them, so pressing A on the level select
+   pressed Randomize on the hidden title menu. */
+const NAV_CONTAINER = { title: '#title', custom: '#custPanel', catalog: '#catalog', levelsel: '#levelSel', store: '#storeScreen' };
 function focusables() {
   const sel = NAV_CONTAINER[S.mode];
   const ov = sel ? document.querySelector(sel) : [...document.querySelectorAll('.overlay')].find(o => !o.hidden);
-  return ov ? [...ov.querySelectorAll('.nav')].filter(e => !e.disabled && e.offsetParent !== null) : [];
+  const els = ov ? [...ov.querySelectorAll('.nav')].filter(e => !e.disabled && e.offsetParent !== null) : [];
+  /* Reading order, not markup order. The title's Randomize button sits bottom-right but comes first
+     in the HTML, so focusFirst() landed on it and Down had nothing below to move to - the whole menu
+     was unreachable unless you guessed at Up. Rows are bucketed so items on one line sort left to right. */
+  return els.sort((a, b) => {
+    const p = a.getBoundingClientRect(), q = b.getBoundingClientRect();
+    return Math.round(p.top / 8) - Math.round(q.top / 8) || p.left - q.left;
+  });
 }
 function focusFirst() { const f = focusables(); if (f.length) f[0].focus(); }
 function navH(dx) {

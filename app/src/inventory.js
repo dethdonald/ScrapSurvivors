@@ -976,7 +976,14 @@ function ensureAudio() { try { if (!actx) actx = new (window.AudioContext || win
 const sfxGap = { tink: 0.04, squeak: 0.035, hurt: 0.09,  flame: 0.07, roar: 0.1, slash: 0.05, swish: 0.08, unfold: 0.5, zap: 0.06, slot: 0.05, reload: 0.08, reloaded: 0.08, jet: 0.07, autogun: 0.055, step: 0.07, chirp: 0.09, land: 0.12, hit: 0.045, kill: 0.04, xp: 0.03, coin: 0.04, pistol: 0.03, shotgun: 0.05 };
 const sfxLast = {};
 const GUN_LAYERS = { pistol: { crack: 0.8, thump: 0.5 }, autogun: { crack: 0.6, thump: 0.35 }, shotgun: { crack: 1, thump: 1.1 }, sniper: { crack: 1.2, thump: 1.2 }, rocket: { crack: 0.5, thump: 0.9 }, zap: { crack: 0.5, thump: 0.25 } };
-const TAILS = { boom: 1, shotgun: 0.45, sniper: 0.6, rocket: 0.5, nukefall: 0.4 };
+/* How much each sound rings off the arena walls (three darkening echoes at 0.16 / 0.29 / 0.47s).
+   Deliberately NOT here: autogun, gatling and the melee swings. At twenty rounds a second the taps
+   land on top of the next shot and the whole thing turns to porridge - the weapons that earn a tail
+   are the ones with space around them. Anything above about 0.5 starts to sound like a canyon. */
+const TAILS = {
+  boom: 1, thoom: 0.85, sniper: 0.65, rocket: 0.55, shotgun: 0.5, roar: 0.5,
+  nukefall: 0.4, launch: 0.4, fwoomp: 0.35, zap: 0.22, land: 0.2, pistol: 0.18,
+};
 /* Voice budget: every sound is a handful of audio nodes, and a big fight asks for hundreds a second, which made the
    mixer stutter and cut out. Each sound now has a priority and a rough length; when too many are alive the cheap,
    frequent ones (ticks, hits, pickups, footsteps) are dropped first, the important ones (damage, big bangs, level-ups)
@@ -1007,6 +1014,12 @@ function sfxNoiseBuf(dur) {
   }
   return a[(Math.random() * a.length) | 0];
 }
+/* NOT a master compressor. The obvious answer to explosions peaking at 1.26 against a ceiling of 1.0
+   is a limiter, and it was tried: a DynamicsCompressor at -3dB, ratio 14, 1ms attack. Measured
+   offline it was a disaster - peaks fell to a ninth, and the sniper's attack went from 1.7ms to
+   154ms, because WebAudio's DynamicsCompressor is not a brickwall limiter and squashes precisely the
+   transient that makes a shot sound sharp. If the loud ones ever need taming, scale the individual
+   sounds down; do not put a compressor across the bus. */
 function sfxPlay(kind, vol, live) {
   const now = actx.currentTime;
   try {
@@ -1031,21 +1044,41 @@ function sfxPlay(kind, vol, live) {
       e.gain.setValueAtTime(g, t + at); e.gain.exponentialRampToValueAtTime(0.001, t + at + dur);
       o.connect(e); e.connect(out); o.start(t + at); o.stop(t + at + dur + 0.02);
     };
-    const noise = (dur, g, hp, at = 0) => {
+    /* `punch` sharpens the front of a noise burst. The sample data already carries a cubic fade (see
+       sfxNoiseBuf), but the GAIN on top of it is flat, so the loudest part of the burst is spread
+       across its first half rather than concentrated at the very start - which reads as a hiss with
+       a tail, not a crack. An exponential gain envelope on top puts the energy in the first few
+       milliseconds, which is the shape every real impact has.
+       Left at 0 where a sound genuinely needs to sustain: the flamer's hiss, the nuke's rumble. */
+    const noise = (dur, g, hp, at = 0, punch = 0) => {
       const buf = sfxNoiseBuf(dur);
       const s = actx.createBufferSource(), f = actx.createBiquadFilter(), e = actx.createGain();
-      s.buffer = buf; f.type = 'highpass'; f.frequency.value = hp; e.gain.value = g;
+      s.buffer = buf; f.type = 'highpass'; f.frequency.value = hp;
+      if (punch) {
+        e.gain.setValueAtTime(g, t + at);
+        e.gain.exponentialRampToValueAtTime(Math.max(0.0005, g * 0.0012), t + at + dur * punch);
+      } else e.gain.value = g;
       s.connect(f); f.connect(e); e.connect(out); s.start(t + at);
     };
-    // layered gunshot: a sharp crack on top and a low thump under the gun's own sound
-    if (gun) { noise(0.012, 1.1 * gun.crack, 5200); tone(110, 42, 0.07 + 0.06 * gun.thump, 'sine', 0.9 * gun.thump); if (gun.thump > 0.8) noise(0.08, 0.5 * gun.thump, 120, 0.005); }
+    /* The layered gunshot, in the three stages a real one has:
+       1. transient - a few milliseconds of top end that decays instantly. This is the whole reason a
+          shot sounds sharp; it is almost inaudible on its own but take it away and the gun goes limp.
+       2. crack - the body of the report, mid-heavy and gone inside a twentieth of a second.
+       3. thump - a sub that drops away fast. It has to get out of the way quickly or successive shots
+          pile into a drone instead of punching. */
+    if (gun) {
+      noise(0.006, 1.6 * gun.crack, 7000, 0, 1);
+      noise(0.05, 1.15 * gun.crack, 2400, 0.002, 1);
+      tone(150, 38, 0.05 + 0.07 * gun.thump, 'sine', 1.15 * gun.thump);
+      if (gun.thump > 0.7) noise(0.1, 0.55 * gun.thump, 90, 0.004, 1);      // the chest hit on the big ones
+    }
     if (kind === 'pump') { noise(0.03, 0.9, 1800); tone(220, 160, 0.06, 'square', 0.25); }
     if (kind === 'pump2') { noise(0.035, 1, 2200); tone(300, 200, 0.05, 'square', 0.25); tone(90, 60, 0.06, 'sine', 0.4); }
     if (kind === 'bolt') { noise(0.03, 0.8, 2500); tone(500, 380, 0.05, 'square', 0.2); noise(0.04, 0.7, 1600, 0.12); tone(260, 200, 0.05, 'square', 0.2, 0.12); }
     if (kind === 'hiss') { noise(0.45, 0.35, 4500); }
     if (kind === 'whistle') { tone(900, 2200, 0.7, 'sine', 0.12); tone(905, 2210, 0.7, 'triangle', 0.05); }
     if (kind === 'fwoomp') { noise(0.3, 1.2, 200); tone(90, 160, 0.25, 'sine', 0.6); }
-    if (kind === 'thoom') { tone(70, 30, 0.9, 'sine', 1.3); noise(0.5, 0.8, 60); tone(140, 50, 0.4, 'sawtooth', 0.2); }
+    if (kind === 'thoom') { noise(0.01, 1.3, 5000, 0, 1); tone(70, 28, 0.9, 'sine', 1.45); noise(0.5, 0.9, 60, 0, 0.7); tone(140, 46, 0.4, 'sawtooth', 0.24); }
     if (kind === 'snapZ') { noise(0.03, 0.9, 4000); tone(2400, 900, 0.05, 'square', 0.15); }
     if (kind === 'hitL') { tone(1500, 1100, 0.04, 'triangle', 0.25); noise(0.015, 0.4, 3000); }
     if (kind === 'hitH') { tone(240, 90, 0.1, 'sine', 0.6); noise(0.05, 0.8, 900); tone(1200, 700, 0.06, 'triangle', 0.2); }
@@ -1059,9 +1092,9 @@ function sfxPlay(kind, vol, live) {
     if (kind === 'tick') tone(1400, 1300, 0.02, 'square', 0.1);
     if (kind === 'deny') tone(140, 110, 0.18, 'square', 0.25);
     if (kind === 'thud') { tone(110, 50, 0.1, 'sine', 0.7); noise(0.03, 0.3, 800); }
-    if (kind === 'pistol') { noise(0.06, 0.9, 1800); tone(420, 140, 0.08, 'square', 0.35); }
-    if (kind === 'shotgun') { noise(0.22, 1.4, 300); tone(140, 40, 0.2, 'sine', 0.9); noise(0.05, 0.6, 3000, 0.03); }
-    if (kind === 'autogun') { noise(0.035, 0.6, 2400); tone(320, 180, 0.04, 'square', 0.2); }
+    if (kind === 'pistol') { noise(0.05, 1.15, 1700, 0, 1); tone(420, 120, 0.06, 'square', 0.4); }
+    if (kind === 'shotgun') { noise(0.24, 1.6, 260, 0, 0.55); tone(140, 36, 0.17, 'sine', 1.05); noise(0.05, 0.7, 3000, 0.025, 1); }
+    if (kind === 'autogun') { noise(0.032, 0.8, 2300, 0, 1); tone(320, 160, 0.035, 'square', 0.26); }
     if (kind === 'hit') tone(1600, 1100, 0.03, 'triangle', 0.4);
     if (kind === 'kill') { noise(0.08, 0.7, 900); tone(240, 90, 0.09, 'triangle', 0.4); }
     if (kind === 'xp') tone(1200 + Math.random() * 300, 1800, 0.05, 'sine', 0.25);

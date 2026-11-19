@@ -940,7 +940,28 @@ function hurt(a, from) {
   if (player.hp <= 0) gameOver();
 }
 /* ---------- ground stains: every enemy that dies (and some hits) leaves square blotches that stay for the whole stage ---------- */
-const STAIN_MAX = 6000;
+/* Ground stains from kills. Measured before this was capped properly: a wave of 220 enemies killed on
+   the spot left about 1,400 stains (6.3 per kill), the old 6,000 ceiling was saturated by the fifth
+   wave, and at saturation those 6,000 covered barely 1,850 square metres - 2 in every 3 were sitting
+   directly on top of another one. They are one instanced draw, so the cost was never triangles; it
+   was drawing the same patch of floor three times over, every frame, on a handheld.
+
+   So the fix is mostly the grid below rather than the ceiling: one stain per patch of ground, and the
+   ceiling then only has to cover the area actually fought over. */
+const STAIN_MAX = 2600;                                   // hard allocation; the live cap is per preset
+const STAIN_CAP = { low: 1100, medium: 1900, high: 2600 };
+const stainCap = () => STAIN_CAP[SETTINGS.gfx] || STAIN_MAX;
+/* Occupancy grid over the arena floor, ~0.84 m a cell: fine enough that the little clusters thrown by
+   a single kill still read as a splatter, coarse enough that a crowd dying in one spot cannot lay
+   down forty overlapping quads. Holds slot+1, so 0 means free. */
+const STAIN_CELLS = 300, STAIN_CELL_SZ = (HALF * 2) / STAIN_CELLS;
+const STAIN_CELL = new Int32Array(STAIN_CELLS * STAIN_CELLS);
+const STAIN_SLOT = new Int32Array(STAIN_MAX).fill(-1);    // which cell each slot has claimed
+function stainCellOf(x, z) {
+  const cx = (x + HALF) / STAIN_CELL_SZ | 0, cz = (z + HALF) / STAIN_CELL_SZ | 0;
+  if (cx < 0 || cz < 0 || cx >= STAIN_CELLS || cz >= STAIN_CELLS) return -1;
+  return cz * STAIN_CELLS + cx;
+}
 let stainMesh = null, stainN = 0;
 const _sm = new THREE.Matrix4(), _sq = new THREE.Quaternion(), _ss = new THREE.Vector3(), _sp = new THREE.Vector3(), _sc = new THREE.Color();
 function stainInit() {
@@ -958,7 +979,13 @@ function stain(x, z, size, color) {
   const g = groundAt(x, z), h = size / 2;
   // keep the square on one flat surface (never hanging over a ledge)
   for (const [ox, oz] of [[h, h], [-h, h], [h, -h], [-h, -h]]) if (Math.abs(groundAt(x + ox, z + oz) - g) > 0.05) return;
-  const i = stainN % STAIN_MAX; stainN++;
+  // this patch of floor is already marked - another quad on top of it would cost fill rate and show nothing
+  const cell = stainCellOf(x, z);
+  if (cell >= 0 && STAIN_CELL[cell]) return;
+  const i = stainN % stainCap(); stainN++;
+  if (STAIN_SLOT[i] >= 0) STAIN_CELL[STAIN_SLOT[i]] = 0;   // the slot being recycled gives its cell back
+  STAIN_SLOT[i] = cell;
+  if (cell >= 0) STAIN_CELL[cell] = i + 1;
   STAIN_XZ[i * 2] = x; STAIN_XZ[i * 2 + 1] = z; STAIN_LIVE[i] = 1;
   _sq.setFromAxisAngle(UP3, Math.random() * Math.PI / 2);
   _sm.compose(_sp.set(x, g + 0.015 + (i % 16) * 0.0012, z), _sq, _ss.set(size, 1, size));
@@ -967,7 +994,7 @@ function stain(x, z, size, color) {
   const k = idxOf(x, z);
   if (tileMesh && k >= 0) tileMesh.getColorAt(k, _sc); else _sc.setRGB(0.3, 0.3, 0.3);
   _sc.lerp(color, 0.12).multiplyScalar(rand(0.42, 0.58)); stainMesh.setColorAt(i, _sc);
-  stainMesh.count = Math.min(STAIN_MAX, Math.max(stainMesh.count, i + 1));
+  stainMesh.count = Math.min(stainCap(), Math.max(stainMesh.count, i + 1));
   stainMesh.instanceMatrix.needsUpdate = true; stainMesh.instanceColor.needsUpdate = true;
 }
 function splatter(e, n, spread) {
@@ -977,14 +1004,23 @@ function splatter(e, n, spread) {
     stain(e.pos.x + Math.cos(a) * r, e.pos.z + Math.sin(a) * r, rand(0.18, 0.55) * Math.max(0.8, e.r * 1.4), col);
   }
 }
-function clearStains() { if (stainMesh) { stainMesh.count = 0; stainN = 0; } STAIN_LIVE.fill(0); }
+function clearStains() { if (stainMesh) { stainMesh.count = 0; stainN = 0; } STAIN_LIVE.fill(0); STAIN_CELL.fill(0); STAIN_SLOT.fill(-1); }
 const STAIN_XZ = new Float32Array(STAIN_MAX * 2), STAIN_LIVE = new Uint8Array(STAIN_MAX);
 const _zeroM = new THREE.Matrix4().makeScale(0, 0, 0);
 /* wipe every stain within r of (x, z); returns how many */
 function wipeStains(x, z, r) {
   if (!stainMesh) return 0;
   let n = 0; const r2 = r * r, N = stainMesh.count;
-  for (let i = 0; i < N; i++) { if (!STAIN_LIVE[i]) continue; const dx = STAIN_XZ[i * 2] - x, dz = STAIN_XZ[i * 2 + 1] - z; if (dx * dx + dz * dz < r2) { STAIN_LIVE[i] = 0; stainMesh.setMatrixAt(i, _zeroM); n++; } }
+  // freeing the cell matters as much as hiding the quad: the RoboVac cleans stains, and a cell left
+  // claimed by a wiped stain would stop that patch of floor ever being marked again
+  for (let i = 0; i < N; i++) {
+    if (!STAIN_LIVE[i]) continue;
+    const dx = STAIN_XZ[i * 2] - x, dz = STAIN_XZ[i * 2 + 1] - z;
+    if (dx * dx + dz * dz < r2) {
+      STAIN_LIVE[i] = 0; stainMesh.setMatrixAt(i, _zeroM); n++;
+      if (STAIN_SLOT[i] >= 0) { STAIN_CELL[STAIN_SLOT[i]] = 0; STAIN_SLOT[i] = -1; }
+    }
+  }
   if (n) stainMesh.instanceMatrix.needsUpdate = true;
   return n;
 }

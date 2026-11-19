@@ -752,6 +752,12 @@ svg.picon{width:20px;height:20px;flex:none;fill:currentColor;stroke:none;vertica
 /* the build bay's panels and the HUD's corner boxes scale as well; world-anchored bits (markers, damage
    numbers, the minimap blips) are deliberately left alone, since their positions are in real screen pixels */
 .overlay.bench>*{zoom:var(--uiz)}
+/* ...but NOT the pad cursor. It is a pointer in screen space: benchPad draws it at the very same
+   coordinates it clicks with, so zooming it drew it 10% further from the top-left than it acted -
+   30px out near the left edge, 100px out over the parts panel. You had to aim to the right of
+   whatever you wanted. Size still follows the UI scale; position must not. */
+.overlay.bench>#vcursor{zoom:1;width:calc(22px*var(--uiz,1));height:calc(22px*var(--uiz,1));
+  margin:calc(-11px*var(--uiz,1)) 0 0 calc(-11px*var(--uiz,1))}
 #hud>.tl,#hud>.tc,#hud>.tr,#hud>#loadoutBox,#hud>#speedo,#hud>#bossbar,#hud>#hint,#hud>#prompt,#hud>.toast,#hud>#killMul,#hud>#rewardPop{zoom:var(--uiz)}
 #hud>#crosshair,#hud>#xhWrap{zoom:calc(var(--uiz) * var(--xhz))}
 .tip{transform-origin:0 0}

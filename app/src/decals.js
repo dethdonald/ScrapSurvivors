@@ -6,8 +6,27 @@
 
    The surface normal comes from the same two probes the ricochet code uses: if the ground is higher at
    (new x, old z) than the round was, it ran into a wall facing x, and the same for z. */
-const DEC_MAX = 420;
+/* Bullet marks are blended quads with depthWrite off, so each one costs fill rate wherever it lands -
+   they are dearer per pixel than the ground stains even though there are far fewer of them. The cap
+   follows the graphics preset, and a mark that would land on top of one already there is dropped:
+   emptying a magazine into one spot used to stack a dozen quads inside half a metre. */
+const DEC_MAX = 320;                                      // hard allocation; the live cap is per preset
+const DEC_CAP = { low: 130, medium: 220, high: 320 };
+const decalCap = () => DEC_CAP[SETTINGS.gfx] || DEC_MAX;
+const DEC_AT = new Float32Array(DEC_MAX * 3);             // where each slot's mark sits, for the check below
 const DEC = { mesh: null, n: 0, geo: null, mat: null };
+
+/* Is there already a mark within half a mark's width of here? Only the most recent 32 are checked:
+   older ones are almost never in the same place, and this runs on every round that lands. */
+function decalCrowded(p, size) {
+  const look = Math.min(DEC.n, 32), r = size * 0.55, r2 = r * r;
+  for (let k = 1; k <= look; k++) {
+    const o = (((DEC.n - k) % DEC_MAX + DEC_MAX) % DEC_MAX) * 3;
+    const dx = DEC_AT[o] - p.x, dy = DEC_AT[o + 1] - p.y, dz = DEC_AT[o + 2] - p.z;
+    if (dx * dx + dy * dy + dz * dz < r2) return true;
+  }
+  return false;
+}
 
 const _dcM = new THREE.Matrix4(), _dcQ = new THREE.Quaternion(), _dcP = new THREE.Vector3(),
       _dcS = new THREE.Vector3(1, 1, 1), _dcC = new THREE.Color(), _dcN = new THREE.Vector3(),
@@ -84,7 +103,9 @@ function decalNormal(s, out) {
    be pulled back out to the face of that block or it is buried in solid geometry and never seen. */
 function decalAt(p, n, size, tint) {
   decalInit();
-  const i = DEC.n % DEC_MAX; DEC.n++;
+  if (decalCrowded(p, size)) return;
+  const i = DEC.n % decalCap(); DEC.n++;
+  DEC_AT[i * 3] = p.x; DEC_AT[i * 3 + 1] = p.y; DEC_AT[i * 3 + 2] = p.z;
   _dcN.copy(n).normalize();
   _dcSurf.copy(p);
   if (_dcN.y > 0.5) _dcSurf.y = groundAt(p.x, p.z);
@@ -121,7 +142,7 @@ function decalAt(p, n, size, tint) {
   _dcC.lerp(_dcMid, 0.55).multiplyScalar(rand(0.85, 1.05));
   DEC.mesh.setColorAt(i, _dcC);
 
-  DEC.mesh.count = Math.min(DEC_MAX, Math.max(DEC.mesh.count, i + 1));
+  DEC.mesh.count = Math.min(decalCap(), Math.max(DEC.mesh.count, i + 1));
   DEC.mesh.instanceMatrix.needsUpdate = true;
   if (DEC.mesh.instanceColor) DEC.mesh.instanceColor.needsUpdate = true;
 }
